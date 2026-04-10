@@ -372,6 +372,34 @@ once the key is added — no code change needed.
 **ReportPage 404:**
 - Detects HTTP 404 → "Metro not found" message + "Back to home" link
 
+## 2026-04-11 — Atlas + Navigation + BornIn placeholder (`02de1c2`)
+
+**Atlas static catalog (`frontend/src/data/atlas_catalog.json`):**
+- 8 categories × 2–5 datasets each
+- Fields: id, name, source, url, update_frequency, trust_tag, description,
+  spatial_coverage, license, status (`live` | `planned`)
+- 14 P0 sources marked `live`; remainder `planned`
+
+**New pages:**
+- `frontend/src/pages/Atlas.tsx` — `/atlas` main page, 8 category cards with
+  icon, title, dataset count, live count, 2 sample trust badge pills
+- `frontend/src/pages/AtlasCategory.tsx` — `/atlas/:categorySlug` dataset
+  listing; MetaLine above each dataset; Live/Planned pill; external source link;
+  404 handling for unknown slugs
+
+**Updated components:**
+- `AtlasGrid.tsx` — now imports from `atlas_catalog.json`; shows emoji icon,
+  dataset count, "N live" badge, "View all →" link to `/atlas`
+- `Header.tsx` — full rewrite: sticky (z-index 100), scrollTo() helper for
+  Earth Now / Climate Trends / Local Reports anchors, Atlas → `/atlas` Link,
+  mobile hamburger toggle
+- `BornIn.tsx` — styled placeholder (blue gradient), disabled input + button,
+  "Coming soon (P1)" label, data record start dates
+- `App.tsx` — added `import Atlas` + `<Route path="/atlas" …>` before
+  `:categorySlug`
+
+**Build verified:** 480 modules · 587.70 KB gzipped · 0 TS errors ✅
+
 ## Next
 - Add NYC and Chicago CBSAs to `data/cbsa_mapping.json`.
 - CtaG city monthly time series (Block 2, P1 pending).
