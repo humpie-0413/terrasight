@@ -1,21 +1,50 @@
 """Climate Trends API — CO2 / Global Temp Anomaly / Arctic Sea Ice."""
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+
+from backend.connectors.noaa_gml import NoaaGmlConnector
 
 router = APIRouter()
 
 
 @router.get("/co2")
 async def get_co2() -> dict:
-    """NOAA GML Mauna Loa — daily + monthly, observed, since 1958."""
-    # TODO: delegate to NoaaGmlConnector
+    """NOAA GML Mauna Loa — monthly, observed, since 1958.
+
+    Returns the latest monthly mean plus a 12-month trailing window for the
+    Climate Trends card sparkline. Source text file is public CDN, no auth.
+    """
+    connector = NoaaGmlConnector()
+    try:
+        result = await connector.run()
+    except Exception as exc:  # httpx errors, parse errors
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch NOAA GML CO2 series: {exc}",
+        ) from exc
+
+    points = result.values
+    if not points:
+        raise HTTPException(status_code=502, detail="NOAA GML returned no data")
+
+    latest = points[-1]
+    sparkline = points[-12:]
+
     return {
         "id": "co2",
-        "source": "NOAA GML Mauna Loa",
-        "cadence": "daily + monthly",
-        "tag": "observed",
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
         "record_start": "1958",
-        "latest": None,
-        "series": [],
+        "unit": "ppm",
+        "latest": {
+            "date": latest.iso_month,
+            "value": latest.value_ppm,
+        },
+        "series": [
+            {"date": p.iso_month, "value": p.value_ppm} for p in sparkline
+        ],
+        "notes": result.notes,
     }
 
 
