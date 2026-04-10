@@ -4,10 +4,10 @@ import { useApi } from '../../hooks/useApi';
 
 /**
  * Climate Trends strip — 3 cards: CO2, Global Temp Anomaly, Arctic Sea Ice.
- * CLAUDE.md Block 1층 "Climate Trends (느린 변화 카드 3개)"
+ * CLAUDE.md Block 1층 "Climate Trends (느린 변화 카드 3개)".
  *
- * CO₂ card is wired to real data from /api/trends/co2 (NOAA GML Mauna Loa).
- * Temp and Sea Ice cards remain placeholders until their connectors land.
+ * One request to GET /api/trends fans out to all three connectors on the
+ * backend in parallel, so a single useApi call drives the whole strip.
  */
 
 interface TrendPoint {
@@ -15,77 +15,115 @@ interface TrendPoint {
   value: number;
 }
 
-interface Co2Response {
-  id: 'co2';
+interface TrendIndicator {
+  id: 'co2' | 'temp' | 'sea-ice';
+  label: string;
+  unit: string;
   source: string;
   source_url: string;
   cadence: string;
   tag: string;
   record_start: string;
-  unit: string;
-  latest: { date: string; value: number } | null;
+  latest: { date: string; value: number; window?: string } | null;
   series: TrendPoint[];
+  baseline?: string;
+  error?: string;
 }
 
+interface TrendsResponse {
+  indicators: TrendIndicator[];
+}
+
+const ORDER: Array<TrendIndicator['id']> = ['co2', 'temp', 'sea-ice'];
+
 export default function TrendsStrip() {
-  const co2 = useApi<Co2Response>('/trends/co2');
+  const { data, loading, error } = useApi<TrendsResponse>('/trends');
+
+  // Keep deterministic CO₂ → Temp → Sea Ice order regardless of backend ordering.
+  const byId = new Map<TrendIndicator['id'], TrendIndicator>(
+    data?.indicators.map((i) => [i.id, i]) ?? [],
+  );
 
   return (
     <section id="climate-trends" style={sectionStyle}>
-      <article style={cardStyle}>
-        <MetaLine
-          cadence="Monthly"
-          tag={TrustTag.Observed}
-          source="NOAA GML Mauna Loa"
-          sourceUrl="https://gml.noaa.gov/ccgg/trends/"
+      {ORDER.map((id) => (
+        <TrendCard
+          key={id}
+          id={id}
+          indicator={byId.get(id)}
+          loading={loading}
+          error={error}
         />
-        <h3 style={titleStyle}>CO₂</h3>
-        {co2.loading && <p style={loadingStyle}>Loading…</p>}
-        {co2.error && <p style={errorStyle}>Unable to load CO₂ data.</p>}
-        {co2.data?.latest && (
-          <>
-            <p style={valueStyle}>
-              {co2.data.latest.value.toFixed(2)}{' '}
-              <span style={unitStyle}>ppm</span>
-            </p>
-            <p style={asOfStyle}>as of {co2.data.latest.date}</p>
-            <Sparkline points={co2.data.series} />
-          </>
-        )}
-      </article>
-
-      <article style={cardStyle}>
-        <MetaLine
-          cadence="Monthly (preliminary)"
-          tag={TrustTag.NearRealTime}
-          source="NOAA Climate at a Glance"
-          sourceUrl="https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/"
-        />
-        <h3 style={titleStyle}>Global Temp Anomaly</h3>
-        <p style={placeholderStyle}>— °C</p>
-        {/* TODO: sparkline since 1880 */}
-      </article>
-
-      <article style={cardStyle}>
-        <MetaLine
-          cadence="Daily (5-day running mean)"
-          tag={TrustTag.Observed}
-          source="NSIDC Sea Ice Index"
-          sourceUrl="https://nsidc.org/data/seaice_index"
-        />
-        <h3 style={titleStyle}>Arctic Sea Ice</h3>
-        <p style={placeholderStyle}>— million km²</p>
-        {/* TODO: sparkline since 1979 */}
-      </article>
+      ))}
     </section>
   );
+}
+
+function TrendCard({
+  id,
+  indicator,
+  loading,
+  error,
+}: {
+  id: TrendIndicator['id'];
+  indicator: TrendIndicator | undefined;
+  loading: boolean;
+  error: Error | null;
+}) {
+  const meta = STATIC_META[id];
+
+  return (
+    <article style={cardStyle}>
+      <MetaLine
+        cadence={meta.cadence}
+        tag={meta.tag}
+        source={meta.source}
+        sourceUrl={meta.sourceUrl}
+      />
+      <h3 style={titleStyle}>{meta.title}</h3>
+
+      {loading && <p style={loadingStyle}>Loading…</p>}
+      {!loading && error && <p style={errorStyle}>Unable to load data.</p>}
+      {!loading && indicator?.error && (
+        <p style={errorStyle}>Unable to load data.</p>
+      )}
+      {!loading && indicator && !indicator.error && indicator.latest && (
+        <>
+          <p style={valueStyle}>
+            {formatValue(indicator.latest.value, id)}{' '}
+            <span style={unitStyle}>{indicator.unit}</span>
+          </p>
+          <p style={asOfStyle}>
+            as of {indicator.latest.date}
+            {indicator.latest.window ? ` · ${indicator.latest.window}` : ''}
+            {indicator.baseline ? ` · baseline ${indicator.baseline}` : ''}
+          </p>
+          <Sparkline points={indicator.series} strokeColor={meta.sparkColor} />
+        </>
+      )}
+    </article>
+  );
+}
+
+function formatValue(value: number, id: TrendIndicator['id']): string {
+  if (id === 'temp') {
+    const sign = value >= 0 ? '+' : '';
+    return `${sign}${value.toFixed(2)}`;
+  }
+  return value.toFixed(2);
 }
 
 /**
  * Tiny inline SVG sparkline — no chart library yet, keeps bundle lean.
  * Expects a series of { date, value } sorted ascending.
  */
-function Sparkline({ points }: { points: TrendPoint[] }) {
+function Sparkline({
+  points,
+  strokeColor,
+}: {
+  points: TrendPoint[];
+  strokeColor: string;
+}) {
   if (points.length < 2) return null;
 
   const width = 220;
@@ -111,13 +149,13 @@ function Sparkline({ points }: { points: TrendPoint[] }) {
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="CO₂ 12-month sparkline"
+      aria-label="12-month sparkline"
       style={{ display: 'block', marginTop: '8px' }}
     >
       <path
         d={path}
         fill="none"
-        stroke="#0f766e"
+        stroke={strokeColor}
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -125,6 +163,49 @@ function Sparkline({ points }: { points: TrendPoint[] }) {
     </svg>
   );
 }
+
+/**
+ * Static per-card metadata. The backend ships the same strings, but rendering
+ * them from a local table lets the MetaLine paint even during the initial
+ * loading state so the trust signalling is visible from the first frame.
+ */
+const STATIC_META: Record<
+  TrendIndicator['id'],
+  {
+    title: string;
+    cadence: string;
+    tag: TrustTag;
+    source: string;
+    sourceUrl: string;
+    sparkColor: string;
+  }
+> = {
+  co2: {
+    title: 'CO₂',
+    cadence: 'Monthly',
+    tag: TrustTag.Observed,
+    source: 'NOAA GML Mauna Loa',
+    sourceUrl: 'https://gml.noaa.gov/ccgg/trends/',
+    sparkColor: '#0f766e',
+  },
+  temp: {
+    title: 'Global Temp Anomaly',
+    cadence: 'Monthly (preliminary)',
+    tag: TrustTag.NearRealTime,
+    source: 'NOAA Global Temperature',
+    sourceUrl:
+      'https://www.ncei.noaa.gov/products/land-based-station/noaa-global-temp',
+    sparkColor: '#b91c1c',
+  },
+  'sea-ice': {
+    title: 'Arctic Sea Ice',
+    cadence: 'Daily (5-day running mean)',
+    tag: TrustTag.Observed,
+    source: 'NSIDC Sea Ice Index',
+    sourceUrl: 'https://nsidc.org/data/seaice_index',
+    sparkColor: '#1d4ed8',
+  },
+};
 
 const sectionStyle: React.CSSProperties = {
   display: 'grid',
@@ -165,12 +246,6 @@ const asOfStyle: React.CSSProperties = {
   margin: '2px 0 0',
   fontSize: '11px',
   color: '#94a3b8',
-};
-
-const placeholderStyle: React.CSSProperties = {
-  margin: '8px 0 0',
-  fontSize: '20px',
-  color: '#cbd5e1',
 };
 
 const loadingStyle: React.CSSProperties = {

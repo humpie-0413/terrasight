@@ -55,10 +55,40 @@ End-to-end data flow proven for the NOAA GML CO₂ Climate Trends card:
   - MetaLine renders "Monthly · 🟢observed · NOAA GML Mauna Loa" ABOVE the value
   - Big number + `ppm` unit + "as of YYYY-MM"
   - Inline SVG 12-month sparkline (no chart library — keeps bundle lean)
-- Temp and Sea Ice cards intentionally left as placeholders.
+
+### Phase 4 — Climate Trends Strip COMPLETE (3/3 cards live)
+
+- `backend/connectors/nsidc.py` — fetches NSIDC G02135 v4.0 daily Arctic
+  CSV (`N_seaice_extent_daily_v4.0.csv`), parses via `csv` module (the
+  Source Data column is comma-laden). Helpers:
+  - `five_day_mean()` — trailing 5-day running mean for headline value
+  - `monthly_means()` — daily → calendar-month aggregation for sparkline
+  - Verified: 15,682 points 1978-10-26 → 2026-04-09; latest 5-day mean
+    **13.98 M km²**.
+- `backend/connectors/noaa_ctag.py` — pivoted away from CtaG (no public
+  REST API) to **NOAAGlobalTemp CDR v6.1** ASCII time series. Discovers
+  latest `aravg.mon.land_ocean.90S.90N.v6.1.0.YYYYMM.asc` via directory
+  index scrape, parses year/month/anomaly columns. Anomalies are °C vs
+  1991-2020 baseline. Verified: 2,114 points 1850-01 → 2026-02; latest
+  **+0.53 °C (2026-02)**.
+- `backend/api/trends.py` — refactored:
+  - New fan-out endpoint `GET /api/trends` runs all three connectors in
+    parallel via `asyncio.gather(..., return_exceptions=True)`; a failure
+    in one indicator degrades gracefully without blocking the others.
+  - Individual `/co2`, `/temperature`, `/sea-ice` endpoints retained for
+    deep-link and debugging use.
+  - Payload includes `baseline: "1991-2020"` for temperature, `window:
+    "5-day mean"` for sea ice latest.
+- `frontend/.../TrendsStrip.tsx` — rewritten around a single
+  `useApi<TrendsResponse>('/trends')` call. Deterministic CO₂ → Temp →
+  Sea Ice card ordering independent of backend ordering. Temperature
+  shows signed values (`+0.53`). Each card gets its own sparkline color
+  (teal / red / blue). Static per-card metadata table lets the MetaLine
+  paint trust signals during the initial loading state.
 
 ## Next
-- Implement NSIDC Sea Ice connector (next simplest — public CSV, no auth)
-- Implement NOAAGlobalTemp CDR connector for temperature anomaly
+- Begin Earth Now globe skeleton (Cesium or Globe.gl + GIBS base imagery)
+- NASA FIRMS connector for globe Fires layer (free MAP_KEY)
+- OISST ERDDAP WMS integration for globe Ocean Heat layer
 - Register for 5 API keys (AirNow, OpenAQ v3, Copernicus ADS, EPA AQS, NASA FIRMS)
-- Begin Earth Now globe skeleton (GIBS base imagery layer)
+- Born-in Interactive (P1) — uses all three trend connectors, so unblocked
