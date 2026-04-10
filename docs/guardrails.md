@@ -97,6 +97,7 @@ Run these in order.
 | ECHO single-hop returns no Facilities | `connectors/echo.py` | Two-hop required: `get_facilities` → QueryID → `get_qid` paginated |
 | ECHO `FacLong` absent from QID response | `connectors/echo.py` | Only `FacLat` available; facility map deferred |
 | ECHO `CurrVioFlag`/`Over3yrsFormalActions` absent | `connectors/echo.py` | Use `FacSNCFlg` + `FacComplianceStatus` instead |
+| ECHO bbox query → "Queryset Limit exceeded" for large metros | `connectors/echo.py` | Add `p_act=Y` (active facilities only) — reduces rows from 363k to ~50k |
 | WQP `/data/` missing USGS post-2024-03-11 | `connectors/wqp.py` | Use `/wqx3/` beta |
 | WQP `/wqx3/Result/search` 500 without profile | `connectors/wqp.py` | `dataProfile=basicPhysChem` |
 | WQP `providers=NWIS,STORET` → zero rows | `connectors/wqp.py` | Repeat the param: `providers=NWIS&providers=STORET` |

@@ -341,12 +341,40 @@ once the key is added — no code change needed.
 - `echo13_rest_services` → gone; use `echo_rest_services`
 - Two-hop required; `FacLong` absent; `CurrVioFlag` absent
 
+## 2026-04-11 — AirNow activated
+
+- `AIRNOW_API_KEY` set in `.env` → Block 1 Air Quality now **ok**
+- Houston live reading: **AQI 63 · Moderate · PM2.5**
+  Reporting area: Houston-Galveston-Brazoria, TX
+- All 5 data blocks now ok (related = P1 pending as expected)
+
+## 2026-04-11 — LA metro + Home Local Reports section (`f430f89`)
+
+**Second metro added: Los Angeles-Long Beach-Anaheim (CBSA 31080)**
+- bbox, AirNow ZIP 90001, NOAA USW00023174 (LAX)
+- LA smoke test: all 5 blocks ok · AQI 44 Good · 500 sampled · 8 in violation · 56 NRT sites
+
+**ECHO p_act=Y fix:**
+- LA bbox without p_act → 363k rows → ECHO queryset-limit error
+- p_act=Y (active facilities only) → QueryID obtained for any metro
+- Now applied to all ECHO queries; Houston unaffected (22k vs 71k rows, CAARows consistent)
+- Landmine added to guardrails.md
+
+**New backend endpoints:**
+- `GET /api/reports/` — metro list (slug, name, state, pop, climate_zone)
+- `GET /api/reports/search?q=` — ZIP prefix + metro name substring match
+  - 77002 → Houston, 90001 → LA, "Houston" → Houston, "99999" → null+message
+
+**Home page:**
+- LocalReportsSection with metro cards (fetched from `/api/reports/`) + ZIP/city search → navigate
+- Story Panel "Read Local Report →" already pointed to LA (no change needed)
+
+**ReportPage 404:**
+- Detects HTTP 404 → "Metro not found" message + "Back to home" link
+
 ## Next
-- **AirNow API key** — register at https://docs.airnowapi.org/ and
-  set `AIRNOW_API_KEY` in `.env` to activate Block 1 Air Quality.
-  Connector is ready; no code change needed.
+- Add NYC and Chicago CBSAs to `data/cbsa_mapping.json`.
 - CtaG city monthly time series (Block 2, P1 pending).
-- Add 2-3 more CBSAs to `data/cbsa_mapping.json` (LA, NYC, Chicago).
 - Preset bank for Story Panel, Born-in Interactive (both P1).
-- ECHO `FacLong` absent → facility map on Block 3 deferred until EPA
-  adds longitude back or an alternative coordinate source is found.
+- ECHO `FacLong` absent → facility map on Block 3 deferred.
+- ECHO p_act=Y landmine documented in guardrails.md.
