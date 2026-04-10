@@ -24,7 +24,39 @@
       "city_station_id": "USW00012918",
       "city_station_name": "Houston Hobby AP"
     },
+    "zip_prefixes": ["770", "771", "772", "773", "774", "775", "776", "777",
+                     "778", "779"],
     "core_county_fips": "48201",
     "core_county_name": "Harris County"
+  },
+  "31080": {
+    "cbsa_code": "31080",
+    "name": "Los Angeles-Long Beach-Anaheim",
+    "slug": "los-angeles-long-beach-anaheim",
+    "state": "CA",
+    "population": 13200000,
+    "population_year": "2022",
+    "climate_zone": "Mediterranean (Csb)",
+    "lat": 34.05,
+    "lon": -118.24,
+    "bbox": {
+      "west": -119.0,
+      "south": 33.5,
+      "east": -116.9,
+      "north": 34.9
+    },
+    "airnow": {
+      "reporting_area": "Los Angeles-South Coast Air Basin",
+      "sample_zip": "90001"
+    },
+    "noaa": {
+      "city_station_id": "USW00023174",
+      "city_station_name": "Los Angeles Intl AP"
+    },
+    "zip_prefixes": ["900", "901", "902", "903", "904", "905", "906", "907",
+                     "908", "910", "911", "912", "913", "914", "915", "916",
+                     "917", "918", "919", "920", "921", "922", "923", "924"],
+    "core_county_fips": "06037",
+    "core_county_name": "Los Angeles County"
   }
 }

@@ -268,6 +268,52 @@ def _key_signals(
     return [aqi_card, temp_card, fac_card, water_card]
 
 
+@router.get("/")
+async def list_reports() -> list[dict[str, Any]]:
+    """Return lightweight metadata for all available metros (home page cards)."""
+    mapping = _load_cbsa_mapping()
+    return [
+        {
+            "slug": cbsa["slug"],
+            "name": cbsa["name"],
+            "state": cbsa.get("state"),
+            "population": cbsa.get("population"),
+            "population_year": cbsa.get("population_year"),
+            "climate_zone": cbsa.get("climate_zone"),
+            "lat": cbsa.get("lat"),
+            "lon": cbsa.get("lon"),
+        }
+        for cbsa in mapping.values()
+    ]
+
+
+@router.get("/search")
+async def search_report(q: str) -> dict[str, Any]:
+    """Match a ZIP code or metro name to a CBSA slug.
+
+    ZIP: checks if q starts with any prefix in the CBSA's zip_prefixes list.
+    Name: case-insensitive substring match on the CBSA name.
+    Returns {slug, name} on match or {slug: null, message} when nothing found.
+    """
+    mapping = _load_cbsa_mapping()
+    term = q.strip()
+    # ZIP lookup (numeric input → prefix match)
+    if term.isdigit():
+        for cbsa in mapping.values():
+            for prefix in cbsa.get("zip_prefixes", []):
+                if term.startswith(prefix):
+                    return {"slug": cbsa["slug"], "name": cbsa["name"]}
+    # City / metro name substring match
+    term_lower = term.lower()
+    for cbsa in mapping.values():
+        if term_lower in cbsa["name"].lower():
+            return {"slug": cbsa["slug"], "name": cbsa["name"]}
+    return {
+        "slug": None,
+        "message": f"No metro found for '{term}'. Try a ZIP code or city name.",
+    }
+
+
 @router.get("/{cbsa_slug}")
 async def get_report(cbsa_slug: str) -> dict[str, Any]:
     """Return a full 6-block Local Environmental Report for a metro (CBSA)."""

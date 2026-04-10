@@ -215,12 +215,18 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
   }
 
   if (error || !data) {
+    const is404 = error?.message?.includes('404');
     return (
       <article style={pageStyle}>
-        <h1 style={h1Style}>Report unavailable</h1>
+        <h1 style={h1Style}>{is404 ? 'Metro not found' : 'Report unavailable'}</h1>
         <p style={errorStyle}>
-          {error?.message ?? 'Unknown error'} — for slug "{cbsaSlug}".
+          {is404
+            ? `No report exists for "${cbsaSlug}". Check the URL or search for another metro.`
+            : (error?.message ?? 'Unknown error')}
         </p>
+        <a href="/" style={{ color: '#2563eb', fontSize: '14px' }}>
+          ← Back to home
+        </a>
       </article>
     );
   }

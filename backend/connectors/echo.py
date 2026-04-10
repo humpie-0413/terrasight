@@ -92,6 +92,10 @@ class EchoConnector(BaseConnector):
             "p_c1lat": south,
             "p_c2lon": east,
             "p_c2lat": north,
+            # p_act=Y limits to active facilities — reduces row count for
+            # large metro areas (e.g. LA) that otherwise exceed ECHO's
+            # queryset limit and return an Error instead of a QueryID.
+            "p_act": "Y",
             "responseset": 100,
         }
         timeout = httpx.Timeout(30.0, connect=10.0)
@@ -102,6 +106,14 @@ class EchoConnector(BaseConnector):
             r1 = await client.get(BASE_URL + FACILITIES_PATH, params=params)
             r1.raise_for_status()
             first_hop = r1.json().get("Results", {})
+            # ECHO returns {"Error": {"ErrorMessage": "..."}} when the queryset
+            # limit is exceeded. Surface that message instead of a generic error.
+            if "Error" in first_hop:
+                msg = (
+                    first_hop["Error"].get("ErrorMessage")
+                    or "ECHO queryset error (unknown)"
+                )
+                raise RuntimeError(f"ECHO API error: {msg}")
             qid = first_hop.get("QueryID")
             if not qid:
                 raise RuntimeError(
