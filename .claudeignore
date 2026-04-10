@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+*.log
+*.lock
+__pycache__/
+coverage/
+.venv/
+data/*.csv
