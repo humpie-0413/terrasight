@@ -1,0 +1,30 @@
+{
+  "_comment": "CBSA metro mapping used by backend/api/reports.py to resolve a slug URL into the coordinates, reporting areas, and station codes each connector needs. Hand-curated for MVP; grows to 50-100 metros per CLAUDE.md.",
+  "26420": {
+    "cbsa_code": "26420",
+    "name": "Houston-The Woodlands-Sugar Land",
+    "slug": "houston-the-woodlands-sugar-land",
+    "state": "TX",
+    "population": 7340000,
+    "population_year": "2022",
+    "climate_zone": "Humid subtropical (Cfa)",
+    "lat": 29.76,
+    "lon": -95.37,
+    "bbox": {
+      "west": -96.2,
+      "south": 29.0,
+      "east": -94.5,
+      "north": 30.5
+    },
+    "airnow": {
+      "reporting_area": "Houston-Galveston-Brazoria",
+      "sample_zip": "77002"
+    },
+    "noaa": {
+      "city_station_id": "USW00012918",
+      "city_station_name": "Houston Hobby AP"
+    },
+    "core_county_fips": "48201",
+    "core_county_name": "Harris County"
+  }
+}

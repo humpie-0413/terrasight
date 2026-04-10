@@ -240,13 +240,116 @@ tooltip: "CAMS forecast — Copernicus ADS account required (P1)".
 - `npm run build` succeeds, 478 modules, ~578 KB gzipped. Clean
   `tsc --noEmit`.
 
+### Phase 7 — Local Reports Vertical Slice (COMPLETE for Houston)
+
+End-to-end Local Environmental Report proven for CBSA 26420
+(Houston-The Woodlands-Sugar Land). Five of six data blocks wired
+through real connectors; ECHO and AirNow degrade gracefully when the
+network/API key isn't available.
+
+**New / rewritten backend connectors:**
+
+- `backend/connectors/airnow.py` — AirNow current AQI by ZIP code,
+  reporting-area granularity. Picks worst pollutant as headline.
+  Raises a clean "not configured" RuntimeError when AIRNOW_API_KEY is
+  missing, which `reports.py` catches as a `not_configured` block.
+- `backend/connectors/echo.py` — EPA ECHO facilities via
+  `http://ofmpub.epa.gov/echo/echo13_rest_services.get_facilities`
+  (HTTP only — HTTPS returns 404). Parses CurrVioFlag,
+  Over3yrsFormalActions, Over3yrsEnfAmt from the first response.
+  Some network regions block this host; the connector wraps the
+  timeout so the orchestrator can surface it as an error block.
+- `backend/connectors/usgs.py` — USGS modernized OGC API Features,
+  `GET /collections/daily/items?bbox=...&parameter_code=00060`.
+  Real property names from the spike: `monitoring_location_id`,
+  `time`, `value` (string), `unit_of_measure`, `parameter_code`,
+  `statistic_id`, `approval_status`. Feature payload carries NO
+  human-readable site name — we fall back to the USGS site ID.
+  Houston CBSA returns 51 streamflow sites for a 7-day window.
+- `backend/connectors/wqp.py` — Water Quality Portal WQX 3.0 beta at
+  `/wqx3/Result/search`. **Three landmines found during wiring:**
+  (1) `/wqx3/Result/search` returns HTTP 500 without
+  `dataProfile=basicPhysChem`; (2) WQX 3.0 column names differ from
+  2.2 (`Location_Identifier`, `Result_Characteristic`,
+  `Result_Measure`, `Result_MeasureUnit` — NOT the slash-separated
+  2.2 names); (3) `providers=NWIS,STORET` (comma-joined string)
+  silently matches **zero rows** — WQP treats the comma as a literal
+  character, not a delimiter. Fix: emit `providers=NWIS&providers=STORET`
+  via a list-of-tuples httpx params. Houston CBSA × 365-day window
+  returns **31,549 samples / 448 stations / 272 analytes**.
+- `backend/connectors/climate_normals.py` — U.S. Climate Normals
+  1991-2020 per-station CSVs at `ncei.noaa.gov/data/normals-monthly/
+  1991-2020/access/{STATION_ID}.csv`. 12 monthly rows × ~260 columns;
+  we extract MLY-TAVG/TMAX/TMIN-NORMAL and MLY-PRCP-NORMAL, handle
+  -9999/-7777/blank sentinels, and compute annual averages. Houston
+  `USW00012918` = **HOUSTON HOBBY AP** (fix: `data/cbsa_mapping.json`
+  originally labeled it "Intercontinental"). Annual mean 71.1°F,
+  annual precip 55.6 in.
+
+**Reports orchestrator:**
+
+- `backend/api/reports.py` — full rewrite. `GET /api/reports/{slug}`:
+  1. Loads `data/cbsa_mapping.json` (indexed by slug; repo-root path
+     resolved relative to `__file__` so CWD doesn't matter).
+  2. Fans out `asyncio.gather(..., return_exceptions=True)` across
+     AirNow + ECHO + USGS + WQP + ClimateNormals in parallel.
+  3. Wraps each connector result as a block with `status`
+     (`ok` / `error` / `not_configured` / `pending`). A single
+     connector failure never 5xxs the whole report.
+  4. Computes four **key-signal mini-cards** for Block 0: Current AQI,
+     Temp anomaly (placeholder), EPA facilities, Streamflow sites.
+  5. Emits a **methodology table** derived from only the healthy
+     blocks (no ghost rows for sources that failed).
+  6. Attaches CLAUDE.md mandatory disclaimers:
+     "Regulatory compliance ≠ environmental exposure or health risk",
+     WQP "Discrete samples — dates vary", AirNow
+     "reporting area ≠ CBSA boundary".
+
+**Frontend:**
+
+- `frontend/src/components/local-reports/ReportPage.tsx` — full
+  rewrite, ~800 lines. Uses `useApi<ReportResponse>` against
+  `/api/reports/{cbsaSlug}` and renders the 6-block layout:
+  - **Block 0** — metro header + 4 key-signal cards.
+  - **Block 1 Air Quality** — AirNow headline (AQI · category ·
+    pollutant) + per-pollutant table. Falls back to a
+    "not configured" notice that tells the user where to register.
+  - **Block 2 Climate Locally** — 12-row monthly normals table plus
+    annual rollup. City monthly series still marked as P1 pending.
+  - **Block 3 Facilities** — 4 stat cards + "top facilities by
+    enforcement activity" table + mandatory disclaimer.
+  - **Block 4 Water** — two sub-blocks (USGS continuous + WQP
+    discrete) with explicit labels and CLAUDE.md disclaimer.
+  - **Block 5 Methodology** — single table listing source / cadence /
+    geo scope / trust tag / license for every healthy block.
+  - **Block 6 Related** — stub linking to rankings/guides (P1).
+  - AdSense slots rendered between 1-2 and 3-4 per CLAUDE.md.
+  - Every healthy block shows a `MetaLine` (cadence · trust badge ·
+    source) before any numbers — honoring the "메타정보가 숫자보다
+    먼저 보여야 함" rule.
+
+**Verified (smoke test against Houston CBSA):**
+- `python -c "from backend.api.reports import get_report; ..."` →
+  Climate Normals OK (71.1°F), USGS OK (51 sites), WQP OK (31,549
+  samples), Facilities error (ConnectTimeout — expected per ECHO
+  docstring on blocked network regions), AirNow not_configured
+  (AIRNOW_API_KEY absent). The orchestrator returned a complete
+  payload with partial data. Methodology table listed 3 healthy
+  sources. Key signal cards rendered even for the degraded blocks.
+- `npm run build` succeeds, 478 modules, 581 KB gzipped.
+- `from backend.main import app` → 18 routes registered.
+
 ## Next
-- Register for FIRMS MAP_KEY + OPENAQ_API_KEY (both free) so the
-  Fires and Air Monitors layers actually carry data. Ocean Heat
-  works right now without any key.
-- Preset bank (5-10 templates for Story Panel): wildfire, hurricane,
-  heatwave, flood, sea ice minimum — replace the hardcoded preset
-  in `/api/earth-now/story`.
-- Register for AirNow, Copernicus ADS, EPA AQS (3 more keys) for
-  Local Reports.
-- Born-in Interactive (P1) — uses all three trend connectors.
+- Register for FIRMS MAP_KEY + OPENAQ_API_KEY + AIRNOW_API_KEY (all
+  free) so Fires, Air Monitors, and Local Reports air quality carry
+  real data. The rest of Local Reports already works without a key.
+- Investigate ECHO HTTP reachability from the current dev network,
+  or add a retry/backoff layer; the orchestrator already degrades
+  gracefully so this is not urgent.
+- City monthly time series for Block 2 Climate (CtaG city product
+  integration, still P1).
+- Add 2-3 more CBSAs to `data/cbsa_mapping.json` (Los Angeles,
+  New York, Chicago) to start exercising the slug router and
+  rankings derivation.
+- Preset bank (5-10 templates for Story Panel).
+- Born-in Interactive (P1).
