@@ -1,486 +1,196 @@
 # EarthPulse / TerraSight — Progress Log
 
-## 2026-04-10
+## 1차 MVP 완료 (2026-04-11)
 
-### Phase 0 — Scaffold
-- Initialized project structure (frontend + backend scaffolding)
-- Created git repository (commit `a95ea56`)
-- React + Vite + TypeScript frontend skeleton (15 components, 5 pages, hooks/utils/types)
-- FastAPI backend skeleton with 14 connector stubs + 5 API routers
+### 라이브 URL
+| 서비스 | URL |
+|--------|-----|
+| Frontend (CF Pages) | https://terrasight.pages.dev |
+| Backend (Render) | https://terrasight-api-o959.onrender.com |
+| GitHub | https://github.com/humpie-0413/terrasight |
 
-### Phase 1-2 — API Spike (COMPLETE)
-Verified accessibility of all 14 P0 data sources via 4 parallel Explore agents.
-Full report in `docs/api-spike-results.md`.
+### 핵심 수치
+| 항목 | 수치 |
+|------|------|
+| Git commits | 21 |
+| Backend connectors | 14 구현 (12 live, 2 stub) |
+| API endpoints | 16개 |
+| Frontend components / pages | ~25개 |
+| Local Reports metros | 10 / 50 목표 |
+| Bundle size | 591 KB gzipped (< 600 KB 가드레일) |
+| 배포 스택 | Cloudflare Pages + Render (Docker) |
 
-**Final score: 9 ✅ GO / 5 ⚠️ / 0 ❌** (OISST blocker resolved — see below)
+---
 
-| Source | Status | Notes |
-|---|---|---|
-| NOAA GML (CO2) | ✅ | Direct file download, no auth |
-| NOAA CtaG | ⚠️ | No public REST API — pivot to NOAAGlobalTemp CDR NetCDF |
-| NSIDC Sea Ice | ✅ | CSV at noaadata.apps.nsidc.org |
-| NOAA OISST | ✅ | **Resolved** — NOAA CoastWatch ERDDAP griddap (NRT + final) |
-| U.S. Climate Normals | ✅ | Station CSVs at ncei.noaa.gov/data/normals-monthly/1991-2020 |
-| AirNow | ✅ | Free key, 500 req/hr per endpoint |
-| OpenAQ v3 | ✅ | Free key (v1/v2 retired 2025-01-31), 2000 req/hr |
-| CAMS (ADS) | ⚠️ | Registration + cdsapi Python client; investigate WMS tile alt |
-| USGS modernized | ✅ | OGC API Features at api.waterdata.usgs.gov/ogcapi/v0 |
-| WQP | ⚠️ | **Must use `/wqx3/` beta** (legacy `/data/` broken for USGS post-2024-03-11) |
-| EPA ECHO | ✅ | HTTP only (HTTPS 404) — use `http://ofmpub.epa.gov/echo/` |
-| EPA AQS | ⚠️ | Email + key, 10 req/min enforced |
-| NASA FIRMS | ✅ | Free MAP_KEY, 5000 trans/10min |
-| NASA GIBS | ✅ | Public WMTS, no auth, default base = `BlueMarble_ShadedRelief_Bathymetry` |
+## 완료 항목 요약
 
-### Integration actions identified
-1. ✅ **OISST blocker RESOLVED** — pivoted to NOAA CoastWatch ERDDAP
-   (`ncdcOisst21NrtAgg`, verified curl returned real SST for 2026-04-08).
-   PODAAC GHRSST kept as fallback.
-2. ⚠️ **CtaG pivot** — use NOAAGlobalTemp CDR NetCDF for Climate Trends strip
-3. ⚠️ **WQP hard-code** `/wqx3/` endpoints in `wqp.py`, add test preventing `/data/` regression
-4. ⚠️ **CAMS** — investigate ADS WMS tile path before committing to cdsapi inside FastAPI
-5. ✅ **URL corrections applied** to `connectors/{usgs,wqp,echo,gibs}.py`
-6. Registration needed: AirNow, OpenAQ v3, Copernicus ADS, EPA AQS, NASA FIRMS (5 free accounts)
+### Phase 0 — Scaffold (`a95ea56`)
+- React + Vite + TypeScript 프런트 skeleton (15 컴포넌트, 5 페이지, hooks/utils/types)
+- FastAPI 백엔드 skeleton (14 커넥터 stub, 5 API 라우터)
+- 프로젝트 구조: `frontend/`, `backend/`, `data/`, `docs/`
 
-### Phase 3 — First Vertical Slice (COMPLETE)
-End-to-end data flow proven for the NOAA GML CO₂ Climate Trends card:
+### Phase 1 — API Spike (`7414e6b`, `ad3175b`)
+14개 P0 소스 검증. 최종 결과: **9 GO / 5 주의 / 0 블로커**
 
-- `backend/connectors/noaa_gml.py` — async httpx fetch of
-  `co2_mm_mlo.txt`, parser skips `#` comments, returns list of
-  `Co2Point(year, month, decimal_date, value_ppm)` wrapped in a
-  `ConnectorResult`. Spike returned 816 points from 1958-03 to 2026-02.
-- `backend/api/trends.py` — `GET /api/trends/co2` returns latest monthly
-  mean + 12-month trailing series. Latest verified: **429.35 ppm (2026-02)**.
-- `frontend/src/components/climate-trends/TrendsStrip.tsx` — CO₂ card wired
-  via `useApi<Co2Response>('/trends/co2')`:
-  - MetaLine renders "Monthly · 🟢observed · NOAA GML Mauna Loa" ABOVE the value
-  - Big number + `ppm` unit + "as of YYYY-MM"
-  - Inline SVG 12-month sparkline (no chart library — keeps bundle lean)
+| 소스 | 결과 | 주요 사항 |
+|------|------|-----------|
+| NOAA GML CO₂ | ✅ | 직접 파일 다운로드, 인증 불필요 |
+| NOAAGlobalTemp CDR | ✅ | CtaG 대체 (공개 REST API 없음) |
+| NSIDC Sea Ice | ✅ | CSV, noaadata.apps.nsidc.org |
+| NOAA OISST | ✅ | ERDDAP griddap (CoastWatch) |
+| U.S. Climate Normals | ✅ | NCEI 1991-2020 per-station CSV |
+| AirNow | ✅ | 무료 키, 500 req/hr |
+| OpenAQ v3 | ✅ | v1/v2 은퇴 2025-01-31; v3 키 필요 |
+| NASA FIRMS | ✅ | 무료 MAP_KEY, 5,000 트랜잭션/10분 |
+| NASA GIBS | ✅ | 공개 WMTS, 인증 불필요 |
+| EPA ECHO | ✅ | echodata.epa.gov (ofmpub 차단됨) |
+| USGS modernized | ✅ | OGC API, api.waterdata.usgs.gov |
+| WQP | ✅ | `/wqx3/` beta 필수 (legacy 폐기) |
+| EPA AQS | ⚠️ | 이메일+키, 10 req/min — P1 |
+| CAMS (ADS) | ⚠️ | Copernicus 계정 필요 — P1 보류 |
 
-### Phase 4 — Climate Trends Strip COMPLETE (3/3 cards live)
+### Phase 2 — Climate Trends Strip (`f69988b`, `ddf8735`)
+3개 카드 모두 라이브.
 
-- `backend/connectors/nsidc.py` — fetches NSIDC G02135 v4.0 daily Arctic
-  CSV (`N_seaice_extent_daily_v4.0.csv`), parses via `csv` module (the
-  Source Data column is comma-laden). Helpers:
-  - `five_day_mean()` — trailing 5-day running mean for headline value
-  - `monthly_means()` — daily → calendar-month aggregation for sparkline
-  - Verified: 15,682 points 1978-10-26 → 2026-04-09; latest 5-day mean
-    **13.98 M km²**.
-- `backend/connectors/noaa_ctag.py` — pivoted away from CtaG (no public
-  REST API) to **NOAAGlobalTemp CDR v6.1** ASCII time series. Discovers
-  latest `aravg.mon.land_ocean.90S.90N.v6.1.0.YYYYMM.asc` via directory
-  index scrape, parses year/month/anomaly columns. Anomalies are °C vs
-  1991-2020 baseline. Verified: 2,114 points 1850-01 → 2026-02; latest
-  **+0.53 °C (2026-02)**.
-- `backend/api/trends.py` — refactored:
-  - New fan-out endpoint `GET /api/trends` runs all three connectors in
-    parallel via `asyncio.gather(..., return_exceptions=True)`; a failure
-    in one indicator degrades gracefully without blocking the others.
-  - Individual `/co2`, `/temperature`, `/sea-ice` endpoints retained for
-    deep-link and debugging use.
-  - Payload includes `baseline: "1991-2020"` for temperature, `window:
-    "5-day mean"` for sea ice latest.
-- `frontend/.../TrendsStrip.tsx` — rewritten around a single
-  `useApi<TrendsResponse>('/trends')` call. Deterministic CO₂ → Temp →
-  Sea Ice card ordering independent of backend ordering. Temperature
-  shows signed values (`+0.53`). Each card gets its own sparkline color
-  (teal / red / blue). Static per-card metadata table lets the MetaLine
-  paint trust signals during the initial loading state.
+| 카드 | 커넥터 | 최신값 (검증일) |
+|------|--------|-----------------|
+| CO₂ | `noaa_gml.py` — Mauna Loa 직접 다운로드 | 429.35 ppm (2026-02) |
+| Global Temp | `noaa_ctag.py` — NOAAGlobalTemp CDR v6.1 ASCII | +0.53 °C vs 1991-2020 (2026-02) |
+| Arctic Sea Ice | `nsidc.py` — G02135 v4.0 daily CSV, 5-day mean | 13.98 M km² (2026-04-09) |
 
-### Phase 5 — Earth Now Globe MVP (COMPLETE)
+- 팬아웃 엔드포인트 `GET /api/trends` — 3개 커넥터 병렬 실행, 한 개 실패해도 나머지 정상 반환
+- `TrendsStrip.tsx` — MetaLine(cadence · badge · source)이 수치 위에 표시
 
-Visible globe + one live event overlay on the home page.
+### Phase 3 — Earth Now Globe (`00a1ae1`, `0b85e37`)
+글로브 + 4개 레이어 + Story Panel.
 
-**Library decision: `react-globe.gl`** (chosen over Cesium)
-- Single package install (51 deps), no static-asset copying. Cesium would
-  require `vite-plugin-cesium` + Workers/Assets/ThirdParty mirrored into
-  `public/` — painful on Windows Git Bash.
-- Declarative `pointsData` overlay — Cesium would need Entity plumbing.
-- Bundle: full frontend builds to 2 MB / **576 KB gzipped** including
-  three.js + globe.gl. Cesium's minimum is ~3-5 MB.
-- Accepted tradeoff: no WMTS tile streaming. Fine for a static BlueMarble
-  base; revisit if we later need daily-updating tiled layers (MODIS true
-  color etc.).
+**라이브러리:** `react-globe.gl` (Cesium 대신 — 번들 3-5 MB 절감)
 
-**Backend:**
-- `backend/connectors/firms.py` — httpx fetch of the NASA FIRMS Area API
-  `api/area/csv/{MAP_KEY}/{SOURCE}/{AREA}/{DAYS}`. Parses the VIIRS CSV
-  into `FireHotspot(lat, lon, brightness, frp, confidence, acq_date,
-  acq_time, daynight)`. Helper `top_by_frp(limit=1500)` caps the feed
-  because the full global 24h VIIRS stream is 30k+ points (too dense
-  at globe scale and too heavy for the browser).
-- `backend/api/earth_now.py` — `GET /api/earth-now/fires` endpoint.
-  Reads `FIRMS_MAP_KEY` from `get_settings()`. **If the key is missing,
-  the endpoint returns `configured: false` with instructions** rather
-  than a 5xx — the globe still renders with an empty overlay and a
-  status line telling the user to register.
-- `backend/config.py` — already had `firms_map_key: str | None`.
-  Pydantic-settings reads it from the `FIRMS_MAP_KEY` env var.
-- `.env.example` added at project root with placeholder values for
-  `FIRMS_MAP_KEY`, `AIRNOW_API_KEY`, `OPENAQ_API_KEY`.
+| 레이어 | 커넥터 | 상태 |
+|--------|--------|------|
+| Base (BlueMarble) | NASA GIBS WMS GetMap | ✅ 항상 ON |
+| Fires | `firms.py` — VIIRS Area API, top 1,500 by FRP | ✅ 기본 ON |
+| Ocean Heat | `oisst.py` — ERDDAP griddap stride 20, 1,684 points | ✅ |
+| Air Monitors | `openaq.py` — v3 PM2.5 locations, AQI 색상 밴드 | ✅ (키 필요) |
+| Smoke | `cams.py` | ⚪ P1 보류 (Copernicus 계정 없음) |
+
+- `Globe.tsx` — `forwardRef` + `flyTo()` 명령 핸들 (Story Panel 연동)
+- `StoryPanel.tsx` — "2026 Wildfire Season" 프리셋, "Explore on Globe" + "Read Local Report →"
+- 레이어 규칙: 연속 필드 1개 + 이벤트 오버레이 1개
+
+### Phase 4 — Local Reports (`e925798`, `7265819`, `f430f89`, `0342dd9`)
+10개 metro, 6블록 구조 라이브.
+
+**커넥터 (Block별):**
+| 커넥터 | 블록 | 검증 수치 |
+|--------|------|-----------|
+| `airnow.py` | Block 1 현재 AQI | Houston AQI 63 · Moderate · PM2.5 |
+| `climate_normals.py` | Block 2 기준선 | Houston 71.1°F / 55.6 in (1991-2020) |
+| `echo.py` | Block 3 시설 | 500 샘플, FacSNCFlg + ComplianceStatus |
+| `usgs.py` | Block 4 수문 | Houston 51 NRT 사이트 |
+| `wqp.py` | Block 4 수질 | Houston 31,549 이산 샘플 |
+
+**ECHO 주요 변경사항 (이전 ofmpub → echodata):**
+- Two-hop API: `get_facilities` → QueryID → `get_qid`
+- `p_act=Y` 필수 (LA bbox → 363k rows → queryset 한계 초과)
+- `FacLong` 없음 (지도 P1 보류), `CurrVioFlag` 없음 → `FacSNCFlg` 사용
+
+**10개 Metro (data/cbsa_mapping.json):**
+| CBSA | 이름 | 인구 | 기후 | NOAA 스테이션 |
+|------|------|------|------|---------------|
+| 26420 | Houston-The Woodlands-Sugar Land | 7.3M | Cfa | USW00012918 |
+| 31080 | Los Angeles-Long Beach-Anaheim | 13.2M | Csb | USW00023174 |
+| 35620 | New York-Newark-Jersey City | 19.8M | Cfa | USW00094728 |
+| 16980 | Chicago-Naperville-Elgin | 9.5M | Dfa | USW00094846 |
+| 19100 | Dallas-Fort Worth-Arlington | 7.8M | Cfa | USW00003927 |
+| 38060 | Phoenix-Mesa-Chandler | 5.1M | BWh | USW00023183 |
+| 37980 | Philadelphia-Camden-Wilmington | 6.2M | Cfa | USW00013739 |
+| 41700 | San Antonio-New Braunfels | 2.6M | Cfa | USW00012921 |
+| 41740 | San Diego-Chula Vista-Carlsbad | 3.3M | Csb | USW00023188 |
+| 41940 | San Jose-Sunnyvale-Santa Clara | 2.0M | Csb | USW00023293 |
+
+**Backend endpoints:**
+- `GET /api/reports/` — metro 목록
+- `GET /api/reports/search?q=` — ZIP prefix + 이름 매칭
+- `GET /api/reports/{cbsa_slug}` — 6블록 리포트 (5개 커넥터 병렬)
 
 **Frontend:**
-- `frontend/src/components/earth-now/Globe.tsx` — full rewrite:
-  - Base texture: NASA GIBS WMS GetMap single equirectangular JPEG
-    (2048×1024 BlueMarble_ShadedRelief_Bathymetry). Verified 2026-04-10:
-    returns `image/jpeg` with `Access-Control-Allow-Origin: *`.
-  - `ResizeObserver` drives responsive width/height matching parent.
-  - Auto-rotate enabled via `controls().autoRotate = true`
-    (speed 0.35) with initial camera at lat 15, lng 0, altitude 2.3.
-  - Fires overlay pulled from `/api/earth-now/fires` via `useApi`,
-    rendered as `pointsData` with:
-    - `pointRadius` = log-scaled FRP (keeps one huge wildfire from
-      dominating the view)
-    - `pointAltitude` = log-scaled FRP (slight lift off surface)
-    - `pointColor` = `#ff3d00`
-    - `pointLabel` = custom HTML tooltip showing FRP, confidence,
-      date/time, day/night flag, and coordinates
-  - Trust metadata (`MetaLine`) overlaid top-left: "NRT ~3h · 🟢observed ·
-    NASA FIRMS / NASA GIBS".
-  - Top-right layer toggle button `[🔥 Fires (N)]`. Default ON.
-  - Bottom status line shows loading or "FIRMS_MAP_KEY not configured"
-    warning when the backend reports the key is missing.
-- `frontend/src/vite-env.d.ts` added — standard Vite+TS triple-slash
-  reference was missing from the initial scaffold, blocking `npm run
-  build` via a pre-existing `import.meta.env` type error in `useApi.ts`.
-  Added to unblock builds.
-- `frontend/package.json` — added `react-globe.gl@^2.37.1`.
-- `frontend/src/pages/Home.tsx` — already wires `<Globe />` in the hero
-  section; no changes needed.
+- `ReportPage.tsx` — 6블록 + MetaLine + graceful degradation + AdSense 슬롯
+- 홈 LocalReportsSection: 상위 4개 카드 + "View all N →" + 랭킹/가이드 링크
 
-**Verified:**
-- `npm run build` succeeds, 478 modules, 2 MB total / 576 KB gzipped.
-- `python -m` smoke test of `/api/earth-now/fires` without a key
-  returns `configured: false` with the registration instructions and
-  an empty `fires: []` list — degrades gracefully.
+### Phase 5 — Atlas + Navigation (`02de1c2`)
+- `atlas_catalog.json` — 8개 카테고리 × 2-5 데이터셋, 14개 live
+- `Atlas.tsx` (/atlas) — 카테고리 카드, trust badge 샘플
+- `AtlasCategory.tsx` (/atlas/:slug) — 데이터셋 목록, MetaLine, 404 처리
+- `AtlasGrid.tsx` — 홈 진입 카드 (emoji, count, live badge)
+- `Header.tsx` — sticky, scrollTo() 앵커, 모바일 햄버거
 
-### Phase 6 — Earth Now Complete (SST + Air Monitors + Story Panel)
+### Phase 6 — SEO 콘텐츠 (`0342dd9`)
+- `GET /api/rankings/epa-violations` — 10개 metro ECHO 병렬 호출, 위반순 정렬
+- `Ranking.tsx` (/rankings/epa-violations) — 로딩 안내 + 위반 테이블 + ECHO 면책
+- `Guide.tsx` (/guides/how-to-read-aqi) — AQI 6단계 + 색상 스와치 + 오염물질 테이블
 
-Three new layers + Story Panel interactivity.
+### Phase 7 — 배포 + 인프라 (`8d03752`, `46d1c52`)
+- `Dockerfile` — python:3.12-slim, 비루트 유저, `$PORT`
+- `render.yaml` — Render blueprint (docker runtime, free plan)
+- `frontend/public/_headers` — CF Pages 보안 헤더 + 정적 에셋 캐싱
+- `frontend/public/_redirects` — SPA fallback
+- `docs/deploy.md` — 3가지 옵션 비교 + 단계별 가이드
+- **CORS 버그 수정:** pydantic-settings `list[str]` 필드가 plain URL 파싱 실패
+  → `str` 타입으로 변경, `main.py`에서 `_parse_origins()` 직접 파싱
 
-**Backend:**
-- `backend/connectors/oisst.py` — real implementation. Uses ERDDAP
-  griddap CSV at stride 20 (`sst[(last)][(0.0)][...]:20:...`),
-  two-header-row parser, filters `NaN` land cells, converts 0-360
-  longitude to -180..180 for the globe. Verified 2026-04-10:
-  latest timestep **2026-04-08T12:00Z**, **1,684 ocean points**,
-  range **-1.80 °C → +31.13 °C**, mean 14.52 °C. ~2 s response.
-- `backend/connectors/openaq.py` — real implementation. Uses OpenAQ
-  v3 `/locations?parameters_id=2&limit=1000` (PM2.5). Single call
-  returns station name + coords + latest sensor reading inline —
-  no second hop to `/measurements` or `/latest`. X-API-Key header.
-  Gracefully raises when the key is missing; the API layer catches
-  that and returns `configured: false`.
-- `backend/api/earth_now.py` — three new endpoints:
-  - `GET /api/earth-now/sst` — ~1,700 point payload with min/max/mean
-    stats for the client-side color ramp.
-  - `GET /api/earth-now/air-monitors` — stations list, `configured:
-    false` fallback when the key is missing (mirrors FIRMS pattern).
-  - `GET /api/earth-now/story` — hardcoded "2026 Wildfire Season"
-    preset with `globe_hint.camera` (lat 40, lng -120, alt 1.6) and
-    `report_link: /reports/los-angeles-long-beach-anaheim`. Full
-    preset bank (5-10 templates) deferred to a later pass.
-- `/api/earth-now/layers` extended with `oisst`, `cams-smoke`
-  (marked `disabled: true` with explanatory `disabled_reason`), and
-  `openaq`.
+### 토큰 최적화 (`085ffe7`)
+- `.claudeignore` 추가 (node_modules, dist, __pycache__ 등)
+- CLAUDE.md: 299 → 123줄 (다이어트)
+- 분산 docs: `connectors.md`, `report-spec.md`, `guardrails.md`, `api-spike-results.md`
 
-**CAMS decision:**
-CAMS has no public WMS tile endpoint without a Copernicus ADS
-account (verified via parallel research agent: ECMWF open data
-decommissioned non-S2S/TIGGE datasets in 2023; Sentinel Hub public
-WMS requires per-instance UUIDs; OpenCharts is PNG-only). NASA GIBS
-MODIS `MODIS_Combined_Value_Added_AOD` would work as an observed
-aerosol proxy but that's a substitution, not CAMS — deferred to a
-follow-up. For now the Smoke toggle is rendered **disabled** with a
-tooltip: "CAMS forecast — Copernicus ADS account required (P1)".
+---
 
-**Frontend:**
-- `frontend/src/components/earth-now/Globe.tsx` — full rewrite as a
-  `forwardRef` controlled component. Layer state is lifted to
-  `Home.tsx` so the Story Panel can command both the active layer
-  and the camera position:
-  - Props: `firesOn`, `onToggleFires`, `continuousLayer`,
-    `onSetContinuousLayer`.
-  - Imperative handle: `flyTo(lat, lng, altitude)` — pauses
-    auto-rotate and animates the camera over 1.5 s.
-  - Fetches fires + SST + air-monitors on mount (~500 KB total).
-  - **Fires** → `pointsData`, red, log-scaled FRP radius / altitude
-    (unchanged).
-  - **Ocean Heat** → `hexBinPointsData` with `hexBinResolution={3}`,
-    `weight = sst_c`, and a 5-stop cold→warm color ramp (deep blue
-    -2 °C → teal 5 → pale green 15 → orange 22 → red 30+). Hex
-    hover tooltip shows mean °C and cell count.
-  - **Air Monitors** → `labelsData` with `labelDotRadius` and EPA
-    PM2.5 AQI color bands (green/yellow/orange/red/purple).
-    Hover tooltip shows station name, PM2.5, and timestamp.
-  - Layer toggles (top-right): Fires is an independent event
-    overlay; Ocean Heat / Smoke / Air Monitors are the mutually-
-    exclusive continuous-field group (Smoke disabled with tooltip).
-  - Active-layer `MetaLine` in the header (top-left) updates to
-    show the current continuous layer's source + badge, or falls
-    back to FIRMS/GIBS when none is active.
-- `frontend/src/components/earth-now/StoryPanel.tsx` — full rewrite.
-  Loads `/api/earth-now/story`, renders title + body, and renders
-  **Explore on Globe** + **Read Local Report →** buttons. The first
-  calls the parent's `onExploreOnGlobe` with the preset's
-  `layer_on` id and camera target. Panel also renders a
-  **Data Status** legend (🟢 observed / 🟡 NRT / 🟠 forecast /
-  🔵 derived / ⚪ estimated) — the trust-tag vocabulary from
-  CLAUDE.md, visible to the user on every visit.
-- `frontend/src/pages/Home.tsx` — holds `firesOn`, `continuousLayer`,
-  and a `globeRef: RefObject<GlobeHandle>`. The `handleExploreOnGlobe`
-  handler maps preset layer ids (`firms` / `oisst` / `openaq`) to
-  the right state setter and then calls `globeRef.current?.flyTo(...)`.
-  Two-column hero: `minmax(0, 2fr) minmax(280px, 1fr)`.
+## 알려진 랜드마인 (docs/guardrails.md 상세 기록)
 
-**Verified:**
-- Backend smoke test: `/sst` returns 1,684 points + stats,
-  `/air-monitors` returns `configured: false` + instructions without
-  a key, `/story` returns the 2026 wildfire preset with camera
-  hint. All three endpoints wired through `APIRouter`.
-- `npm run build` succeeds, 478 modules, ~578 KB gzipped. Clean
-  `tsc --noEmit`.
+| 소스 | 함정 | 해결책 |
+|------|------|--------|
+| EPA ECHO | `ofmpub.epa.gov` 차단 | `echodata.epa.gov` 사용 |
+| EPA ECHO | `echo13_rest_services` 404 | `echo_rest_services` 사용 |
+| EPA ECHO | 단일 요청으로 시설 목록 안 나옴 | Two-hop: get_facilities → get_qid |
+| EPA ECHO | LA같은 대도시 bbox → queryset 초과 | `p_act=Y` 파라미터 필수 |
+| EPA ECHO | `FacLong` 없음 | 위도만 사용; 지도 기능 P1 보류 |
+| WQP | legacy `/data/` — USGS 2024-03-11 이후 데이터 없음 | `/wqx3/` beta 필수 |
+| WQP | `providers=NWIS,STORET` comma-join → 0 rows | repeated params 사용 |
+| pydantic-settings | `list[str]` 필드 — plain URL → json.loads 실패 | `str` 타입 + 직접 파싱 |
 
-## 2026-04-11 — Phase 7 Local Reports + Token Optimization
+---
 
-**Phase 2 connectors (Local Reports backend):**
-- `usgs.py` — modernized OGC API `/collections/daily/items`,
-  parameter_code=00060. Houston: 51 streamflow sites. Feature has
-  no `site_name` — falls back to `monitoring_location_id`.
-- `wqp.py` — WQX 3.0 beta `/wqx3/Result/search`. 3 landmines fixed:
-  (a) `dataProfile=basicPhysChem` required (else HTTP 500),
-  (b) WQX 3.0 column renames (`Location_Identifier`,
-  `Result_Characteristic`, `Result_Measure`, `Result_MeasureUnit`),
-  (c) `providers=NWIS,STORET` comma-joined silently matches zero
-  rows — must emit as repeated params. Houston: 31,549 samples /
-  448 stations / 272 analytes over past year.
-- `climate_normals.py` — per-station 1991-2020 CSVs from NCEI.
-  Houston `USW00012918` = **Houston Hobby AP** (cbsa_mapping label
-  corrected). Annual mean 71.1°F, precip 55.6 in.
+## 2차 작업 목록
 
-**Report API orchestrator** (`backend/api/reports.py`):
-- `GET /api/reports/{cbsa_slug}` loads `data/cbsa_mapping.json`,
-  fans out 5 connectors in parallel via
-  `asyncio.gather(..., return_exceptions=True)`, wraps each as a
-  block with `status: ok | error | not_configured | pending`.
-  Single-connector failure never 5xxs the whole report.
-- Emits Block 0 key-signal mini-cards + methodology source table
-  + mandatory CLAUDE.md disclaimers (ECHO compliance, WQP discrete,
-  AirNow reporting area).
+### 우선순위 높음
+1. **Metro 40개 추가** — 50개 채우기 (현재 10/50)
+   - 상위 50개 CBSA 선정, CBSA code / NOAA 스테이션 / ZIP prefix 조사
+2. **PM2.5 연간 랭킹** — EPA AQS key 등록 후 `GET /api/rankings/pm25`
+3. **AdSense 신청** — 콘텐츠 충분 (10개 리포트 + 2개 SEO 페이지)
+4. **커스텀 도메인** — CF Pages + Render 양쪽 설정
 
-**Current block statuses (Houston smoke test):**
-- ✅ Climate Normals — baseline 71.1°F
-- ✅ USGS — 51 streamflow sites
-- ✅ WQP — 31,549 discrete samples
-- ❌ ECHO — ConnectTimeout (HTTP-only `ofmpub.epa.gov` blocked from
-  current dev network; graceful-degraded as error block). **Needs
-  re-investigation** — possibly corporate firewall, possibly
-  endpoint change, possibly proxy required.
-- ⚪ AirNow — `not_configured`, AIRNOW_API_KEY unset. **Register at
-  https://docs.airnowapi.org/ and add to .env**.
+### 우선순위 중간
+5. **가이드 3~4개 추가**
+   - "What Your Water Quality Samples Mean"
+   - "How to Interpret ECHO Compliance Data"
+   - "Understanding Climate Normals"
+6. **Born-in Interactive 완성** (P1 바이럴)
+   - CO₂ / 기온 / 해빙 then vs now 비교
+   - OG image 자동 생성 → SNS 공유
 
-**Frontend** (`frontend/src/components/local-reports/ReportPage.tsx`):
-- Full 6-block rewrite: metro header + key signals, Air Quality,
-  Climate Locally (12-row normals table), Facilities (top
-  violations table + 4 stat cards), Water (USGS NRT + WQP discrete
-  sub-blocks), Methodology source table, Related Content stub.
-- MetaLine on every healthy block (cadence · trust badge · source
-  above the value). Graceful notices for error / not_configured /
-  pending. AdSense slots between Blocks 1-2 and 3-4.
-- `npm run build` clean, 478 modules, 581 KB gzipped.
+### 우선순위 낮음
+7. **Story Panel 프리셋 확장** — 5~10개 (현재 1개)
+8. **Block 2 도시 시계열** — NOAAGlobalTemp city product 연동
+9. **CAMS Smoke 레이어** — Copernicus 계정 승인 후
 
-**Token optimization:**
-- `.claudeignore` added (node_modules, dist, __pycache__, etc.)
-- CLAUDE.md diet: **299 → 123 lines**. Extracted content to:
-  - `docs/connectors.md` — per-source catalog + endpoint quirks
-  - `docs/report-spec.md` — 6-block spec + AdSense rules
-  - `docs/guardrails.md` — rules + verification checklist +
-    known-landmine table
-- New Operating Rules section in CLAUDE.md: no re-reading context
-  files, parallel tool calls, sub-agent delegation, write down
-  landmines, mandatory graceful degradation.
+---
 
-**Commits:**
-- `085ffe7` chore: token optimization (CLAUDE.md diet + docs split)
-- `e925798` feat: Local Reports MVP — Houston vertical slice
+## 블로커
 
-## 2026-04-11 — ECHO fix + AirNow wiring
-
-### ECHO connector migrated to echodata.epa.gov (`7265819`)
-
-**Root cause of ConnectTimeout:** `ofmpub.epa.gov` is blocked on most
-networks. New host: `echodata.epa.gov` (HTTPS works).
-
-**API behavioral changes vs old echo13:**
-- Two hops required: `get_facilities` → QueryID → `get_qid` paginated
-- `FacLong` absent from QID response (lat-only; map deferred)
-- `CurrVioFlag`, `Over3yrsFormalActions`, `Over3yrsEnfAmt` absent
-- Violation detection now: `FacSNCFlg == 'Y'` OR `FacComplianceStatus`
-  contains "violation" (not "no violation")
-- `QueryRows` in both hops = global unconstrained count; use
-  `CAARows`/`CWARows` from first hop for program-level geo estimate
-- `responseset=100` + up to 5 pages → 500 facility sample per call
-
-**Houston smoke test:** 500 facilities sampled · 2 in violation ·
-1,329 CAA-regulated · 26,272 CWA-regulated (index counts)
-
-**AirNow status:** connector already fully implemented
-(`connectors/airnow.py`). Returns `not_configured` until
-`AIRNOW_API_KEY` is set in `.env`. Block 1 will light up automatically
-once the key is added — no code change needed.
-
-**Full Houston report blocks after fix:**
-- ✅ air_quality — not_configured (key absent, graceful)
-- ✅ climate_locally — ok (normals 71.1°F baseline)
-- ✅ facilities — ok (500 sampled, 2 in violation)
-- ✅ water — ok (USGS 50 NRT sites + WQP discrete)
-- ✅ methodology — ok
-- ⚪ related — pending (P1)
-
-**New landmines added to guardrails.md:**
-- `ofmpub.epa.gov` → blocked; use `echodata.epa.gov`
-- `echo13_rest_services` → gone; use `echo_rest_services`
-- Two-hop required; `FacLong` absent; `CurrVioFlag` absent
-
-## 2026-04-11 — AirNow activated
-
-- `AIRNOW_API_KEY` set in `.env` → Block 1 Air Quality now **ok**
-- Houston live reading: **AQI 63 · Moderate · PM2.5**
-  Reporting area: Houston-Galveston-Brazoria, TX
-- All 5 data blocks now ok (related = P1 pending as expected)
-
-## 2026-04-11 — LA metro + Home Local Reports section (`f430f89`)
-
-**Second metro added: Los Angeles-Long Beach-Anaheim (CBSA 31080)**
-- bbox, AirNow ZIP 90001, NOAA USW00023174 (LAX)
-- LA smoke test: all 5 blocks ok · AQI 44 Good · 500 sampled · 8 in violation · 56 NRT sites
-
-**ECHO p_act=Y fix:**
-- LA bbox without p_act → 363k rows → ECHO queryset-limit error
-- p_act=Y (active facilities only) → QueryID obtained for any metro
-- Now applied to all ECHO queries; Houston unaffected (22k vs 71k rows, CAARows consistent)
-- Landmine added to guardrails.md
-
-**New backend endpoints:**
-- `GET /api/reports/` — metro list (slug, name, state, pop, climate_zone)
-- `GET /api/reports/search?q=` — ZIP prefix + metro name substring match
-  - 77002 → Houston, 90001 → LA, "Houston" → Houston, "99999" → null+message
-
-**Home page:**
-- LocalReportsSection with metro cards (fetched from `/api/reports/`) + ZIP/city search → navigate
-- Story Panel "Read Local Report →" already pointed to LA (no change needed)
-
-**ReportPage 404:**
-- Detects HTTP 404 → "Metro not found" message + "Back to home" link
-
-## 2026-04-11 — Atlas + Navigation + BornIn placeholder (`02de1c2`)
-
-**Atlas static catalog (`frontend/src/data/atlas_catalog.json`):**
-- 8 categories × 2–5 datasets each
-- Fields: id, name, source, url, update_frequency, trust_tag, description,
-  spatial_coverage, license, status (`live` | `planned`)
-- 14 P0 sources marked `live`; remainder `planned`
-
-**New pages:**
-- `frontend/src/pages/Atlas.tsx` — `/atlas` main page, 8 category cards with
-  icon, title, dataset count, live count, 2 sample trust badge pills
-- `frontend/src/pages/AtlasCategory.tsx` — `/atlas/:categorySlug` dataset
-  listing; MetaLine above each dataset; Live/Planned pill; external source link;
-  404 handling for unknown slugs
-
-**Updated components:**
-- `AtlasGrid.tsx` — now imports from `atlas_catalog.json`; shows emoji icon,
-  dataset count, "N live" badge, "View all →" link to `/atlas`
-- `Header.tsx` — full rewrite: sticky (z-index 100), scrollTo() helper for
-  Earth Now / Climate Trends / Local Reports anchors, Atlas → `/atlas` Link,
-  mobile hamburger toggle
-- `BornIn.tsx` — styled placeholder (blue gradient), disabled input + button,
-  "Coming soon (P1)" label, data record start dates
-- `App.tsx` — added `import Atlas` + `<Route path="/atlas" …>` before
-  `:categorySlug`
-
-**Build verified:** 480 modules · 587.70 KB gzipped · 0 TS errors ✅
-
-## 2026-04-11 — 10-metro expansion + Rankings + AQI Guide (`0342dd9`)
-
-**Metro expansion to 10 (data/cbsa_mapping.json):**
-| CBSA | Name | Pop | Climate | NOAA Station | Normals verified |
-|------|------|-----|---------|--------------|-----------------|
-| 35620 | New York-Newark-Jersey City | 19.8M | Cfa | USW00094728 (JFK) | 55.8°F / 49.5in |
-| 16980 | Chicago-Naperville-Elgin | 9.5M | Dfa | USW00094846 (O'Hare) | 51.3°F / 37.9in |
-| 19100 | Dallas-Fort Worth-Arlington | 7.8M | Cfa | USW00003927 (DFW) | 66.6°F / 37.0in |
-| 38060 | Phoenix-Mesa-Chandler | 5.1M | BWh | USW00023183 (Sky Harbor) | 75.6°F / 7.2in |
-| 37980 | Philadelphia-Camden-Wilmington | 6.2M | Cfa | USW00013739 (PHL) | 56.3°F / 44.1in |
-| 41700 | San Antonio-New Braunfels | 2.6M | Cfa | USW00012921 (SAT) | 69.6°F / 32.4in |
-| 41740 | San Diego-Chula Vista-Carlsbad | 3.3M | Csb | USW00023188 (SAN) | 64.7°F / 9.8in |
-| 41940 | San Jose-Sunnyvale-Santa Clara | 2.0M | Csb | USW00023293 (SJC) | 60.7°F / 13.5in |
-
-ECHO smoke: NY=500 sampled/7 violations, Chicago=500 sampled/5 violations ✅
-
-**Rankings API (backend/api/rankings.py):**
-- `GET /api/rankings/epa-violations` — parallel asyncio.gather across all 10 metros
-- Returns rows sorted by in_violation desc; per-row status ok/error for graceful degradation
-- 60s per-metro timeout via asyncio.wait_for; error rows appended at end
-
-**Ranking page (frontend/src/pages/Ranking.tsx):**
-- `/rankings/epa-violations` — loading notice (30-60s expected), table with
-  metro name/state, sampled count, in-violation count, violation rate %, report link
-- ECHO disclaimer footer + source/retrieved_date attribution
-
-**AQI Guide (frontend/src/pages/Guide.tsx):**
-- `/guides/how-to-read-aqi` — static content
-- 6 AQI categories with color swatches, descriptions, action recommendations
-- Criteria pollutant table (PM2.5, PM10, O₃, NO₂, SO₂, CO)
-- Sensitive groups section, data sources, related links
-
-**Home page updates:**
-- LocalReportsSection: shows top 4 metro cards + "View all N metros →" link
-- Rankings quick-link card (📊 EPA Violations Ranking)
-- Guides quick-link card (📖 How to Read an AQI Report)
-
-**Header:** Rankings link updated from /rankings/pm25 → /rankings/epa-violations
-
-**Build:** 480 modules · 591.62 KB gzipped · 0 TS errors ✅
-
-## 2026-04-11 — Production deployment setup (`8d03752`)
-
-**Build check:**
-- 0 `console.log` in frontend + backend ✅
-- 591.63 KB gzipped — within 600 KB guardrail ✅
-- Fixed: `Home.tsx` `handleSearch` used hardcoded `/api` — now uses `VITE_API_BASE ?? '/api'`
-
-**Deployment option comparison (3 options evaluated):**
-| Option | Frontend | Backend | Free BW | Cold Start | Notes |
-|--------|----------|---------|---------|------------|-------|
-| A | Vercel | Render | 100 GB | ~30s | Simple but bandwidth cap |
-| B ✅ | CF Pages | Render | Unlimited | ~30s | Best for SEO long-tail |
-| C | CF Pages | Fly.io | Unlimited | <5s | Lowest cost always-on |
-
-**Chosen: Option B (CF Pages + Render)**
-Reason: CF Pages unlimited bandwidth is critical for SEO-driven local reports;
-Render is zero-config Python; free tier works for MVP; $7/mo for always-on.
-
-**Files created:**
-- `Dockerfile` — python:3.12-slim, non-root user, `$PORT` env var
-- `render.yaml` — Render blueprint (docker runtime, free plan, env var stubs)
-- `frontend/public/_headers` — CF Pages security headers + asset caching rules
-- `frontend/public/_redirects` — SPA fallback (`/* → /index.html 200`)
-- `docs/deploy.md` — option table, step-by-step setup, env var reference
-
-**`.env.example` updated** — all 5 API services documented:
-1. FIRMS_MAP_KEY (P0)
-2. AIRNOW_API_KEY (P0)
-3. OPENAQ_API_KEY (P0)
-4. EPA_AQS_EMAIL + EPA_AQS_KEY (P1)
-5. CAMS_ADS_KEY (P1)
-
-**`backend/config.py` updated:**
-- `debug=False` default (was `True`)
-- `CORS_ORIGINS` env-configurable
-- Added `epa_aqs_email`, `epa_aqs_key`, `cams_ads_key` fields
-
-## Next
-- CtaG city monthly time series (Block 2, P1 pending).
-- Preset bank for Story Panel, Born-in Interactive (both P1).
-- ECHO `FacLong` absent → facility map on Block 3 deferred.
-- Born-in Interactive full implementation (P1).
-- Add PM2.5 annual ranking once EPA AQS key is registered.
+| 항목 | 내용 | 해결 방법 |
+|------|------|-----------|
+| Render Free tier 슬립 | 15분 비활성 → 30초 cold start | UptimeRobot 핑 or Starter $7/월 전환 |
+| CAMS Smoke | Copernicus ADS 계정 수동 승인 | 신청 완료 후 대기 |
+| EPA AQS | 이메일 + 키 등록 필요 (10 req/min) | 등록 후 `epa_aqs_email/key` .env 추가 |
+| FIRMS / OpenAQ | 키 미등록 → 해당 레이어 비활성 | 무료 등록 필요 |
