@@ -24,8 +24,7 @@
       "city_station_id": "USW00012918",
       "city_station_name": "Houston Hobby AP"
     },
-    "zip_prefixes": ["770", "771", "772", "773", "774", "775", "776", "777",
-                     "778", "779"],
+    "zip_prefixes": ["770", "771", "772", "773", "774", "775", "776", "777", "778", "779"],
     "core_county_fips": "48201",
     "core_county_name": "Harris County"
   },
@@ -53,10 +52,232 @@
       "city_station_id": "USW00023174",
       "city_station_name": "Los Angeles Intl AP"
     },
-    "zip_prefixes": ["900", "901", "902", "903", "904", "905", "906", "907",
-                     "908", "910", "911", "912", "913", "914", "915", "916",
-                     "917", "918", "919", "920", "921", "922", "923", "924"],
+    "zip_prefixes": ["900", "901", "902", "903", "904", "905", "906", "907", "908", "910", "911", "912", "913", "914", "915", "916", "917", "918"],
     "core_county_fips": "06037",
     "core_county_name": "Los Angeles County"
+  },
+  "35620": {
+    "cbsa_code": "35620",
+    "name": "New York-Newark-Jersey City",
+    "slug": "new-york-newark-jersey-city",
+    "state": "NY",
+    "population": 19768000,
+    "population_year": "2022",
+    "climate_zone": "Humid subtropical (Cfa)",
+    "lat": 40.71,
+    "lon": -74.00,
+    "bbox": {
+      "west": -74.9,
+      "south": 40.2,
+      "east": -73.2,
+      "north": 41.5
+    },
+    "airnow": {
+      "reporting_area": "New York",
+      "sample_zip": "10001"
+    },
+    "noaa": {
+      "city_station_id": "USW00094728",
+      "city_station_name": "New York JFK Intl AP"
+    },
+    "zip_prefixes": ["070", "071", "072", "073", "074", "100", "101", "102", "103", "104", "110", "111", "112", "113", "114"],
+    "core_county_fips": "36061",
+    "core_county_name": "New York County"
+  },
+  "16980": {
+    "cbsa_code": "16980",
+    "name": "Chicago-Naperville-Elgin",
+    "slug": "chicago-naperville-elgin",
+    "state": "IL",
+    "population": 9509000,
+    "population_year": "2022",
+    "climate_zone": "Humid continental (Dfa)",
+    "lat": 41.88,
+    "lon": -87.63,
+    "bbox": {
+      "west": -89.0,
+      "south": 41.0,
+      "east": -87.0,
+      "north": 42.7
+    },
+    "airnow": {
+      "reporting_area": "Chicago",
+      "sample_zip": "60601"
+    },
+    "noaa": {
+      "city_station_id": "USW00094846",
+      "city_station_name": "Chicago O'Hare Intl AP"
+    },
+    "zip_prefixes": ["600", "601", "602", "603", "604", "605", "606", "607", "608"],
+    "core_county_fips": "17031",
+    "core_county_name": "Cook County"
+  },
+  "19100": {
+    "cbsa_code": "19100",
+    "name": "Dallas-Fort Worth-Arlington",
+    "slug": "dallas-fort-worth-arlington",
+    "state": "TX",
+    "population": 7759000,
+    "population_year": "2022",
+    "climate_zone": "Humid subtropical (Cfa)",
+    "lat": 32.78,
+    "lon": -96.80,
+    "bbox": {
+      "west": -98.0,
+      "south": 32.0,
+      "east": -96.0,
+      "north": 33.6
+    },
+    "airnow": {
+      "reporting_area": "Dallas/Fort Worth",
+      "sample_zip": "75201"
+    },
+    "noaa": {
+      "city_station_id": "USW00003927",
+      "city_station_name": "Dallas Fort Worth Intl AP"
+    },
+    "zip_prefixes": ["750", "751", "752", "753", "754", "755", "756", "757", "758", "760", "761", "762", "763", "764", "765", "766", "767"],
+    "core_county_fips": "48113",
+    "core_county_name": "Dallas County"
+  },
+  "38060": {
+    "cbsa_code": "38060",
+    "name": "Phoenix-Mesa-Chandler",
+    "slug": "phoenix-mesa-chandler",
+    "state": "AZ",
+    "population": 5070000,
+    "population_year": "2022",
+    "climate_zone": "Desert (BWh)",
+    "lat": 33.45,
+    "lon": -112.07,
+    "bbox": {
+      "west": -113.5,
+      "south": 32.8,
+      "east": -111.0,
+      "north": 34.0
+    },
+    "airnow": {
+      "reporting_area": "Phoenix",
+      "sample_zip": "85001"
+    },
+    "noaa": {
+      "city_station_id": "USW00023183",
+      "city_station_name": "Phoenix Sky Harbor Intl AP"
+    },
+    "zip_prefixes": ["850", "851", "852", "853", "854", "855", "856", "857", "858"],
+    "core_county_fips": "04013",
+    "core_county_name": "Maricopa County"
+  },
+  "37980": {
+    "cbsa_code": "37980",
+    "name": "Philadelphia-Camden-Wilmington",
+    "slug": "philadelphia-camden-wilmington",
+    "state": "PA",
+    "population": 6228000,
+    "population_year": "2022",
+    "climate_zone": "Humid subtropical (Cfa)",
+    "lat": 39.95,
+    "lon": -75.17,
+    "bbox": {
+      "west": -76.5,
+      "south": 39.4,
+      "east": -74.2,
+      "north": 40.5
+    },
+    "airnow": {
+      "reporting_area": "Philadelphia",
+      "sample_zip": "19101"
+    },
+    "noaa": {
+      "city_station_id": "USW00013739",
+      "city_station_name": "Philadelphia Intl AP"
+    },
+    "zip_prefixes": ["190", "191", "192", "193", "194", "195", "196", "197", "198"],
+    "core_county_fips": "42101",
+    "core_county_name": "Philadelphia County"
+  },
+  "41700": {
+    "cbsa_code": "41700",
+    "name": "San Antonio-New Braunfels",
+    "slug": "san-antonio-new-braunfels",
+    "state": "TX",
+    "population": 2648000,
+    "population_year": "2022",
+    "climate_zone": "Humid subtropical (Cfa)",
+    "lat": 29.42,
+    "lon": -98.49,
+    "bbox": {
+      "west": -99.5,
+      "south": 29.0,
+      "east": -97.8,
+      "north": 30.0
+    },
+    "airnow": {
+      "reporting_area": "San Antonio",
+      "sample_zip": "78201"
+    },
+    "noaa": {
+      "city_station_id": "USW00012921",
+      "city_station_name": "San Antonio Intl AP"
+    },
+    "zip_prefixes": ["780", "781", "782", "783", "784", "785", "786", "787", "788"],
+    "core_county_fips": "48029",
+    "core_county_name": "Bexar County"
+  },
+  "41740": {
+    "cbsa_code": "41740",
+    "name": "San Diego-Chula Vista-Carlsbad",
+    "slug": "san-diego-chula-vista-carlsbad",
+    "state": "CA",
+    "population": 3298000,
+    "population_year": "2022",
+    "climate_zone": "Mediterranean (Csb)",
+    "lat": 32.72,
+    "lon": -117.16,
+    "bbox": {
+      "west": -117.6,
+      "south": 32.4,
+      "east": -116.4,
+      "north": 33.2
+    },
+    "airnow": {
+      "reporting_area": "San Diego",
+      "sample_zip": "92101"
+    },
+    "noaa": {
+      "city_station_id": "USW00023188",
+      "city_station_name": "San Diego Lindbergh Field"
+    },
+    "zip_prefixes": ["921"],
+    "core_county_fips": "06073",
+    "core_county_name": "San Diego County"
+  },
+  "41940": {
+    "cbsa_code": "41940",
+    "name": "San Jose-Sunnyvale-Santa Clara",
+    "slug": "san-jose-sunnyvale-santa-clara",
+    "state": "CA",
+    "population": 1990000,
+    "population_year": "2022",
+    "climate_zone": "Mediterranean (Csb)",
+    "lat": 37.34,
+    "lon": -121.89,
+    "bbox": {
+      "west": -122.2,
+      "south": 37.0,
+      "east": -121.5,
+      "north": 37.7
+    },
+    "airnow": {
+      "reporting_area": "San Jose",
+      "sample_zip": "95101"
+    },
+    "noaa": {
+      "city_station_id": "USW00023293",
+      "city_station_name": "San Jose Intl AP"
+    },
+    "zip_prefixes": ["950", "951", "952", "953", "954"],
+    "core_county_fips": "06085",
+    "core_county_name": "Santa Clara County"
   }
 }

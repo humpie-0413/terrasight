@@ -108,10 +108,10 @@ function LocalReportsSection() {
         Metro-level air quality, climate, water, and facility data — U.S. metros.
       </p>
 
-      {/* Metro cards */}
+      {/* Metro cards — top 4 + "View all" */}
       <div style={gridStyle}>
         {loading && <p style={{ color: '#64748b', fontSize: '14px' }}>Loading metros…</p>}
-        {metros?.map((metro) => (
+        {metros?.slice(0, 4).map((metro) => (
           <a
             key={metro.slug}
             href={`/reports/${metro.slug}`}
@@ -130,6 +130,25 @@ function LocalReportsSection() {
             <div style={cardLinkStyle}>View Report →</div>
           </a>
         ))}
+      </div>
+
+      {/* View all link */}
+      {metros && metros.length > 4 && (
+        <div style={{ marginBottom: '20px' }}>
+          <a href="/#local-reports" style={viewAllStyle}>
+            View all {metros.length} metros →
+          </a>
+        </div>
+      )}
+
+      {/* Rankings + Guides quick links */}
+      <div style={linksRowStyle}>
+        <a href="/rankings/epa-violations" style={quickLinkStyle}>
+          📊 EPA Violations Ranking
+        </a>
+        <a href="/guides/how-to-read-aqi" style={quickLinkStyle}>
+          📖 How to Read an AQI Report
+        </a>
       </div>
 
       {/* ZIP / city search */}
@@ -201,6 +220,31 @@ const cardClimateStyle: React.CSSProperties = {
 const cardLinkStyle: React.CSSProperties = {
   fontSize: '13px',
   color: '#2563eb',
+  fontWeight: 500,
+};
+const viewAllStyle: React.CSSProperties = {
+  fontSize: '14px',
+  color: '#2563eb',
+  textDecoration: 'none',
+  fontWeight: 500,
+};
+const linksRowStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: '12px',
+  flexWrap: 'wrap',
+  marginBottom: '20px',
+};
+const quickLinkStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '6px',
+  padding: '8px 14px',
+  background: '#f1f5f9',
+  border: '1px solid #e2e8f0',
+  borderRadius: '6px',
+  fontSize: '13px',
+  color: '#0f172a',
+  textDecoration: 'none',
   fontWeight: 500,
 };
 const searchRowStyle: React.CSSProperties = {

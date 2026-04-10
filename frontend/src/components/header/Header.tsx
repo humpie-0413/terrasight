@@ -42,7 +42,7 @@ export default function Header() {
           <Link to="/atlas" style={navLinkStyle}>Atlas</Link>
           <button style={navBtnStyle} onClick={() => scrollTo('local-reports')}>Local Reports</button>
           <Link to="/guides/how-to-read-aqi" style={navLinkStyle}>Guides</Link>
-          <Link to="/rankings/pm25" style={navLinkStyle}>Rankings</Link>
+          <Link to="/rankings/epa-violations" style={navLinkStyle}>Rankings</Link>
         </div>
 
         {/* Hamburger button (mobile only) */}
@@ -63,7 +63,7 @@ export default function Header() {
           <Link to="/atlas" style={mobileLinkStyle} onClick={() => setOpen(false)}>Atlas</Link>
           <button style={mobileLinkStyle} onClick={() => scrollTo('local-reports')}>Local Reports</button>
           <Link to="/guides/how-to-read-aqi" style={mobileLinkStyle} onClick={() => setOpen(false)}>Guides</Link>
-          <Link to="/rankings/pm25" style={mobileLinkStyle} onClick={() => setOpen(false)}>Rankings</Link>
+          <Link to="/rankings/epa-violations" style={mobileLinkStyle} onClick={() => setOpen(false)}>Rankings</Link>
         </div>
       )}
     </header>
