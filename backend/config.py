@@ -10,9 +10,13 @@ class Settings(BaseSettings):
     # Server
     app_name: str = "EarthPulse API"
     debug: bool = False  # set DEBUG=true in .env for local dev
-    # Comma-separated origins; pydantic-settings parses JSON list or bare string.
-    # Example env value: '["https://earthpulse.pages.dev","http://localhost:5173"]'
-    cors_origins: list[str] = ["http://localhost:5173"]
+    # Raw string so pydantic-settings never tries to json.loads it.
+    # Parsed into a list by cors_origins_list() below.
+    # Accepts any of these formats:
+    #   plain URL:       https://terrasight.pages.dev
+    #   comma-separated: https://terrasight.pages.dev,http://localhost:5173
+    #   JSON array:      ["https://terrasight.pages.dev","http://localhost:5173"]
+    cors_origins: str = "http://localhost:5173"
 
     # Database / cache (not yet wired — placeholders for Phase 2)
     database_url: str = "postgresql+asyncpg://localhost/earthpulse"

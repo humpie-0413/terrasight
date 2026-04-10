@@ -1,17 +1,29 @@
 """FastAPI entrypoint for EarthPulse backend."""
+import json
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import atlas, earth_now, rankings, reports, trends
 from backend.config import get_settings
 
+
+def _parse_origins(raw: str) -> list[str]:
+    """Parse CORS_ORIGINS env var — handles plain URL, comma-list, or JSON array."""
+    raw = raw.strip()
+    if raw.startswith("["):
+        return json.loads(raw)
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 settings = get_settings()
+cors_origins = _parse_origins(settings.cors_origins)
 
 app = FastAPI(title=settings.app_name, debug=settings.debug)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

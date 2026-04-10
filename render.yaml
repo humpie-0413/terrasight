@@ -20,7 +20,7 @@ services:
         value: "false"
       - key: CORS_ORIGINS
         # Replace with your Cloudflare Pages URL after first deploy
-        value: '["https://earthpulse.pages.dev"]'
+        value: 'https://terrasight.pages.dev'
 
       # P0 keys — set in Render dashboard → Environment → Secret File / Env Vars
       - key: AIRNOW_API_KEY
