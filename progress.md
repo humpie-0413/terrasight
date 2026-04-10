@@ -153,10 +153,100 @@ Visible globe + one live event overlay on the home page.
   returns `configured: false` with the registration instructions and
   an empty `fires: []` list — degrades gracefully.
 
+### Phase 6 — Earth Now Complete (SST + Air Monitors + Story Panel)
+
+Three new layers + Story Panel interactivity.
+
+**Backend:**
+- `backend/connectors/oisst.py` — real implementation. Uses ERDDAP
+  griddap CSV at stride 20 (`sst[(last)][(0.0)][...]:20:...`),
+  two-header-row parser, filters `NaN` land cells, converts 0-360
+  longitude to -180..180 for the globe. Verified 2026-04-10:
+  latest timestep **2026-04-08T12:00Z**, **1,684 ocean points**,
+  range **-1.80 °C → +31.13 °C**, mean 14.52 °C. ~2 s response.
+- `backend/connectors/openaq.py` — real implementation. Uses OpenAQ
+  v3 `/locations?parameters_id=2&limit=1000` (PM2.5). Single call
+  returns station name + coords + latest sensor reading inline —
+  no second hop to `/measurements` or `/latest`. X-API-Key header.
+  Gracefully raises when the key is missing; the API layer catches
+  that and returns `configured: false`.
+- `backend/api/earth_now.py` — three new endpoints:
+  - `GET /api/earth-now/sst` — ~1,700 point payload with min/max/mean
+    stats for the client-side color ramp.
+  - `GET /api/earth-now/air-monitors` — stations list, `configured:
+    false` fallback when the key is missing (mirrors FIRMS pattern).
+  - `GET /api/earth-now/story` — hardcoded "2026 Wildfire Season"
+    preset with `globe_hint.camera` (lat 40, lng -120, alt 1.6) and
+    `report_link: /reports/los-angeles-long-beach-anaheim`. Full
+    preset bank (5-10 templates) deferred to a later pass.
+- `/api/earth-now/layers` extended with `oisst`, `cams-smoke`
+  (marked `disabled: true` with explanatory `disabled_reason`), and
+  `openaq`.
+
+**CAMS decision:**
+CAMS has no public WMS tile endpoint without a Copernicus ADS
+account (verified via parallel research agent: ECMWF open data
+decommissioned non-S2S/TIGGE datasets in 2023; Sentinel Hub public
+WMS requires per-instance UUIDs; OpenCharts is PNG-only). NASA GIBS
+MODIS `MODIS_Combined_Value_Added_AOD` would work as an observed
+aerosol proxy but that's a substitution, not CAMS — deferred to a
+follow-up. For now the Smoke toggle is rendered **disabled** with a
+tooltip: "CAMS forecast — Copernicus ADS account required (P1)".
+
+**Frontend:**
+- `frontend/src/components/earth-now/Globe.tsx` — full rewrite as a
+  `forwardRef` controlled component. Layer state is lifted to
+  `Home.tsx` so the Story Panel can command both the active layer
+  and the camera position:
+  - Props: `firesOn`, `onToggleFires`, `continuousLayer`,
+    `onSetContinuousLayer`.
+  - Imperative handle: `flyTo(lat, lng, altitude)` — pauses
+    auto-rotate and animates the camera over 1.5 s.
+  - Fetches fires + SST + air-monitors on mount (~500 KB total).
+  - **Fires** → `pointsData`, red, log-scaled FRP radius / altitude
+    (unchanged).
+  - **Ocean Heat** → `hexBinPointsData` with `hexBinResolution={3}`,
+    `weight = sst_c`, and a 5-stop cold→warm color ramp (deep blue
+    -2 °C → teal 5 → pale green 15 → orange 22 → red 30+). Hex
+    hover tooltip shows mean °C and cell count.
+  - **Air Monitors** → `labelsData` with `labelDotRadius` and EPA
+    PM2.5 AQI color bands (green/yellow/orange/red/purple).
+    Hover tooltip shows station name, PM2.5, and timestamp.
+  - Layer toggles (top-right): Fires is an independent event
+    overlay; Ocean Heat / Smoke / Air Monitors are the mutually-
+    exclusive continuous-field group (Smoke disabled with tooltip).
+  - Active-layer `MetaLine` in the header (top-left) updates to
+    show the current continuous layer's source + badge, or falls
+    back to FIRMS/GIBS when none is active.
+- `frontend/src/components/earth-now/StoryPanel.tsx` — full rewrite.
+  Loads `/api/earth-now/story`, renders title + body, and renders
+  **Explore on Globe** + **Read Local Report →** buttons. The first
+  calls the parent's `onExploreOnGlobe` with the preset's
+  `layer_on` id and camera target. Panel also renders a
+  **Data Status** legend (🟢 observed / 🟡 NRT / 🟠 forecast /
+  🔵 derived / ⚪ estimated) — the trust-tag vocabulary from
+  CLAUDE.md, visible to the user on every visit.
+- `frontend/src/pages/Home.tsx` — holds `firesOn`, `continuousLayer`,
+  and a `globeRef: RefObject<GlobeHandle>`. The `handleExploreOnGlobe`
+  handler maps preset layer ids (`firms` / `oisst` / `openaq`) to
+  the right state setter and then calls `globeRef.current?.flyTo(...)`.
+  Two-column hero: `minmax(0, 2fr) minmax(280px, 1fr)`.
+
+**Verified:**
+- Backend smoke test: `/sst` returns 1,684 points + stats,
+  `/air-monitors` returns `configured: false` + instructions without
+  a key, `/story` returns the 2026 wildfire preset with camera
+  hint. All three endpoints wired through `APIRouter`.
+- `npm run build` succeeds, 478 modules, ~578 KB gzipped. Clean
+  `tsc --noEmit`.
+
 ## Next
-- Register for FIRMS MAP_KEY (free, instant) so fire hotspots actually
-  render. Every other piece is already in place.
-- OISST ERDDAP WMS integration for globe Ocean Heat layer (continuous
-  field counterpart to Fires per CLAUDE.md "1 continuous + 1 event" rule).
-- Register for AirNow, OpenAQ v3, Copernicus ADS, EPA AQS (4 more keys).
+- Register for FIRMS MAP_KEY + OPENAQ_API_KEY (both free) so the
+  Fires and Air Monitors layers actually carry data. Ocean Heat
+  works right now without any key.
+- Preset bank (5-10 templates for Story Panel): wildfire, hurricane,
+  heatwave, flood, sea ice minimum — replace the hardcoded preset
+  in `/api/earth-now/story`.
+- Register for AirNow, Copernicus ADS, EPA AQS (3 more keys) for
+  Local Reports.
 - Born-in Interactive (P1) — uses all three trend connectors.

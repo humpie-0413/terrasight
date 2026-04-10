@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.config import get_settings
 from backend.connectors.firms import FirmsConnector, top_by_frp
+from backend.connectors.oisst import OisstConnector, summarize as sst_summary
+from backend.connectors.openaq import OpenAqConnector
 
 router = APIRouter()
 
@@ -36,6 +38,7 @@ async def list_layers() -> list[dict]:
             "kind": "continuous",
             "tag": "observed",
             "cadence": "daily",
+            "default": False,
         },
         {
             "id": "cams-smoke",
@@ -43,13 +46,20 @@ async def list_layers() -> list[dict]:
             "kind": "continuous",
             "tag": "forecast",
             "cadence": "6-12h",
+            "default": False,
+            "disabled": True,
+            "disabled_reason": (
+                "CAMS (Copernicus Atmosphere Monitoring Service) forecast "
+                "smoke layer requires a Copernicus ADS account. Deferred to P1."
+            ),
         },
         {
             "id": "openaq",
             "title": "Air monitors",
-            "kind": "event",
+            "kind": "continuous",
             "tag": "observed",
             "cadence": "varies",
+            "default": False,
         },
     ]
 
@@ -118,14 +128,121 @@ async def get_fires(
     }
 
 
+@router.get("/sst")
+async def get_sst() -> dict[str, Any]:
+    """NOAA OISST v2.1 daily global SST, downsampled for globe rendering.
+
+    Returns ~1,700 ocean grid points at ~5° spacing with lat/lon/sst_c.
+    Continuous-field layer (mutually exclusive with other continuous
+    layers on the Earth Now globe).
+    """
+    connector = OisstConnector()
+    try:
+        raw = await connector.fetch()
+        result = connector.normalize(raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch OISST ERDDAP feed: {exc}",
+        ) from exc
+
+    stats = sst_summary(result.values)
+    return {
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "count": stats["count"],
+        "stats": stats,
+        "configured": True,
+        "points": [
+            {"lat": p.lat, "lon": p.lon, "sst_c": round(p.sst_c, 2)}
+            for p in result.values
+        ],
+        "notes": result.notes,
+    }
+
+
+@router.get("/air-monitors")
+async def get_air_monitors(
+    limit: int = Query(1000, ge=1, le=1000),
+) -> dict[str, Any]:
+    """OpenAQ v3 global PM2.5 stations with latest value per station.
+
+    Returns stations with lat/lon/pm25/location_name. Graceful
+    degradation when OPENAQ_API_KEY is missing — empty list plus
+    registration instructions, so the globe toggle can render as
+    disabled without erroring.
+    """
+    settings = get_settings()
+    connector = OpenAqConnector(api_key=settings.openaq_api_key)
+
+    if not settings.openaq_api_key:
+        return {
+            "source": connector.source,
+            "source_url": connector.source_url,
+            "cadence": connector.cadence,
+            "tag": connector.tag,
+            "count": 0,
+            "configured": False,
+            "message": (
+                "OPENAQ_API_KEY is not configured. Register at "
+                "https://explore.openaq.org/ and set OPENAQ_API_KEY "
+                "in the project-root .env."
+            ),
+            "monitors": [],
+        }
+
+    try:
+        raw = await connector.fetch(limit=limit)
+        result = connector.normalize(raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch OpenAQ feed: {exc}",
+        ) from exc
+
+    return {
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "count": len(result.values),
+        "configured": True,
+        "monitors": [
+            {
+                "lat": m.lat,
+                "lon": m.lon,
+                "pm25": m.pm25,
+                "location_name": m.location_name,
+                "datetime_utc": m.datetime_utc,
+                "country": m.country,
+            }
+            for m in result.values
+        ],
+        "notes": result.notes,
+    }
+
+
 @router.get("/story")
 async def get_story() -> dict:
-    """This month's climate story (preset-driven editorial)."""
-    # TODO: load from editorial preset bank (5-10 presets)
+    """This month's climate story (preset-driven editorial).
+
+    MVP ships one hard-coded preset ("2026 Wildfire Season"). The
+    full preset bank with 5-10 seasonal/event templates will land
+    in a later pass (see CLAUDE.md Story Panel section).
+    """
     return {
-        "title": None,
-        "body": None,
-        "preset_id": None,
-        "globe_hint": None,
-        "report_link": None,
+        "preset_id": "2026-wildfire-season",
+        "title": "2026 Wildfire Season",
+        "body": (
+            "NASA FIRMS is tracking active fire hotspots across western "
+            "North America. Dense smoke plumes are already affecting "
+            "air quality in several metros — check your local report."
+        ),
+        "globe_hint": {
+            "layer_on": "firms",
+            "camera": {"lat": 40, "lng": -120, "altitude": 1.6},
+        },
+        "report_link": "/reports/los-angeles-long-beach-anaheim",
     }
