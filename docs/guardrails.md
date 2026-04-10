@@ -92,7 +92,11 @@ Run these in order.
 
 | Landmine | Where | Fix |
 |---|---|---|
-| ECHO HTTPS → 404 | `connectors/echo.py` | Use `http://ofmpub.epa.gov/...` |
+| ECHO `ofmpub.epa.gov` → blocked | `connectors/echo.py` | Use `https://echodata.epa.gov/echo/` |
+| ECHO `echo13_rest_services` → 404 on echodata | `connectors/echo.py` | Use `echo_rest_services` (no `13`) |
+| ECHO single-hop returns no Facilities | `connectors/echo.py` | Two-hop required: `get_facilities` → QueryID → `get_qid` paginated |
+| ECHO `FacLong` absent from QID response | `connectors/echo.py` | Only `FacLat` available; facility map deferred |
+| ECHO `CurrVioFlag`/`Over3yrsFormalActions` absent | `connectors/echo.py` | Use `FacSNCFlg` + `FacComplianceStatus` instead |
 | WQP `/data/` missing USGS post-2024-03-11 | `connectors/wqp.py` | Use `/wqx3/` beta |
 | WQP `/wqx3/Result/search` 500 without profile | `connectors/wqp.py` | `dataProfile=basicPhysChem` |
 | WQP `providers=NWIS,STORET` → zero rows | `connectors/wqp.py` | Repeat the param: `providers=NWIS&providers=STORET` |
