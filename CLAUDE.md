@@ -108,6 +108,12 @@ hook → depth → revenue funnel.
    missing API keys / pending features must never 5xx or blank the
    UI. Every block / endpoint returns a structured `status` field
    (`ok` / `error` / `not_configured` / `pending`).
+6. **Always update `progress.md` when work finishes.** Record
+   completed items, changed numbers, next actions, and blockers.
+   This step is not optional — never skip it.
+7. **No changes until you're 95% sure.** If you are not ~95%
+   confident in the plan or the diagnosis, do not start editing.
+   Ask clarifying questions until you reach that bar.
 
 ## When to read which doc
 
