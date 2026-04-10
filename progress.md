@@ -400,9 +400,50 @@ once the key is added — no code change needed.
 
 **Build verified:** 480 modules · 587.70 KB gzipped · 0 TS errors ✅
 
+## 2026-04-11 — 10-metro expansion + Rankings + AQI Guide (`0342dd9`)
+
+**Metro expansion to 10 (data/cbsa_mapping.json):**
+| CBSA | Name | Pop | Climate | NOAA Station | Normals verified |
+|------|------|-----|---------|--------------|-----------------|
+| 35620 | New York-Newark-Jersey City | 19.8M | Cfa | USW00094728 (JFK) | 55.8°F / 49.5in |
+| 16980 | Chicago-Naperville-Elgin | 9.5M | Dfa | USW00094846 (O'Hare) | 51.3°F / 37.9in |
+| 19100 | Dallas-Fort Worth-Arlington | 7.8M | Cfa | USW00003927 (DFW) | 66.6°F / 37.0in |
+| 38060 | Phoenix-Mesa-Chandler | 5.1M | BWh | USW00023183 (Sky Harbor) | 75.6°F / 7.2in |
+| 37980 | Philadelphia-Camden-Wilmington | 6.2M | Cfa | USW00013739 (PHL) | 56.3°F / 44.1in |
+| 41700 | San Antonio-New Braunfels | 2.6M | Cfa | USW00012921 (SAT) | 69.6°F / 32.4in |
+| 41740 | San Diego-Chula Vista-Carlsbad | 3.3M | Csb | USW00023188 (SAN) | 64.7°F / 9.8in |
+| 41940 | San Jose-Sunnyvale-Santa Clara | 2.0M | Csb | USW00023293 (SJC) | 60.7°F / 13.5in |
+
+ECHO smoke: NY=500 sampled/7 violations, Chicago=500 sampled/5 violations ✅
+
+**Rankings API (backend/api/rankings.py):**
+- `GET /api/rankings/epa-violations` — parallel asyncio.gather across all 10 metros
+- Returns rows sorted by in_violation desc; per-row status ok/error for graceful degradation
+- 60s per-metro timeout via asyncio.wait_for; error rows appended at end
+
+**Ranking page (frontend/src/pages/Ranking.tsx):**
+- `/rankings/epa-violations` — loading notice (30-60s expected), table with
+  metro name/state, sampled count, in-violation count, violation rate %, report link
+- ECHO disclaimer footer + source/retrieved_date attribution
+
+**AQI Guide (frontend/src/pages/Guide.tsx):**
+- `/guides/how-to-read-aqi` — static content
+- 6 AQI categories with color swatches, descriptions, action recommendations
+- Criteria pollutant table (PM2.5, PM10, O₃, NO₂, SO₂, CO)
+- Sensitive groups section, data sources, related links
+
+**Home page updates:**
+- LocalReportsSection: shows top 4 metro cards + "View all N metros →" link
+- Rankings quick-link card (📊 EPA Violations Ranking)
+- Guides quick-link card (📖 How to Read an AQI Report)
+
+**Header:** Rankings link updated from /rankings/pm25 → /rankings/epa-violations
+
+**Build:** 480 modules · 591.62 KB gzipped · 0 TS errors ✅
+
 ## Next
-- Add NYC and Chicago CBSAs to `data/cbsa_mapping.json`.
 - CtaG city monthly time series (Block 2, P1 pending).
 - Preset bank for Story Panel, Born-in Interactive (both P1).
 - ECHO `FacLong` absent → facility map on Block 3 deferred.
-- ECHO p_act=Y landmine documented in guardrails.md.
+- Born-in Interactive full implementation (P1).
+- Add PM2.5 annual ranking once EPA AQS key is registered.
