@@ -1,0 +1,344 @@
+{
+  "categories": [
+    {
+      "slug": "air",
+      "title": "Air & Atmosphere",
+      "icon": "💨",
+      "description": "Real-time and historical air quality, pollutant concentrations, and atmospheric composition from U.S. and global monitoring networks.",
+      "datasets": [
+        {
+          "id": "airnow",
+          "name": "AirNow — Current AQI",
+          "source": "US EPA / NOAA",
+          "url": "https://www.airnow.gov/",
+          "update_frequency": "Hourly",
+          "trust_tag": "observed",
+          "description": "Real-time Air Quality Index by reporting area across the U.S. Covers O₃, PM2.5, PM10, CO, SO₂, and NO₂. Used in Local Reports Block 1.",
+          "spatial_coverage": "U.S. reporting areas",
+          "license": "Public (US EPA)",
+          "status": "live"
+        },
+        {
+          "id": "epa-aqs",
+          "name": "EPA AirData / AQS — Annual Trends",
+          "source": "US EPA Air Quality System",
+          "url": "https://www.epa.gov/outdoor-air-quality-data",
+          "update_frequency": "Annual",
+          "trust_tag": "observed",
+          "description": "Annual AQI, PM2.5, and ozone trends at county and CBSA level. Used for Local Reports Block 1 trend charts.",
+          "spatial_coverage": "U.S. counties and CBSAs",
+          "license": "Public domain (US EPA)",
+          "status": "live"
+        },
+        {
+          "id": "openaq",
+          "name": "OpenAQ v3 — Global Air Monitors",
+          "source": "OpenAQ",
+          "url": "https://openaq.org/",
+          "update_frequency": "Varies (sensor-dependent)",
+          "trust_tag": "observed",
+          "description": "Aggregated PM2.5 readings from thousands of ground-level sensors worldwide. Used for the Earth Now globe Air Monitors overlay.",
+          "spatial_coverage": "Global",
+          "license": "CC BY 4.0",
+          "status": "live"
+        },
+        {
+          "id": "cams",
+          "name": "CAMS — Smoke & Atmospheric Composition",
+          "source": "Copernicus Atmosphere Monitoring Service (ECMWF)",
+          "url": "https://atmosphere.copernicus.eu/",
+          "update_frequency": "6–12 hours",
+          "trust_tag": "forecast",
+          "description": "Model-based aerosol optical depth, smoke plumes, and atmospheric composition. Requires a Copernicus ADS account. Globe Smoke layer is planned for P1.",
+          "spatial_coverage": "Global",
+          "license": "Copernicus licence (open, non-commercial)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "water",
+      "title": "Water Quality, Drinking Water & Wastewater",
+      "icon": "💧",
+      "description": "Discrete water-quality sampling results, drinking water compliance records, and wastewater facility data.",
+      "datasets": [
+        {
+          "id": "wqp",
+          "name": "Water Quality Portal (WQP) — Discrete Samples",
+          "source": "USGS / EPA / USDA",
+          "url": "https://www.waterqualitydata.us/",
+          "update_frequency": "Discrete (event-based)",
+          "trust_tag": "observed",
+          "description": "Aggregated portal for USGS NWIS, EPA STORET, and USDA water-quality samples. Uses WQX 3.0 beta endpoints. Used in Local Reports Block 4.",
+          "spatial_coverage": "U.S. and some international",
+          "license": "Public domain",
+          "status": "live"
+        },
+        {
+          "id": "sdwis",
+          "name": "SDWIS — Safe Drinking Water Information System",
+          "source": "US EPA",
+          "url": "https://www.epa.gov/enviro/sdwis-search",
+          "update_frequency": "Quarterly",
+          "trust_tag": "observed",
+          "description": "Compliance and violation records for public water systems. Tracks health-based violations, monitoring failures, and enforcement actions.",
+          "spatial_coverage": "U.S. public water systems",
+          "license": "Public domain (US EPA)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "hydrology",
+      "title": "Hydrology & Floods",
+      "icon": "🌊",
+      "description": "Near-real-time streamflow, stage height, and flood forecasts from stream gauges and forecast models.",
+      "datasets": [
+        {
+          "id": "usgs-water",
+          "name": "USGS Modernized Water Data — Streamflow (NRT)",
+          "source": "U.S. Geological Survey",
+          "url": "https://waterdata.usgs.gov/",
+          "update_frequency": "15-minute intervals",
+          "trust_tag": "observed",
+          "description": "Continuous streamflow and stage height from thousands of stream gauges via the modernized OGC API Features. Legacy WaterServices endpoint decommissions Q1 2027. Used in Local Reports Block 4.",
+          "spatial_coverage": "U.S. and territories",
+          "license": "Public domain (USGS)",
+          "status": "live"
+        },
+        {
+          "id": "noaa-rfc",
+          "name": "NOAA River Forecast Centers — Flood Predictions",
+          "source": "NOAA / National Weather Service",
+          "url": "https://www.weather.gov/owp/",
+          "update_frequency": "Varies (event-driven)",
+          "trust_tag": "forecast",
+          "description": "Short- and long-range river stage forecasts from 13 Regional River Forecast Centers. Includes flood category thresholds (minor, moderate, major).",
+          "spatial_coverage": "U.S. rivers",
+          "license": "Public domain (NOAA)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "coast-ocean",
+      "title": "Coast & Ocean",
+      "icon": "🌐",
+      "description": "Sea surface temperature, tides, ocean buoy observations, and marine ecosystem indicators.",
+      "datasets": [
+        {
+          "id": "oisst",
+          "name": "NOAA OISST — Daily Sea Surface Temperature",
+          "source": "NOAA CoastWatch / ERDDAP",
+          "url": "https://coastwatch.pfeg.noaa.gov/erddap/",
+          "update_frequency": "Daily",
+          "trust_tag": "observed",
+          "description": "Optimally-interpolated sea surface temperature on a 0.25° global grid. Served via NOAA CoastWatch ERDDAP (ncdcOisst21NrtAgg). Used for the Earth Now Ocean Heat overlay.",
+          "spatial_coverage": "Global ocean",
+          "license": "Public domain (NOAA)",
+          "status": "live"
+        },
+        {
+          "id": "noaa-coops",
+          "name": "NOAA CO-OPS — Tides & Water Levels",
+          "source": "NOAA Center for Operational Oceanographic Products and Services",
+          "url": "https://tidesandcurrents.noaa.gov/",
+          "update_frequency": "6-minute intervals",
+          "trust_tag": "observed",
+          "description": "Tidal predictions, observed water levels, and storm surge data from the U.S. coastal gauge network.",
+          "spatial_coverage": "U.S. coastlines and territories",
+          "license": "Public domain (NOAA)",
+          "status": "planned"
+        },
+        {
+          "id": "ndbc",
+          "name": "NOAA NDBC — Ocean Buoy Network",
+          "source": "NOAA National Data Buoy Center",
+          "url": "https://www.ndbc.noaa.gov/",
+          "update_frequency": "Hourly",
+          "trust_tag": "observed",
+          "description": "Wave height, period, wind speed, and sea surface temperature from hundreds of moored and drifting buoys.",
+          "spatial_coverage": "Global (U.S.-operated)",
+          "license": "Public domain (NOAA)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "soil-land",
+      "title": "Soil, Land & Site Condition",
+      "icon": "🌱",
+      "description": "Global soil property maps, national land cover, and contaminated site inventories.",
+      "datasets": [
+        {
+          "id": "soilgrids",
+          "name": "SoilGrids — Global Soil Properties",
+          "source": "ISRIC — World Soil Information",
+          "url": "https://www.isric.org/explore/soilgrids",
+          "update_frequency": "Periodic (model updates)",
+          "trust_tag": "derived",
+          "description": "250m global maps of soil organic carbon, pH, texture, bulk density, and other properties, derived from machine-learning models trained on field profiles.",
+          "spatial_coverage": "Global (250m resolution)",
+          "license": "CC BY 4.0",
+          "status": "planned"
+        },
+        {
+          "id": "nlcd",
+          "name": "NLCD — National Land Cover Database",
+          "source": "USGS / Multi-Resolution Land Characteristics Consortium",
+          "url": "https://www.mrlc.gov/",
+          "update_frequency": "Every 2–3 years",
+          "trust_tag": "derived",
+          "description": "30m Landsat-derived classification of U.S. land cover into 20 classes: forests, wetlands, developed, agriculture, open water, etc.",
+          "spatial_coverage": "Conterminous U.S., Alaska, Hawaii",
+          "license": "Public domain (USGS)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "waste",
+      "title": "Waste & Materials",
+      "icon": "♻️",
+      "description": "Hazardous waste generation, toxics releases, and material flow tracking at facility and national levels.",
+      "datasets": [
+        {
+          "id": "tri",
+          "name": "EPA TRI — Toxics Release Inventory",
+          "source": "US EPA",
+          "url": "https://www.epa.gov/toxics-release-inventory-tri-program",
+          "update_frequency": "Annual (reported by October)",
+          "trust_tag": "observed",
+          "description": "Annual facility-level reports of releases, transfers, and disposal of ~800 listed toxic chemicals to air, water, and land. Publicly available back to 1987.",
+          "spatial_coverage": "U.S. facilities",
+          "license": "Public domain (US EPA)",
+          "status": "planned"
+        },
+        {
+          "id": "rcrainfo",
+          "name": "EPA RCRAInfo — Hazardous Waste Tracking",
+          "source": "US EPA",
+          "url": "https://rcrainfo.epa.gov/",
+          "update_frequency": "Varies (biennial report)",
+          "trust_tag": "observed",
+          "description": "Generator, transporter, and treatment/storage/disposal facility data under RCRA. Tracks waste quantities, compliance status, and permit information.",
+          "spatial_coverage": "U.S. RCRA-regulated facilities",
+          "license": "Public domain (US EPA)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "emissions",
+      "title": "Emissions, Energy & Facilities",
+      "icon": "🏭",
+      "description": "Regulated facility inventory, compliance history, and greenhouse gas emissions from stationary sources.",
+      "datasets": [
+        {
+          "id": "echo",
+          "name": "EPA ECHO — Facility Compliance & Enforcement",
+          "source": "US EPA Enforcement and Compliance History Online",
+          "url": "https://echo.epa.gov/",
+          "update_frequency": "Live feed",
+          "trust_tag": "observed",
+          "description": "Regulatory compliance status, violation history, and enforcement actions for air (CAA), water (CWA), and hazardous waste (RCRA) programs. Used in Local Reports Block 3.",
+          "spatial_coverage": "U.S. regulated facilities",
+          "license": "Public domain (US EPA)",
+          "status": "live"
+        },
+        {
+          "id": "climate-trace",
+          "name": "Climate TRACE — GHG Emissions by Facility",
+          "source": "Climate TRACE coalition",
+          "url": "https://climatetrace.org/",
+          "update_frequency": "Annual",
+          "trust_tag": "estimated",
+          "description": "Independent, satellite-derived greenhouse gas emission estimates for 352M+ individual sources — power plants, shipping, agriculture, and more.",
+          "spatial_coverage": "Global facility-level",
+          "license": "CC BY 4.0",
+          "status": "planned"
+        },
+        {
+          "id": "egrid",
+          "name": "EPA eGRID — Power Plant Emissions",
+          "source": "US EPA",
+          "url": "https://www.epa.gov/egrid",
+          "update_frequency": "Annual",
+          "trust_tag": "observed",
+          "description": "Comprehensive emission and resource data for U.S. electricity generation. Covers CO₂, SO₂, NOₓ, and heat input at the plant, boiler, and grid subregion level.",
+          "spatial_coverage": "U.S. power plants and grid regions",
+          "license": "Public domain (US EPA)",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "slug": "climate-hazards",
+      "title": "Climate, Hazards & Exposure",
+      "icon": "🌡️",
+      "description": "Long-term climate signals, extreme weather hazards, and community exposure indices.",
+      "datasets": [
+        {
+          "id": "firms",
+          "name": "NASA FIRMS — Active Wildfires (NRT)",
+          "source": "NASA Fire Information for Resource Management System",
+          "url": "https://firms.modaps.eosdis.nasa.gov/",
+          "update_frequency": "Near-real-time (~3 hours)",
+          "trust_tag": "observed",
+          "description": "VIIRS and MODIS thermal anomaly detections at 375m resolution. Fire Radiative Power (FRP) indicates fire intensity. Used for the Earth Now Fires overlay.",
+          "spatial_coverage": "Global",
+          "license": "Public domain (NASA)",
+          "status": "live"
+        },
+        {
+          "id": "noaa-gml",
+          "name": "NOAA GML Mauna Loa — CO₂ Concentration",
+          "source": "NOAA Global Monitoring Laboratory",
+          "url": "https://gml.noaa.gov/ccgg/trends/",
+          "update_frequency": "Daily + monthly mean",
+          "trust_tag": "observed",
+          "description": "Continuous atmospheric CO₂ measurements from the Mauna Loa Observatory (1958–present). The definitive long-term record of greenhouse gas accumulation.",
+          "spatial_coverage": "Global baseline (Mauna Loa, HI)",
+          "license": "Public domain (NOAA)",
+          "status": "live"
+        },
+        {
+          "id": "noaa-globaltemp",
+          "name": "NOAAGlobalTemp CDR — Temperature Anomaly",
+          "source": "NOAA National Centers for Environmental Information",
+          "url": "https://www.ncei.noaa.gov/products/land-based-station/noaa-global-surface-temperature",
+          "update_frequency": "Monthly (preliminary)",
+          "trust_tag": "near-real-time",
+          "description": "Global surface temperature anomaly relative to the 1991–2020 climatology. Derived from the NOAAGlobalTemp v6.1 combined land-ocean product (1850–present).",
+          "spatial_coverage": "Global (land + ocean)",
+          "license": "Public domain (NOAA)",
+          "status": "live"
+        },
+        {
+          "id": "nsidc-seaice",
+          "name": "NSIDC Sea Ice Index — Arctic Extent",
+          "source": "National Snow and Ice Data Center",
+          "url": "https://nsidc.org/data/g02135",
+          "update_frequency": "Daily (5-day running mean)",
+          "trust_tag": "observed",
+          "description": "Daily Arctic and Antarctic sea ice extent from passive microwave satellite data (1979–present). G02135 v4.0 provides a consistent long-term record.",
+          "spatial_coverage": "Arctic and Antarctic",
+          "license": "Public domain (NSIDC)",
+          "status": "live"
+        },
+        {
+          "id": "fema-nri",
+          "name": "FEMA NRI — National Risk Index",
+          "source": "FEMA",
+          "url": "https://hazards.fema.gov/nri/",
+          "update_frequency": "Annual",
+          "trust_tag": "derived",
+          "description": "County-level composite risk scores for 18 natural hazard types, incorporating expected annual loss, social vulnerability, and community resilience.",
+          "spatial_coverage": "U.S. counties",
+          "license": "Public domain (FEMA)",
+          "status": "planned"
+        }
+      ]
+    }
+  ]
+}

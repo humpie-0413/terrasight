@@ -37,8 +37,11 @@ export default function Home() {
 
   return (
     <main>
-      <TrendsStrip />
+      <div id="climate-trends">
+        <TrendsStrip />
+      </div>
       <section
+        id="earth-now"
         style={{
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)',
@@ -57,7 +60,9 @@ export default function Home() {
       </section>
       <BornIn />
       <AtlasGrid />
-      <LocalReportsSection />
+      <div id="local-reports">
+        <LocalReportsSection />
+      </div>
     </main>
   );
 }
