@@ -441,6 +441,43 @@ ECHO smoke: NY=500 sampled/7 violations, Chicago=500 sampled/5 violations ✅
 
 **Build:** 480 modules · 591.62 KB gzipped · 0 TS errors ✅
 
+## 2026-04-11 — Production deployment setup (`8d03752`)
+
+**Build check:**
+- 0 `console.log` in frontend + backend ✅
+- 591.63 KB gzipped — within 600 KB guardrail ✅
+- Fixed: `Home.tsx` `handleSearch` used hardcoded `/api` — now uses `VITE_API_BASE ?? '/api'`
+
+**Deployment option comparison (3 options evaluated):**
+| Option | Frontend | Backend | Free BW | Cold Start | Notes |
+|--------|----------|---------|---------|------------|-------|
+| A | Vercel | Render | 100 GB | ~30s | Simple but bandwidth cap |
+| B ✅ | CF Pages | Render | Unlimited | ~30s | Best for SEO long-tail |
+| C | CF Pages | Fly.io | Unlimited | <5s | Lowest cost always-on |
+
+**Chosen: Option B (CF Pages + Render)**
+Reason: CF Pages unlimited bandwidth is critical for SEO-driven local reports;
+Render is zero-config Python; free tier works for MVP; $7/mo for always-on.
+
+**Files created:**
+- `Dockerfile` — python:3.12-slim, non-root user, `$PORT` env var
+- `render.yaml` — Render blueprint (docker runtime, free plan, env var stubs)
+- `frontend/public/_headers` — CF Pages security headers + asset caching rules
+- `frontend/public/_redirects` — SPA fallback (`/* → /index.html 200`)
+- `docs/deploy.md` — option table, step-by-step setup, env var reference
+
+**`.env.example` updated** — all 5 API services documented:
+1. FIRMS_MAP_KEY (P0)
+2. AIRNOW_API_KEY (P0)
+3. OPENAQ_API_KEY (P0)
+4. EPA_AQS_EMAIL + EPA_AQS_KEY (P1)
+5. CAMS_ADS_KEY (P1)
+
+**`backend/config.py` updated:**
+- `debug=False` default (was `True`)
+- `CORS_ORIGINS` env-configurable
+- Added `epa_aqs_email`, `epa_aqs_key`, `cams_ads_key` fields
+
 ## Next
 - CtaG city monthly time series (Block 2, P1 pending).
 - Preset bank for Story Panel, Born-in Interactive (both P1).
