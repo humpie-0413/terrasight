@@ -1,0 +1,16 @@
+# Cloudflare Pages — HTTP response headers
+# Docs: https://developers.cloudflare.com/pages/configuration/headers/
+
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# Cache static assets aggressively (Vite hashes filenames)
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Never cache HTML (SPA entry point)
+/*.html
+  Cache-Control: no-cache, no-store, must-revalidate

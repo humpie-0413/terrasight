@@ -1,0 +1,4 @@
+# Cloudflare Pages — SPA fallback redirect
+# All routes that don't match a static file → serve index.html
+# Docs: https://developers.cloudflare.com/pages/configuration/redirects/
+/*    /index.html   200

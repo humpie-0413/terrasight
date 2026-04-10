@@ -89,7 +89,8 @@ function LocalReportsSection() {
     if (!q) return;
     setSearchMsg('');
     try {
-      const res = await fetch(`/api/reports/search?q=${encodeURIComponent(q)}`);
+      const base = import.meta.env.VITE_API_BASE ?? '/api';
+      const res = await fetch(`${base}/reports/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       if (data.slug) {
         navigate(`/reports/${data.slug}`);

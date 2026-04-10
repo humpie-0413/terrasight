@@ -1,0 +1,39 @@
+# ── Render Blueprint — EarthPulse Backend ────────────────────────────────────
+# Docs: https://render.com/docs/blueprint-spec
+# Deploy: connect repo on Render → "New Blueprint" → select this file.
+#
+# Free tier: 512 MB RAM, auto-sleeps after 15 min of inactivity (30s cold start).
+# Upgrade to Starter ($7/mo) for always-on once traffic picks up.
+
+services:
+  - type: web
+    name: earthpulse-api
+    runtime: docker           # uses Dockerfile at repo root
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+
+    # Environment variables — set secret values in the Render dashboard
+    # (mark as "Secret" so they are not stored in plain text in render.yaml)
+    envVars:
+      - key: DEBUG
+        value: "false"
+      - key: CORS_ORIGINS
+        # Replace with your Cloudflare Pages URL after first deploy
+        value: '["https://earthpulse.pages.dev"]'
+
+      # P0 keys — set in Render dashboard → Environment → Secret File / Env Vars
+      - key: AIRNOW_API_KEY
+        sync: false   # "sync: false" = must be set manually in dashboard
+      - key: FIRMS_MAP_KEY
+        sync: false
+      - key: OPENAQ_API_KEY
+        sync: false
+
+      # P1 keys — set when connectors are implemented
+      - key: EPA_AQS_EMAIL
+        sync: false
+      - key: EPA_AQS_KEY
+        sync: false
+      - key: CAMS_ADS_KEY
+        sync: false
