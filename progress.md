@@ -86,9 +86,77 @@ End-to-end data flow proven for the NOAA GML CO₂ Climate Trends card:
   (teal / red / blue). Static per-card metadata table lets the MetaLine
   paint trust signals during the initial loading state.
 
+### Phase 5 — Earth Now Globe MVP (COMPLETE)
+
+Visible globe + one live event overlay on the home page.
+
+**Library decision: `react-globe.gl`** (chosen over Cesium)
+- Single package install (51 deps), no static-asset copying. Cesium would
+  require `vite-plugin-cesium` + Workers/Assets/ThirdParty mirrored into
+  `public/` — painful on Windows Git Bash.
+- Declarative `pointsData` overlay — Cesium would need Entity plumbing.
+- Bundle: full frontend builds to 2 MB / **576 KB gzipped** including
+  three.js + globe.gl. Cesium's minimum is ~3-5 MB.
+- Accepted tradeoff: no WMTS tile streaming. Fine for a static BlueMarble
+  base; revisit if we later need daily-updating tiled layers (MODIS true
+  color etc.).
+
+**Backend:**
+- `backend/connectors/firms.py` — httpx fetch of the NASA FIRMS Area API
+  `api/area/csv/{MAP_KEY}/{SOURCE}/{AREA}/{DAYS}`. Parses the VIIRS CSV
+  into `FireHotspot(lat, lon, brightness, frp, confidence, acq_date,
+  acq_time, daynight)`. Helper `top_by_frp(limit=1500)` caps the feed
+  because the full global 24h VIIRS stream is 30k+ points (too dense
+  at globe scale and too heavy for the browser).
+- `backend/api/earth_now.py` — `GET /api/earth-now/fires` endpoint.
+  Reads `FIRMS_MAP_KEY` from `get_settings()`. **If the key is missing,
+  the endpoint returns `configured: false` with instructions** rather
+  than a 5xx — the globe still renders with an empty overlay and a
+  status line telling the user to register.
+- `backend/config.py` — already had `firms_map_key: str | None`.
+  Pydantic-settings reads it from the `FIRMS_MAP_KEY` env var.
+- `.env.example` added at project root with placeholder values for
+  `FIRMS_MAP_KEY`, `AIRNOW_API_KEY`, `OPENAQ_API_KEY`.
+
+**Frontend:**
+- `frontend/src/components/earth-now/Globe.tsx` — full rewrite:
+  - Base texture: NASA GIBS WMS GetMap single equirectangular JPEG
+    (2048×1024 BlueMarble_ShadedRelief_Bathymetry). Verified 2026-04-10:
+    returns `image/jpeg` with `Access-Control-Allow-Origin: *`.
+  - `ResizeObserver` drives responsive width/height matching parent.
+  - Auto-rotate enabled via `controls().autoRotate = true`
+    (speed 0.35) with initial camera at lat 15, lng 0, altitude 2.3.
+  - Fires overlay pulled from `/api/earth-now/fires` via `useApi`,
+    rendered as `pointsData` with:
+    - `pointRadius` = log-scaled FRP (keeps one huge wildfire from
+      dominating the view)
+    - `pointAltitude` = log-scaled FRP (slight lift off surface)
+    - `pointColor` = `#ff3d00`
+    - `pointLabel` = custom HTML tooltip showing FRP, confidence,
+      date/time, day/night flag, and coordinates
+  - Trust metadata (`MetaLine`) overlaid top-left: "NRT ~3h · 🟢observed ·
+    NASA FIRMS / NASA GIBS".
+  - Top-right layer toggle button `[🔥 Fires (N)]`. Default ON.
+  - Bottom status line shows loading or "FIRMS_MAP_KEY not configured"
+    warning when the backend reports the key is missing.
+- `frontend/src/vite-env.d.ts` added — standard Vite+TS triple-slash
+  reference was missing from the initial scaffold, blocking `npm run
+  build` via a pre-existing `import.meta.env` type error in `useApi.ts`.
+  Added to unblock builds.
+- `frontend/package.json` — added `react-globe.gl@^2.37.1`.
+- `frontend/src/pages/Home.tsx` — already wires `<Globe />` in the hero
+  section; no changes needed.
+
+**Verified:**
+- `npm run build` succeeds, 478 modules, 2 MB total / 576 KB gzipped.
+- `python -m` smoke test of `/api/earth-now/fires` without a key
+  returns `configured: false` with the registration instructions and
+  an empty `fires: []` list — degrades gracefully.
+
 ## Next
-- Begin Earth Now globe skeleton (Cesium or Globe.gl + GIBS base imagery)
-- NASA FIRMS connector for globe Fires layer (free MAP_KEY)
-- OISST ERDDAP WMS integration for globe Ocean Heat layer
-- Register for 5 API keys (AirNow, OpenAQ v3, Copernicus ADS, EPA AQS, NASA FIRMS)
-- Born-in Interactive (P1) — uses all three trend connectors, so unblocked
+- Register for FIRMS MAP_KEY (free, instant) so fire hotspots actually
+  render. Every other piece is already in place.
+- OISST ERDDAP WMS integration for globe Ocean Heat layer (continuous
+  field counterpart to Fires per CLAUDE.md "1 continuous + 1 event" rule).
+- Register for AirNow, OpenAQ v3, Copernicus ADS, EPA AQS (4 more keys).
+- Born-in Interactive (P1) — uses all three trend connectors.
