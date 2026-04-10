@@ -1,36 +1,34 @@
 """EPA ECHO (Enforcement and Compliance History Online) connector.
 
-REST services base: http://ofmpub.epa.gov/echo/
+REST services base: https://echodata.epa.gov/echo/
 Docs:               https://echo.epa.gov/tools/web-services
 Cadence:            live feed
 Tag:                observed (enforcement records are observed regulatory facts)
 Geo:                facility coordinates → aggregated to CBSA
 
 =============================================================================
-⚠️ HTTP ONLY — NOT HTTPS.
-2026-04-10 API spike verified: https://ofmpub.epa.gov → 404.
-Use http://ofmpub.epa.gov/echo/... exactly. Do not upgrade the scheme.
+⚠️ TWO-HOP PATTERN (updated 2026-04-11)
+
+Old endpoint (ofmpub.epa.gov): BLOCKED on most networks — do not use.
+New endpoint (echodata.epa.gov): works via HTTPS.
+
+  Hop 1 – GET /echo/echo_rest_services.get_facilities
+    params:  p_c1lon/p_c1lat (SW corner), p_c2lon/p_c2lat (NE corner),
+             output=JSON, responseset=100
+    returns: QueryID + CAARows / CWARows / RCRRows header counts
+
+  Hop 2 – GET /echo/echo_rest_services.get_qid
+    params:  output=JSON, qid=<QueryID>, pageno=1..N
+    returns: paginated facilities geographically filtered by the original bbox
+
+Key behavioral differences from old echo13 API:
+  • FacLong is ABSENT — only FacLat is returned.
+  • CurrVioFlag, Over3yrsFormalActions, Over3yrsEnfAmt are absent.
+    Use FacSNCFlg (Y=Significant Non-Compliance) + FacComplianceStatus.
+  • QueryRows in both hops reflects GLOBAL (unconstrained) count — do not
+    use for Houston-specific totals.  CAARows / CWARows are better proxies.
+  • Geographic filtering is applied lazily to paginated QID results.
 =============================================================================
-
-Endpoint: echo13_rest_services.get_facilities
-
-Bounding-box parameters: p_c1lon, p_c1lat (west/south), p_c2lon, p_c2lat
-(east/north). Output=JSON returns a first response with a QueryID + Totals +
-the first N facilities. For count-only Block 3 aggregation we only need the
-first response.
-
-Useful qcolumns (per ECHO DFR REST services PDF):
-  1  FacSourceID             — facility identifier
-  3  FacName                 — facility name
-  4  FacStreet + FacCity     — address
-  5  FacState + FacZip       — location
-  12 FacLat / FacLong        — coordinates
-  19 CurrVioFlag             — currently in violation
-  22 Over3yrsFormalActions   — formal enforcement actions in past 3 yrs
-  23 Over3yrsEnfAmt          — enforcement penalties past 3 yrs ($)
-
-Facility-level violation flags live on each facility object in the first
-response — no second QID hop needed for counts.
 
 MANDATORY disclaimer wherever this data is shown:
   "Regulatory compliance ≠ environmental exposure or health risk."
@@ -45,28 +43,30 @@ import httpx
 
 from backend.connectors.base import BaseConnector, ConnectorResult
 
-# NOTE: HTTP, not HTTPS. HTTPS returns 404. See module docstring.
-BASE_URL = "http://ofmpub.epa.gov"
-FACILITIES_PATH = "/echo/echo13_rest_services.get_facilities"
+# HTTPS works on echodata.epa.gov (unlike the old ofmpub.epa.gov).
+BASE_URL = "https://echodata.epa.gov"
+FACILITIES_PATH = "/echo/echo_rest_services.get_facilities"
+QID_PATH = "/echo/echo_rest_services.get_qid"
+
+# 100 facilities per page; 5 pages = 500 facility sample per call.
+MAX_PAGES = 5
 
 
 @dataclass
 class FacilitySummary:
     name: str
-    source_id: str
+    registry_id: str
     lat: float | None
-    lon: float | None
     in_violation: bool
-    formal_actions_3yr: int
-    penalties_3yr_usd: float
+    compliance_status: str | None
 
 
 @dataclass
 class EchoSummary:
-    total_facilities: int
-    in_violation: int
-    formal_actions_3yr: int
-    penalties_3yr_usd: float
+    sampled_facilities: int   # actual records scanned from QID pages
+    in_violation: int         # count where FacSNCFlg=Y or compliance="In Violation"
+    caa_facilities: int       # approximate CAA-regulated count (first-hop CAARows)
+    cwa_facilities: int       # approximate CWA-regulated count (first-hop CWARows)
     top_violations: list[FacilitySummary]
 
 
@@ -83,7 +83,7 @@ class EchoConnector(BaseConnector):
         south: float,
         east: float,
         north: float,
-        response_set: int = 10,
+        max_pages: int = MAX_PAGES,
         **_: Any,
     ) -> dict[str, Any]:
         params = {
@@ -92,92 +92,89 @@ class EchoConnector(BaseConnector):
             "p_c1lat": south,
             "p_c2lon": east,
             "p_c2lat": north,
-            # qcolumns: FacName, FacStreet, FacState, FacLat/Long, CurrVioFlag,
-            # Over3yrsFormalActions, Over3yrsEnfAmt.
-            "qcolumns": "3,4,5,12,19,22,23",
-            "responseset": response_set,
+            "responseset": 100,
         }
-        # ECHO is HTTP-only and reportedly slow. 60s is a reasonable ceiling.
-        timeout = httpx.Timeout(60.0, connect=15.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(
-                BASE_URL + FACILITIES_PATH, params=params
-            )
-            response.raise_for_status()
-            return response.json()
+        timeout = httpx.Timeout(30.0, connect=10.0)
+        async with httpx.AsyncClient(
+            timeout=timeout, follow_redirects=True
+        ) as client:
+            # Hop 1: obtain QueryID and program-level header counts.
+            r1 = await client.get(BASE_URL + FACILITIES_PATH, params=params)
+            r1.raise_for_status()
+            first_hop = r1.json().get("Results", {})
+            qid = first_hop.get("QueryID")
+            if not qid:
+                raise RuntimeError(
+                    "ECHO returned no QueryID in first hop — API may have changed."
+                )
+            caa_rows = int(first_hop.get("CAARows") or 0)
+            cwa_rows = int(first_hop.get("CWARows") or 0)
+
+            # Hop 2: paginate get_qid to collect geographically-filtered records.
+            all_facilities: list[dict[str, Any]] = []
+            for pageno in range(1, max_pages + 1):
+                r2 = await client.get(
+                    BASE_URL + QID_PATH,
+                    params={"output": "JSON", "qid": qid, "pageno": pageno},
+                )
+                r2.raise_for_status()
+                page_facilities = r2.json().get("Results", {}).get("Facilities") or []
+                if not page_facilities:
+                    break
+                all_facilities.extend(page_facilities)
+
+        return {
+            "caa_rows": caa_rows,
+            "cwa_rows": cwa_rows,
+            "facilities": all_facilities,
+        }
 
     def normalize(self, raw: dict[str, Any]) -> ConnectorResult:
-        results_obj = raw.get("Results") or {}
-        facilities = results_obj.get("Facilities") or []
-        query_rows = int(results_obj.get("QueryRows") or len(facilities))
+        facilities_raw = raw.get("facilities") or []
+        caa_rows = int(raw.get("caa_rows") or 0)
+        cwa_rows = int(raw.get("cwa_rows") or 0)
 
-        facility_summaries: list[FacilitySummary] = []
+        summaries: list[FacilitySummary] = []
         in_violation = 0
-        formal_actions_total = 0
-        penalties_total = 0.0
 
-        for f in facilities:
-            curr_vio = str(f.get("CurrVioFlag") or "").upper() == "Y"
-            try:
-                actions = int(f.get("Over3yrsFormalActions") or 0)
-            except (TypeError, ValueError):
-                actions = 0
-            try:
-                penalties = float(
-                    str(f.get("Over3yrsEnfAmt") or "0").replace(",", "")
-                )
-            except (TypeError, ValueError):
-                penalties = 0.0
-
-            if curr_vio:
+        for f in facilities_raw:
+            snc = str(f.get("FacSNCFlg") or "").upper() == "Y"
+            compliance = str(f.get("FacComplianceStatus") or "")
+            is_violation = snc or (
+                "violation" in compliance.lower()
+                and "no violation" not in compliance.lower()
+            )
+            if is_violation:
                 in_violation += 1
-            formal_actions_total += actions
-            penalties_total += penalties
 
-            lat: float | None
-            lon: float | None
             try:
-                lat = float(f.get("FacLat")) if f.get("FacLat") else None
+                lat = float(f["FacLat"]) if f.get("FacLat") else None
             except (TypeError, ValueError):
                 lat = None
-            try:
-                lon = float(f.get("FacLong")) if f.get("FacLong") else None
-            except (TypeError, ValueError):
-                lon = None
 
-            facility_summaries.append(
+            summaries.append(
                 FacilitySummary(
-                    name=str(f.get("FacName") or "Unknown facility"),
-                    source_id=str(f.get("FacSourceID") or ""),
+                    name=str(f.get("FacName") or "Unknown facility").strip(),
+                    registry_id=str(f.get("RegistryID") or ""),
                     lat=lat,
-                    lon=lon,
-                    in_violation=curr_vio,
-                    formal_actions_3yr=actions,
-                    penalties_3yr_usd=penalties,
+                    in_violation=is_violation,
+                    compliance_status=compliance or None,
                 )
             )
 
-        # "Top violations" = currently-in-violation first, then by action count.
+        # Sort: in-violation first.
         top = sorted(
-            facility_summaries,
-            key=lambda fs: (
-                1 if fs.in_violation else 0,
-                fs.formal_actions_3yr,
-                fs.penalties_3yr_usd,
-            ),
-            reverse=True,
+            summaries, key=lambda fs: (1 if fs.in_violation else 0), reverse=True
         )[:10]
 
-        summary = EchoSummary(
-            total_facilities=query_rows,
-            in_violation=in_violation,
-            formal_actions_3yr=formal_actions_total,
-            penalties_3yr_usd=penalties_total,
-            top_violations=top,
-        )
-
         return ConnectorResult(
-            values=summary,
+            values=EchoSummary(
+                sampled_facilities=len(summaries),
+                in_violation=in_violation,
+                caa_facilities=caa_rows,
+                cwa_facilities=cwa_rows,
+                top_violations=top,
+            ),
             source=self.source,
             source_url=self.source_url,
             cadence=self.cadence,
@@ -185,10 +182,13 @@ class EchoConnector(BaseConnector):
             spatial_scope="Facility coordinates within CBSA bounding box",
             license="Public domain (US EPA ECHO)",
             notes=[
-                "Regulatory compliance ≠ environmental exposure or health risk.",
-                "Violation and enforcement counts reflect the sampled "
-                "response_set, not necessarily every facility in the CBSA.",
-                "ECHO is HTTP-only; some deployment regions may be blocked "
-                "and degrade gracefully.",
+                "Regulatory compliance \u2260 environmental exposure or health risk.",
+                (
+                    f"Violation count based on first {len(summaries)} facilities "
+                    "sampled within the bbox (up to 500)."
+                ),
+                "FacLong absent from echodata.epa.gov API \u2014 facility map "
+                "requires lat only; lon is unavailable from this endpoint.",
+                "CAARows/CWARows are index-level counts from the ECHO query header.",
             ],
         )

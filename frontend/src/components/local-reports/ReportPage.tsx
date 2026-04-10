@@ -109,19 +109,17 @@ interface ClimateBlock {
 
 interface FacilitySummary {
   name: string;
-  source_id: string;
+  registry_id: string;
   lat: number | null;
-  lon: number | null;
   in_violation: boolean;
-  formal_actions_3yr: number;
-  penalties_3yr_usd: number;
+  compliance_status: string | null;
 }
 
 interface EchoSummary {
-  total_facilities: number;
+  sampled_facilities: number;
   in_violation: number;
-  formal_actions_3yr: number;
-  penalties_3yr_usd: number;
+  caa_facilities: number;
+  cwa_facilities: number;
   top_violations: FacilitySummary[];
 }
 
@@ -495,16 +493,10 @@ function FacilitiesBody({
   return (
     <>
       <div style={statsGrid}>
-        <Stat label="Facilities tracked" value={values.total_facilities} />
+        <Stat label="Facilities sampled" value={values.sampled_facilities} />
         <Stat label="Currently in violation" value={values.in_violation} />
-        <Stat
-          label="Formal actions (3 yr)"
-          value={values.formal_actions_3yr}
-        />
-        <Stat
-          label="Penalties (3 yr)"
-          value={`$${Math.round(values.penalties_3yr_usd).toLocaleString()}`}
-        />
+        <Stat label="CAA-regulated (approx.)" value={values.caa_facilities} />
+        <Stat label="CWA-regulated (approx.)" value={values.cwa_facilities} />
       </div>
       {values.top_violations.length > 0 && (
         <>
@@ -514,19 +506,15 @@ function FacilitiesBody({
               <tr>
                 <th style={thStyle}>Facility</th>
                 <th style={thStyle}>In violation</th>
-                <th style={thStyle}>Formal actions (3 yr)</th>
-                <th style={thStyle}>Penalties (3 yr)</th>
+                <th style={thStyle}>Compliance status</th>
               </tr>
             </thead>
             <tbody>
               {values.top_violations.map((f) => (
-                <tr key={f.source_id || f.name}>
+                <tr key={f.registry_id || f.name}>
                   <td style={tdStyle}>{f.name}</td>
                   <td style={tdStyle}>{f.in_violation ? '🔴 Yes' : '—'}</td>
-                  <td style={tdStyle}>{f.formal_actions_3yr}</td>
-                  <td style={tdStyle}>
-                    ${Math.round(f.penalties_3yr_usd).toLocaleString()}
-                  </td>
+                  <td style={tdStyle}>{f.compliance_status ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

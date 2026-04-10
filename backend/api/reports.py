@@ -219,11 +219,12 @@ def _key_signals(
     fac_card: dict[str, Any]
     if echo.get("status") == "ok" and echo.get("values"):
         vals = echo["values"]
+        sampled = vals.get("sampled_facilities", 0)
+        in_vio = vals.get("in_violation", 0)
         fac_card = {
             "label": "EPA facilities",
             "value": (
-                f"{vals['total_facilities']} tracked · "
-                f"{vals['in_violation']} in violation"
+                f"{sampled} sampled · {in_vio} in violation"
             ),
             "tag": "observed",
             "source": "EPA ECHO",
