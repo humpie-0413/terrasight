@@ -2,10 +2,13 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import TrendsStrip from '../components/climate-trends/TrendsStrip';
-import Globe, {
-  type ContinuousLayer,
-  type GlobeHandle,
-} from '../components/earth-now/Globe';
+import Globe, { type GlobeHandle } from '../components/earth-now/Globe';
+
+type ActiveEvent = 'fires' | 'storms' | 'monitors' | null;
+type ActiveContinuous =
+  | 'ocean-heat' | 'coral' | 'cmems-sla'
+  | 'gibs-aod' | 'gibs-pm25' | 'gibs-oco2' | 'gibs-flood'
+  | null;
 import StoryPanel from '../components/earth-now/StoryPanel';
 import BornIn from '../components/born-in/BornIn';
 import AtlasGrid from '../components/atlas/AtlasGrid';
@@ -20,18 +23,17 @@ import { useApi } from '../hooks/useApi';
  * position via a forwardRef handle on Globe.
  */
 export default function Home() {
-  const [firesOn, setFiresOn] = useState(true);
-  const [continuousLayer, setContinuousLayer] =
-    useState<ContinuousLayer>(null);
+  const [activeEvent, setActiveEvent] = useState<ActiveEvent>('fires');
+  const [activeContinuous, setActiveContinuous] = useState<ActiveContinuous>(null);
   const globeRef = useRef<GlobeHandle>(null);
 
   const handleExploreOnGlobe = (
     layerOn: string,
     camera: { lat: number; lng: number; altitude: number },
   ) => {
-    if (layerOn === 'firms') setFiresOn(true);
-    if (layerOn === 'oisst') setContinuousLayer('ocean-heat');
-    if (layerOn === 'openaq') setContinuousLayer('air-monitors');
+    if (layerOn === 'firms') setActiveEvent('fires');
+    if (layerOn === 'oisst') setActiveContinuous('ocean-heat');
+    if (layerOn === 'openaq') setActiveContinuous('air-monitors');
     globeRef.current?.flyTo(camera.lat, camera.lng, camera.altitude);
   };
 
@@ -51,10 +53,12 @@ export default function Home() {
       >
         <Globe
           ref={globeRef}
-          firesOn={firesOn}
-          onToggleFires={setFiresOn}
-          continuousLayer={continuousLayer}
-          onSetContinuousLayer={setContinuousLayer}
+          activeEvent={activeEvent}
+          activeContinuous={activeContinuous}
+          onLayerChange={(type, key) => {
+            if (type === 'event') setActiveEvent(key as ActiveEvent);
+            else setActiveContinuous(key as ActiveContinuous);
+          }}
         />
         <StoryPanel onExploreOnGlobe={handleExploreOnGlobe} />
       </section>
