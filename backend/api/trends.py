@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.connectors.noaa_ctag import NoaaCtagConnector
 from backend.connectors.noaa_gml import NoaaGmlConnector
@@ -247,3 +247,143 @@ async def get_sea_level() -> dict[str, Any]:
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to fetch sea level series: {exc}") from exc
+
+
+# ─── Born-in helpers ──────────────────────────────────────────────────────────
+
+async def _fetch_co2_all() -> list:
+    connector = NoaaGmlConnector()
+    result = await connector.run()
+    return result.values
+
+
+async def _fetch_temp_all() -> list:
+    connector = NoaaCtagConnector()
+    result = await connector.run()
+    return result.values
+
+
+async def _fetch_ice_all() -> list:
+    connector = NsidcConnector()
+    result = await connector.run()
+    return result.values
+
+
+@router.get("/born-in")
+async def get_born_in(
+    year: int = Query(..., ge=1850, le=2025, description="Birth year"),
+) -> dict[str, Any]:
+    """Birth-year vs now: CO₂, global temperature, Arctic sea ice.
+
+    Record constraints applied automatically:
+    - CO₂: starts 1958 (Mauna Loa). Years before 1958 clamped.
+    - Temp: starts 1850 (NOAAGlobalTemp). No clamping needed.
+    - Sea ice: starts 1979 (NSIDC AMSR2). Years before 1979 clamped.
+      Uses September mean (traditional annual minimum metric).
+
+    'then' = annual mean for birth year (September mean for sea ice).
+    'now' = most recent available value.
+    """
+    co2_pts, temp_pts, ice_pts = await asyncio.gather(
+        _fetch_co2_all(),
+        _fetch_temp_all(),
+        _fetch_ice_all(),
+        return_exceptions=True,
+    )
+
+    indicators: list[dict[str, Any]] = []
+
+    # ── CO₂ ──────────────────────────────────────────────────────────────────
+    CO2_START = 1958
+    co2_year = max(year, CO2_START)
+    if not isinstance(co2_pts, Exception) and co2_pts:
+        then_pts = [p for p in co2_pts if p.year == co2_year]
+        if then_pts:
+            then_val = round(sum(p.value_ppm for p in then_pts) / len(then_pts), 2)
+            now_pt = co2_pts[-1]
+            now_val = round(now_pt.value_ppm, 2)
+            delta = round(now_val - then_val, 2)
+            indicators.append({
+                "id": "co2",
+                "label": "CO₂ Concentration",
+                "unit": "ppm",
+                "record_start": CO2_START,
+                "birth_year_used": co2_year,
+                "clamped": co2_year != year,
+                "then": {"date": str(co2_year), "value": then_val},
+                "now": {"date": now_pt.iso_month, "value": now_val},
+                "delta_abs": delta,
+                "delta_pct": round(delta / then_val * 100, 1),
+            })
+        else:
+            indicators.append({"id": "co2", "error": f"No data for {co2_year}"})
+    else:
+        indicators.append({"id": "co2", "error": str(co2_pts)})
+
+    # ── Temperature ───────────────────────────────────────────────────────────
+    TEMP_START = 1850
+    temp_year = max(year, TEMP_START)
+    if not isinstance(temp_pts, Exception) and temp_pts:
+        then_pts = [p for p in temp_pts if p.year == temp_year]
+        if then_pts:
+            then_val = round(sum(p.anomaly_c for p in then_pts) / len(then_pts), 2)
+            now_pt = temp_pts[-1]
+            now_val = round(now_pt.anomaly_c, 2)
+            delta = round(now_val - then_val, 2)
+            indicators.append({
+                "id": "temp",
+                "label": "Global Temp Anomaly",
+                "unit": "°C vs 1991–2020",
+                "record_start": TEMP_START,
+                "birth_year_used": temp_year,
+                "clamped": False,
+                "then": {"date": str(temp_year), "value": then_val},
+                "now": {"date": now_pt.iso_month, "value": now_val},
+                "delta_abs": delta,
+                "delta_pct": None,  # anomaly: % change is not meaningful
+            })
+        else:
+            indicators.append({"id": "temp", "error": f"No data for {temp_year}"})
+    else:
+        indicators.append({"id": "temp", "error": str(temp_pts)})
+
+    # ── Sea Ice (September mean — annual minimum) ─────────────────────────────
+    ICE_START = 1979
+    ice_year = max(year, ICE_START)
+    if not isinstance(ice_pts, Exception) and ice_pts:
+        sept_then = [p for p in ice_pts if p.year == ice_year and p.month == 9]
+        # Most recent year that has September data
+        max_sept_year = max((p.year for p in ice_pts if p.month == 9), default=None)
+        sept_now = (
+            [p for p in ice_pts if p.year == max_sept_year and p.month == 9]
+            if max_sept_year else []
+        )
+        if sept_then and sept_now:
+            then_val = round(
+                sum(p.extent_million_km2 for p in sept_then) / len(sept_then), 2
+            )
+            now_val = round(
+                sum(p.extent_million_km2 for p in sept_now) / len(sept_now), 2
+            )
+            delta = round(now_val - then_val, 2)
+            indicators.append({
+                "id": "sea-ice",
+                "label": "Arctic Sea Ice (Sep)",
+                "unit": "million km²",
+                "record_start": ICE_START,
+                "birth_year_used": ice_year,
+                "clamped": ice_year != year,
+                "then": {"date": f"Sep {ice_year}", "value": then_val},
+                "now": {"date": f"Sep {max_sept_year}", "value": now_val},
+                "delta_abs": delta,
+                "delta_pct": round(delta / then_val * 100, 1) if then_val else None,
+            })
+        else:
+            indicators.append({
+                "id": "sea-ice",
+                "error": f"No September data for {ice_year}",
+            })
+    else:
+        indicators.append({"id": "sea-ice", "error": str(ice_pts)})
+
+    return {"year": year, "indicators": indicators}
