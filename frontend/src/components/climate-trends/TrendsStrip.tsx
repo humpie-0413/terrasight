@@ -16,7 +16,7 @@ interface TrendPoint {
 }
 
 interface TrendIndicator {
-  id: 'co2' | 'temp' | 'sea-ice';
+  id: 'co2' | 'temp' | 'sea-ice' | 'ch4' | 'sea-level';
   label: string;
   unit: string;
   source: string;
@@ -34,7 +34,7 @@ interface TrendsResponse {
   indicators: TrendIndicator[];
 }
 
-const ORDER: Array<TrendIndicator['id']> = ['co2', 'temp', 'sea-ice'];
+const ORDER: Array<TrendIndicator['id']> = ['co2', 'temp', 'sea-ice', 'ch4', 'sea-level'];
 
 export default function TrendsStrip() {
   const { data, loading, error } = useApi<TrendsResponse>('/trends');
@@ -110,6 +110,11 @@ function formatValue(value: number, id: TrendIndicator['id']): string {
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(2)}`;
   }
+  if (id === 'sea-level') {
+    const sign = value >= 0 ? '+' : '';
+    return `${sign}${value.toFixed(1)}`;
+  }
+  if (id === 'ch4') return value.toFixed(1);
   return value.toFixed(2);
 }
 
@@ -205,13 +210,31 @@ const STATIC_META: Record<
     sourceUrl: 'https://nsidc.org/data/seaice_index',
     sparkColor: '#1d4ed8',
   },
+  ch4: {
+    title: 'CH₄ (Methane)',
+    cadence: 'Monthly',
+    tag: TrustTag.Observed,
+    source: 'NOAA GML Global CH₄',
+    sourceUrl: 'https://gml.noaa.gov/ccgg/trends/ch4/',
+    sparkColor: '#d97706',
+  },
+  'sea-level': {
+    title: 'Sea Level Rise',
+    cadence: '~10-day',
+    tag: TrustTag.Observed,
+    source: 'NOAA NESDIS GMSL',
+    sourceUrl: 'https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/',
+    sparkColor: '#2563eb',
+  },
 };
 
 const sectionStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: '16px',
+  display: 'flex',
+  gap: '14px',
   padding: '16px 24px',
+  overflowX: 'auto',
+  scrollSnapType: 'x mandatory',
+  WebkitOverflowScrolling: 'touch',
 };
 
 const cardStyle: React.CSSProperties = {
@@ -219,6 +242,9 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid #e5e7eb',
   borderRadius: '8px',
   background: '#fff',
+  minWidth: '200px',
+  flexShrink: 0,
+  scrollSnapAlign: 'start',
 };
 
 const titleStyle: React.CSSProperties = {
