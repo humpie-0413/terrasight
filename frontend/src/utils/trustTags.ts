@@ -4,7 +4,7 @@
 export enum TrustTag {
   Observed = 'observed',
   NearRealTime = 'near-real-time',
-  Forecast = 'forecast',
+  ForecastModel = 'forecast/model',
   Derived = 'derived',
   Estimated = 'estimated',
 }
@@ -29,7 +29,7 @@ export const TRUST_TAG_META: Record<TrustTag, TrustTagMeta> = {
     emoji: '🟡',
     description: '수시간 내 처리',
   },
-  [TrustTag.Forecast]: {
+  [TrustTag.ForecastModel]: {
     label: 'forecast/model',
     color: '#f97316', // orange
     emoji: '🟠',
