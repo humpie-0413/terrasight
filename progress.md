@@ -1,490 +1,332 @@
-# EarthPulse / TerraSight — Progress Log
+# TerraSight — Progress Log
 
-## 1차 MVP 완료 (2026-04-11)
+**최종 업데이트:** 2026-04-12
 
-### 라이브 URL
+---
+
+## 라이브 URL
+
 | 서비스 | URL |
 |--------|-----|
-| Frontend (CF Pages) | https://terrasight.pages.dev |
-| Backend (Render) | https://terrasight-api-o959.onrender.com |
+| Frontend (Cloudflare Pages) | https://terrasight.pages.dev |
+| Backend API (Render) | https://terrasight-api-o959.onrender.com |
 | GitHub | https://github.com/humpie-0413/terrasight |
 
-### 핵심 수치
+---
+
+## 핵심 수치 (2026-04-12 기준)
+
 | 항목 | 수치 |
 |------|------|
-| Git commits | 37 |
-| Backend connectors | 28개 (14 기존 + 14 신규) |
-| API endpoints | 24개 |
-| Frontend components / pages | ~28개 |
-| Local Reports metros | 50 / 50 목표 ✅ |
-| Bundle size | **598 KB gzipped** (< 600 KB 가드레일) |
-| Globe 레이어 | **13개** (5 카테고리 어코디언) |
-| Trends 카드 | **5개** (CO₂ · Temp · Sea Ice · CH₄ · Sea Level) |
+| Git commits | **47** |
+| Backend connectors | **28개** (14 기존 + 14 글로벌) |
+| API endpoints | **27개** |
+| Frontend components / pages | **~32개** |
+| Local Reports metros | **50개** ✅ |
+| Globe 레이어 | **13개** (5카테고리 어코디언) |
+| Climate Trends 카드 | **5개** (CO₂ · Temp · Sea Ice · CH₄ · Sea Level) |
+| Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
+| Atlas 카테고리 | **8개** |
+| SEO 랭킹 페이지 | **2개** |
+| SEO 가이드 페이지 | **4개** |
+| 번들 사이즈 | **599 KB gzipped** (600 KB 가드레일 이내) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
 
 ---
 
-## 완료 항목 요약
+## 완료 항목 전체 정리
 
-### Phase 0 — Scaffold (`a95ea56`)
-- React + Vite + TypeScript 프런트 skeleton (15 컴포넌트, 5 페이지, hooks/utils/types)
+### 0 — 스캐폴딩 (`a95ea56`)
+- React + Vite + TypeScript 프런트 skeleton
 - FastAPI 백엔드 skeleton (14 커넥터 stub, 5 API 라우터)
 - 프로젝트 구조: `frontend/`, `backend/`, `data/`, `docs/`
 
-### Phase 1 — API Spike (`7414e6b`, `ad3175b`)
-14개 P0 소스 검증. 최종 결과: **9 GO / 5 주의 / 0 블로커**
+---
+
+### 1 — API Spike: 14개 소스 검증 (`7414e6b`, `ad3175b`)
 
 | 소스 | 결과 | 주요 사항 |
 |------|------|-----------|
-| NOAA GML CO₂ | ✅ | 직접 파일 다운로드, 인증 불필요 |
-| NOAAGlobalTemp CDR | ✅ | CtaG 대체 (공개 REST API 없음) |
+| NOAA GML CO₂ | ✅ | 직접 파일, 인증 불필요 |
+| NOAAGlobalTemp CDR | ✅ | CtaG 대체 (공개 API 없음) |
 | NSIDC Sea Ice | ✅ | CSV, noaadata.apps.nsidc.org |
-| NOAA OISST | ✅ | ERDDAP griddap (CoastWatch) |
-| U.S. Climate Normals | ✅ | NCEI 1991-2020 per-station CSV |
+| NOAA OISST | ✅ | ERDDAP griddap |
+| U.S. Climate Normals | ✅ | NCEI 1991-2020 per-station |
 | AirNow | ✅ | 무료 키, 500 req/hr |
-| OpenAQ v3 | ✅ | v1/v2 은퇴 2025-01-31; v3 키 필요 |
-| NASA FIRMS | ✅ | 무료 MAP_KEY, 5,000 트랜잭션/10분 |
+| OpenAQ v3 | ✅ | v3 키 필요 (`/v3/parameters/2/latest`) |
+| NASA FIRMS | ✅ | 무료 MAP_KEY |
 | NASA GIBS | ✅ | 공개 WMTS, 인증 불필요 |
 | EPA ECHO | ✅ | echodata.epa.gov (ofmpub 차단됨) |
-| USGS modernized | ✅ | OGC API, api.waterdata.usgs.gov |
-| WQP | ✅ | `/wqx3/` beta 필수 (legacy 폐기) |
-| EPA AQS | ⚠️ | 이메일+키, 10 req/min — P1 |
-| CAMS (ADS) | ⚠️ | Copernicus 계정 필요 — P1 보류 |
+| USGS | ✅ | OGC API, api.waterdata.usgs.gov |
+| WQP | ✅ | `/wqx3/` beta 필수 |
+| EPA AQS | ⚠️ | 10 req/min — P1 |
+| CAMS | ⚠️ | Copernicus 계정 필요 — P1 |
 
-### Phase 2 — Climate Trends Strip (`f69988b`, `ddf8735`)
-3개 카드 모두 라이브.
+---
 
-| 카드 | 커넥터 | 최신값 (검증일) |
-|------|--------|-----------------|
-| CO₂ | `noaa_gml.py` — Mauna Loa 직접 다운로드 | 429.35 ppm (2026-02) |
-| Global Temp | `noaa_ctag.py` — NOAAGlobalTemp CDR v6.1 ASCII | +0.53 °C vs 1991-2020 (2026-02) |
-| Arctic Sea Ice | `nsidc.py` — G02135 v4.0 daily CSV, 5-day mean | 13.98 M km² (2026-04-09) |
+### 2 — Climate Trends Strip (`f69988b`, `ddf8735`)
+- 팬아웃 `GET /api/trends` — 5개 커넥터 병렬, 한 개 실패해도 나머지 정상
+- `TrendsStrip.tsx` — 5카드 horizontal scroll-snap carousel
 
-- 팬아웃 엔드포인트 `GET /api/trends` — 3개 커넥터 병렬 실행, 한 개 실패해도 나머지 정상 반환
-- `TrendsStrip.tsx` — MetaLine(cadence · badge · source)이 수치 위에 표시
+| 카드 | 소스 | 최신값 |
+|------|------|--------|
+| CO₂ | NOAA GML Mauna Loa | 429.35 ppm (2026-02) |
+| Global Temp Anomaly | NOAAGlobalTemp CDR v6.1 | +0.64 °C (2026-03) |
+| Arctic Sea Ice | NSIDC G02135 v4.0, 5-day mean | 13.98 M km² (2026-04-09) |
+| CH₄ | NOAA GML global monthly | live |
+| Sea Level Rise | NOAA NESDIS GMSL `_free_all_66.csv` | live |
 
-### Phase 3 — Earth Now Globe (`00a1ae1`, `0b85e37`)
-글로브 + 4개 레이어 + Story Panel.
+---
 
-**라이브러리:** `react-globe.gl` (Cesium 대신 — 번들 3-5 MB 절감)
+### 3 — Earth Now Globe — Phase 0 (`00a1ae1`, `0b85e37`)
+초기 글로브: BlueMarble + Fires + Ocean Heat + Story Panel
 
-| 레이어 | 커넥터 | 상태 |
-|--------|--------|------|
-| Base (BlueMarble) | NASA GIBS WMS GetMap | ✅ 항상 ON |
-| Fires | `firms.py` — VIIRS Area API, top 1,500 by FRP | ✅ 기본 ON |
-| Ocean Heat | `oisst.py` — ERDDAP griddap stride 20, 1,684 points | ✅ |
-| Air Monitors | `openaq.py` — v3 PM2.5 locations, AQI 색상 밴드 | ✅ (키 필요) |
-| Smoke | `cams.py` | ⚪ P1 보류 (Copernicus 계정 없음) |
+---
 
-- `Globe.tsx` — `forwardRef` + `flyTo()` 명령 핸들 (Story Panel 연동)
-- `StoryPanel.tsx` — "2026 Wildfire Season" 프리셋, "Explore on Globe" + "Read Local Report →"
-- 레이어 규칙: 연속 필드 1개 + 이벤트 오버레이 1개
+### 4 — Local Reports (`e925798` ~ `0342dd9`)
+**6블록 구조, 50개 CBSA metro 라이브**
 
-### Phase 4 — Local Reports (`e925798`, `7265819`, `f430f89`, `0342dd9`)
-10개 metro, 6블록 구조 라이브.
+| 블록 | 커넥터 | 비고 |
+|------|--------|------|
+| Block 1 현재 AQI | `airnow.py` | AirNow 실시간 |
+| Block 2 기후 기준선 | `climate_normals.py` | NCEI 1991-2020 |
+| Block 3 시설/규정 | `echo.py` | echodata.epa.gov Two-hop |
+| Block 4 수문 | `usgs.py` | OGC API NRT |
+| Block 4 수질 | `wqp.py` | `/wqx3/` beta |
 
-**커넥터 (Block별):**
-| 커넥터 | 블록 | 검증 수치 |
-|--------|------|-----------|
-| `airnow.py` | Block 1 현재 AQI | Houston AQI 63 · Moderate · PM2.5 |
-| `climate_normals.py` | Block 2 기준선 | Houston 71.1°F / 55.6 in (1991-2020) |
-| `echo.py` | Block 3 시설 | 500 샘플, FacSNCFlg + ComplianceStatus |
-| `usgs.py` | Block 4 수문 | Houston 51 NRT 사이트 |
-| `wqp.py` | Block 4 수질 | Houston 31,549 이산 샘플 |
+- `GET /api/reports/` · `/api/reports/search?q=` · `/api/reports/{slug}`
+- 50개 CBSA: Houston, LA, New York, Chicago, Dallas, Phoenix, Philadelphia, San Antonio, San Diego, San Jose + 40개 추가
 
-**ECHO 주요 변경사항 (이전 ofmpub → echodata):**
-- Two-hop API: `get_facilities` → QueryID → `get_qid`
-- `p_act=Y` 필수 (LA bbox → 363k rows → queryset 한계 초과)
-- `FacLong` 없음 (지도 P1 보류), `CurrVioFlag` 없음 → `FacSNCFlg` 사용
+**ECHO 랜드마인:**
+- `ofmpub.epa.gov` → `echodata.epa.gov`
+- Two-hop: `get_facilities` → QueryID → `get_qid`
+- `p_act=Y` 필수 (대도시 bbox queryset 초과 방지)
 
-**10개 Metro (data/cbsa_mapping.json):**
-| CBSA | 이름 | 인구 | 기후 | NOAA 스테이션 |
-|------|------|------|------|---------------|
-| 26420 | Houston-The Woodlands-Sugar Land | 7.3M | Cfa | USW00012918 |
-| 31080 | Los Angeles-Long Beach-Anaheim | 13.2M | Csb | USW00023174 |
-| 35620 | New York-Newark-Jersey City | 19.8M | Cfa | USW00094728 |
-| 16980 | Chicago-Naperville-Elgin | 9.5M | Dfa | USW00094846 |
-| 19100 | Dallas-Fort Worth-Arlington | 7.8M | Cfa | USW00003927 |
-| 38060 | Phoenix-Mesa-Chandler | 5.1M | BWh | USW00023183 |
-| 37980 | Philadelphia-Camden-Wilmington | 6.2M | Cfa | USW00013739 |
-| 41700 | San Antonio-New Braunfels | 2.6M | Cfa | USW00012921 |
-| 41740 | San Diego-Chula Vista-Carlsbad | 3.3M | Csb | USW00023188 |
-| 41940 | San Jose-Sunnyvale-Santa Clara | 2.0M | Csb | USW00023293 |
+---
 
-**Backend endpoints:**
-- `GET /api/reports/` — metro 목록
-- `GET /api/reports/search?q=` — ZIP prefix + 이름 매칭
-- `GET /api/reports/{cbsa_slug}` — 6블록 리포트 (5개 커넥터 병렬)
+### 5 — Atlas + Navigation (`02de1c2`)
+- `atlas_catalog.json` — 8개 카테고리, 14개 live 데이터셋
+- `/atlas` → `/atlas/:slug` → 카테고리 카드, trust badge, MetaLine
+- `Header.tsx` — sticky + scrollTo() 앵커 + 모바일 햄버거
 
-**Frontend:**
-- `ReportPage.tsx` — 6블록 + MetaLine + graceful degradation + AdSense 슬롯
-- 홈 LocalReportsSection: 상위 4개 카드 + "View all N →" + 랭킹/가이드 링크
+---
 
-### Phase 5 — Atlas + Navigation (`02de1c2`)
-- `atlas_catalog.json` — 8개 카테고리 × 2-5 데이터셋, 14개 live
-- `Atlas.tsx` (/atlas) — 카테고리 카드, trust badge 샘플
-- `AtlasCategory.tsx` (/atlas/:slug) — 데이터셋 목록, MetaLine, 404 처리
-- `AtlasGrid.tsx` — 홈 진입 카드 (emoji, count, live badge)
-- `Header.tsx` — sticky, scrollTo() 앵커, 모바일 햄버거
+### 6 — SEO 콘텐츠 (`0342dd9`)
+- `GET /api/rankings/epa-violations` — 50개 metro ECHO 병렬, 위반순 정렬
+- `GET /api/rankings/pm25` — AirNow ZIP 기반, AQI 내림차순
+- `/guides/how-to-read-aqi`
+- `/guides/understanding-epa-compliance`
+- `/guides/water-quality-samples`
+- `/guides/climate-normals`
 
-### Phase 6 — SEO 콘텐츠 (`0342dd9`)
-- `GET /api/rankings/epa-violations` — 10개 metro ECHO 병렬 호출, 위반순 정렬
-- `Ranking.tsx` (/rankings/epa-violations) — 로딩 안내 + 위반 테이블 + ECHO 면책
-- `Guide.tsx` (/guides/how-to-read-aqi) — AQI 6단계 + 색상 스와치 + 오염물질 테이블
+---
 
-### Phase 7 — 배포 + 인프라 (`8d03752`, `46d1c52`)
+### 7 — 배포 + 인프라 (`8d03752`, `46d1c52`)
 - `Dockerfile` — python:3.12-slim, 비루트 유저, `$PORT`
-- `render.yaml` — Render blueprint (docker runtime, free plan)
+- `render.yaml` — Render blueprint (Docker, free plan)
 - `frontend/public/_headers` — CF Pages 보안 헤더 + 정적 에셋 캐싱
 - `frontend/public/_redirects` — SPA fallback
-- `docs/deploy.md` — 3가지 옵션 비교 + 단계별 가이드
-- **CORS 버그 수정:** pydantic-settings `list[str]` 필드가 plain URL 파싱 실패
-  → `str` 타입으로 변경, `main.py`에서 `_parse_origins()` 직접 파싱
-
-### 토큰 최적화 (`085ffe7`)
-- `.claudeignore` 추가 (node_modules, dist, __pycache__ 등)
-- CLAUDE.md: 299 → 123줄 (다이어트)
-- 분산 docs: `connectors.md`, `report-spec.md`, `guardrails.md`, `api-spike-results.md`
+- **CORS 버그 수정:** pydantic-settings `list[str]` → `str` + `_parse_origins()`
 
 ---
 
-## 알려진 랜드마인 (docs/guardrails.md 상세 기록)
-
-| 소스 | 함정 | 해결책 |
-|------|------|--------|
-| EPA ECHO | `ofmpub.epa.gov` 차단 | `echodata.epa.gov` 사용 |
-| EPA ECHO | `echo13_rest_services` 404 | `echo_rest_services` 사용 |
-| EPA ECHO | 단일 요청으로 시설 목록 안 나옴 | Two-hop: get_facilities → get_qid |
-| EPA ECHO | LA같은 대도시 bbox → queryset 초과 | `p_act=Y` 파라미터 필수 |
-| EPA ECHO | `FacLong` 없음 | 위도만 사용; 지도 기능 P1 보류 |
-| WQP | legacy `/data/` — USGS 2024-03-11 이후 데이터 없음 | `/wqx3/` beta 필수 |
-| WQP | `providers=NWIS,STORET` comma-join → 0 rows | repeated params 사용 |
-| pydantic-settings | `list[str]` 필드 — plain URL → json.loads 실패 | `str` 타입 + 직접 파싱 |
+### 8 — Metro 50개 + SEO 확장 (2026-04-11)
+- `data/cbsa_mapping.json` 10 → 50개 CBSA
+- 40개 추가: Atlanta, Austin, Baltimore, Boston, Denver, Miami, Seattle, Washington DC 등
+- 홈 빠른 링크 6개 (랭킹 + 가이드)
 
 ---
 
-## Phase 8 — 2차 작업: Metro 확장 + SEO 콘텐츠 (2026-04-11) ✅
+### A — 글로벌 커넥터 14개 추가 (`a5e897d`, 2026-04-11)
 
-### 8.1 Metro 40개 추가 (총 50개)
-- `data/cbsa_mapping.json` → 10 → **50개** CBSA 추가 완료
-- 4개 병렬 에이전트로 NOAA 스테이션 ID, AirNow ZIP, ZIP prefix, bbox 조사
-- **추가된 40개:** Atlanta, Austin, Baltimore, Birmingham, Boston, Buffalo,
-  Cincinnati, Cleveland, Columbus OH, Denver, Detroit, Hartford, Indianapolis,
-  Jacksonville, Kansas City, Las Vegas, Louisville, Memphis, Miami, Milwaukee,
-  Minneapolis, Nashville, New Orleans, Oklahoma City, Orlando, Pittsburgh,
-  Portland OR, Providence, Raleigh, Richmond, Riverside, Sacramento, St. Louis,
-  Salt Lake City, San Francisco, Seattle, Tampa, Tucson, Virginia Beach, Washington DC
-- ZIP prefix 중복 제거: Riverside ["922"-"925"] / Richmond ["230","232","238"] / Virginia Beach ["233"-"237"]
+**GIBS 레이어 카탈로그:**
 
-### 8.2 PM2.5 랭킹
-- `GET /api/rankings/pm25` — AirNow ZIP 기반, 50개 metro 병렬, pm25_aqi 내림차순
-- `AIRNOW_API_KEY` 미설정 시 `not_configured` graceful response
-- `PM25Ranking.tsx` — AQI 카테고리 색상 배지, 테이블 표시
-- App.tsx: `/rankings/pm25` 전용 라우트 (catch-all 앞에 위치)
+| 레이어 | GIBS ID | 상태 |
+|--------|---------|------|
+| PM2.5 (MERRA-2) | `MERRA2_Total_Aerosol_Optical_Thickness_550nm_Scattering_Monthly` | ✅ |
+| AOD (MODIS Terra) | `MODIS_Terra_Aerosol_Optical_Depth_3km` | ✅ |
+| CO₂ Column (OCO-2) | `OCO2_CO2_Column_Daily` | ✅ |
+| Flood Detection | `MODIS_Terra_Flood_3-Day` | ✅ |
+| CH₄ (TROPOMI) | — | ❌ GIBS 미지원, P1 보류 |
 
-### 8.3 교육 가이드 3개
-- `/guides/understanding-epa-compliance` — ECHO SNC 기준, 위반 유형, 면책
-- `/guides/water-quality-samples` — WQP 이산 샘플, 파라미터 테이블, 검출 한계
-- `/guides/climate-normals` — 1991-2020 기준, 기온 vs 강수, 공학 응용
+**신규 커넥터 10개:**
 
-### 8.4 홈 업데이트
-- 랭킹/가이드 빠른 링크 6개: EPA Violations, PM2.5, AQI 가이드, EPA Compliance, Water Quality, Climate Normals
+| 커넥터 | 소스 | 인증 |
+|--------|------|------|
+| `noaa_gml_ch4.py` | NOAA GML CH₄ monthly | 없음 |
+| `noaa_sea_level.py` | NOAA NESDIS GMSL | 없음 |
+| `coral_reef_watch.py` | CRW ERDDAP DHW/BAA/SST | 없음 |
+| `cmems.py` | Copernicus Marine SLA L4 NRT | CMEMS 계정 |
+| `global_forest_watch.py` | Hansen UMD tree cover loss | GFW API key |
+| `jrc_drought.py` | JRC EDO WMS (drought indices) | 없음 |
+| `ibtracs.py` | NOAA IBTrACS active storms | 없음 |
+| `climate_trace.py` | Climate TRACE v6 GHG | 없음 |
+| `gibs.py` | GIBS WMTS layer catalog | 없음 |
+| `airdata.py` | (stub) | — |
 
----
-
----
-
-## Phase A — 글로벌 데이터 커넥터 14개 추가 (`a5e897d`, 2026-04-11) ✅
-
-커넥터 총 **28개** (14 기존 + 14 신규). 전체 신규 목록:
-
-### A.1 GIBS Layer Catalog
-- `backend/connectors/gibs.py` — `LAYER_CATALOG` dict 추가
-
-| 레이어 키 | GIBS Layer ID | 주기 | 상태 |
-|-----------|---------------|------|------|
-| `modis_aod` | `MODIS_Terra_Aerosol` | daily | ✅ live |
-| `pm25` | `MERRA2_Dust_Surface_Mass_Concentration_PM25_Monthly` | monthly | ✅ live (먼지 성분만) |
-| `oco2_xco2` | `OCO-2_Carbon_Dioxide_Total_Column_Average` | daily (swath) | ✅ live |
-| `modis_flood` | `MODIS_Combined_Flood_2-Day` | daily | ✅ live |
-| `tropomi_ch4` | — | — | ❌ GIBS 미지원 → Copernicus GES DISC 대안 |
-
-- `backend/api/layers.py` — `GET /api/layers/catalog` (WMTS tile_url_template 포함)
-- `backend/main.py` — `/api/layers` 라우터 등록
-
-### A.2 해양/기후 커넥터 4개
-
-| 커넥터 | 소스 | 인증 | 태그 |
-|--------|------|------|------|
-| `noaa_gml_ch4.py` | NOAA GML CH₄ monthly global | 없음 | observed |
-| `noaa_sea_level.py` | NOAA NESDIS GMSL (`_free_all_66.csv`) | 없음 | observed |
-| `coral_reef_watch.py` | CRW ERDDAP `NOAA_DHW` (BAA, DHW, SST) | 없음 | near-real-time |
-| `cmems.py` | Copernicus Marine SLA L4 NRT | `CMEMS_USERNAME/PASSWORD` | observed |
-
-### A.3 육지/생태 커넥터 2개
-
-| 커넥터 | 소스 | 인증 | 태그 |
-|--------|------|------|------|
-| `global_forest_watch.py` | GFW Data API / Hansen UMD | `GFW_API_KEY` (무료, 1년 만료) | derived |
-| `jrc_drought.py` | JRC EDO WMS (drought.emergency.copernicus.eu) | 없음 | derived |
-
-JRC: REST API 없음 — WMS/WCS 타일 URL 카탈로그(`status: tiles_only`)로 구현
-
-### A.4 기상/배출 커넥터 2개
-
-| 커넥터 | 소스 | 인증 | 태그 |
-|--------|------|------|------|
-| `ibtracs.py` | NOAA IBTrACS v04r01 ACTIVE + LAST3YEARS CSV | 없음 | observed |
-| `climate_trace.py` | Climate TRACE API v6 (국가별 연간 GHG) | 없음 | estimated |
-
-### 주요 랜드마인 (docs/connectors.md 상세)
-- NOAA Sea Level 구 URL `_txj1j2_90.csv` → 사망, `_free_all_66.csv` 사용
-- GFW: POST-only query (GET → 405), 컬럼명 이중 언더스코어
-- JRC: 도메인 이전 `edo.jrc.ec.europa.eu` → `drought.emergency.copernicus.eu` (2024-04-03)
-- IBTrACS: 파일명 `last3years` (소문자, `LAST3YR` → 404), 2-헤더-행 CSV
-- Climate TRACE: 파라미터 `countries` (복수), 단위 metric tons (기가톤 아님)
+**랜드마인:**
+- NOAA Sea Level: `_txj1j2_90.csv` → 사망 → `_free_all_66.csv`
+- GFW: POST-only, 컬럼명 이중 언더스코어
+- JRC: `edo.jrc.ec.europa.eu` → `drought.emergency.copernicus.eu` (2024-04-03)
+- IBTrACS: `last3years` (소문자), 2-헤더 CSV
+- Climate TRACE: `countries` 복수 파라미터, 단위 metric tons
 
 ---
 
-## Phase 9 — Land/Ecology Connectors (2026-04-11) ✅
+### B — Globe Phase B: 13레이어 어코디언 + Trends 5카드 (2026-04-11)
 
-### 9.1 Global Forest Watch connector (`backend/connectors/global_forest_watch.py`)
-- **Endpoint:** `POST https://data-api.globalforestwatch.org/dataset/umd_tree_cover_loss/{version}/query/json`
-- **Auth:** `x-api-key` header required — free account at globalforestwatch.org; keys expire after 1 year
-- **Data:** Annual global tree cover loss (ha) aggregated worldwide; version auto-detected from `/dataset/umd_tree_cover_loss` metadata
-- **Graceful degradation:** returns `status: not_configured` when `api_key` is absent or HTTP 401/403 received
-- **Tag:** `derived` | **Cadence:** annual | **License:** CC BY 4.0
-- **Landmines:** (1) POST-only query endpoint — GET `?sql=` returns 405; (2) country-level queries require posting a polygon geometry; (3) `area__ha` column name uses double underscores; (4) dataset version must be exact string from metadata list ("v1.12", not "1.12")
+**5-카테고리 어코디언 레이어 패널:**
 
-### 9.2 JRC Global Drought Observatory connector (`backend/connectors/jrc_drought.py`)
-- **API type:** WMS (tiles) + WCS (GeoTIFF rasters) only — NO public JSON/REST tabular API as of 2026-04-11
-- **WMS endpoint:** `https://drought.emergency.copernicus.eu/api/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.1.1`
-- **WCS endpoint:** `https://drought.emergency.copernicus.eu/api/wcs?map=DO_WCS&...`
-- **Available layers:** spaST/spaLT (SPI ERA5), spcST/spcLT (SPI CHIRPS), spgTS (SPI GPCC), smian/smang/smand (Soil Moisture), fpanv (fAPAR), cdiad (CDI Europe), twsan (GRACE TWS), rdria (Drought/Agriculture risk)
-- **Returns:** `DroughtLayer` objects with WMS tile URL templates and WCS GeoTIFF URL templates; `status: tiles_only` in notes
-- **Fallback:** hardcoded `_KNOWN_LAYERS` used if WMS GetCapabilities fetch fails
-- **Tag:** `derived` | **Cadence:** dekadal (most layers), monthly (SPI-LT, GRACE) | **License:** CC BY 4.0
-- **Landmines:** (1) Domain migrated from `edo.jrc.ec.europa.eu` to `drought.emergency.copernicus.eu` on 2024-04-03; (2) SPI GPCC (`spgTS`) requires `SELECTED_TIMESCALE` param ("01","03","06","09","12"); (3) `cdiad` is Europe-only; (4) pixel-to-tabular stats need rasterio/GDAL
+| 카테고리 | 레이어 | 상태 |
+|----------|--------|------|
+| Atmosphere | PM2.5 MERRA-2, AOD MODIS, Air Monitors | ✅ |
+| Fire & Land | Active Fires, Deforestation, Drought | Fires ✅, 나머지 P1 |
+| Ocean | SST, Coral Bleaching, Sea Level Anomaly | SST·Coral ✅, SLA P1 |
+| GHG | CO₂ OCO-2, CH₄ TROPOMI | OCO-2 ✅, CH₄ P1 |
+| Hazards | Tropical Storms, Flood Detection | ✅ |
 
----
+**GIBS 캔버스 컴포지트 (`useGibsTexture`):**
+- WMS 투명 PNG → BlueMarble 오프스크린 합성 (globalAlpha=0.72)
+- 날짜 자동: today → yesterday → day-2 → 이달 1일 → 지난달 1일
 
-## Phase B — Globe UI 레이어 확장 + Trends 캐러셀 (2026-04-11) ✅
-
-브랜치: `feature/phase-b-globe-ui` | 커밋 9개
-
-### B.1 Climate Trends 5-카드 캐러셀 (`cafee8b`, `0ae83cf`)
-- `TrendsStrip.tsx` — 3카드 grid → **5카드 horizontal scroll-snap carousel**
-  - CH₄ (ppb, NOAA GML, sparkColor amber `#d97706`)
-  - Sea Level Rise (mm, NOAA NESDIS GMSL, sparkColor blue `#2563eb`)
-- `backend/api/trends.py` — 3개 → **5개 fan-out** (`_ch4_payload`, `_sea_level_payload`)
-  - 개별 디버그 엔드포인트: `GET /api/trends/ch4`, `GET /api/trends/sea-level`
-
-### B.2 TrustTag 확장 (`b743dd6`)
-- `trustTags.ts` — `Derived`, `NearRealTime`, `ForecastModel` 값 추가 (기존 `Forecast` 버그 수정)
-
-### B.3 Backend 새 earth-now 엔드포인트 (`a468233`)
-- `backend/api/earth_now.py`:
-  - `GET /api/earth-now/storms` — IBTrACS 활성 열대폭풍 (storm당 최신 1포인트)
-  - `GET /api/earth-now/coral` — CRW 산호 표백 열 응력 그리드 (DHW, BAA)
-  - `GET /api/earth-now/sea-level-anomaly` — CMEMS SLA L4 NRT (인증 없으면 `not_configured` 반환)
-
-### B.4 Globe.tsx Phase B 리라이트 (`c1ea188`)
-
-**5-카테고리 어코디언 레이어 패널 (top-right 고정 오버레이):**
-
-| 카테고리 | 레이어 |
-|----------|--------|
-| 🌫 Atmosphere | PM2.5 MERRA-2 (gibs-pm25) · AOD MODIS (gibs-aod) · Air Monitors (monitors) |
-| 🔥 Fire & Land | Active Fires (fires) · Deforestation (disabled) · Drought (disabled P1) |
-| 🌊 Ocean | SST Anomaly (ocean-heat) · Coral Bleaching (coral) · Sea Level (cmems-sla) |
-| 🌿 GHG | CO₂ Column OCO-2 (gibs-oco2) · CH₄ TROPOMI (disabled P1) |
-| ⚡ Hazards | Tropical Storms (storms) · Flood Map (gibs-flood) |
-
-**GIBS 캔버스 컴포지트 (`useGibsTexture` hook):**
-- GIBS WMS GetMap 투명 PNG → BlueMarble 오프스크린 캔버스에 합성 (globalAlpha=0.72)
-- `canvas.toDataURL() → globeImageUrl` → 3D 구체 함께 회전
-- 날짜 자동 선택: today → yesterday → day-2 → 이달 1일 → 지난달 1일 (월별 레이어 폴백)
-
-**새 데이터 레이어 렌더링:**
-- `pointsData` — fires (FRP 로그 스케일) or storms (windKt 색상 밴드)
-- `hexBinPointsData` — SST (sstColor) or coral DHW (dhwColor)
-- `labelsData` — air monitors (pm25Color) or CMEMS SLA dots (slaColor)
-
-**새 색상 헬퍼:** `dhwColor` (DHW 0→16 ramp), `slaColor` (±0.3 m blue/white/red), `stormColor` (windKt 밴드)
-
-**Home.tsx 정리 (`71838e3`, `eb2645e`):**
-- 레이어 상태: `firesOn+continuousLayer` → `activeEvent + activeContinuous`
-- 버그 수정: `openaq → 'air-monitors'`가 ActiveContinuous 멤버 아님 → `setActiveEvent('monitors')` 수정
+**새 earth-now 엔드포인트:**
+- `GET /api/earth-now/storms` — IBTrACS 활성 열대폭풍
+- `GET /api/earth-now/coral` — CRW 산호 표백 열 응력
+- `GET /api/earth-now/sea-level-anomaly` — CMEMS SLA (pending)
 
 ---
 
-## Phase C.0 — 데이터 전수조사 + 미구현 해결 (`b28831d`, 2026-04-11) ✅
-
-### 전수조사 결과 (28개 데이터 소스)
+### C.0 — 데이터 전수조사 (2026-04-11)
 
 | 상태 | 개수 |
 |------|------|
 | ✅ 작동 (인증 불필요) | 18개 |
-| 🔑 API 키 부족 (graceful degradation) | 6개 |
-| ⏸ 비활성화 P1 | 2개 |
-| ❌ 미구현 (코드 없음) | 2개 → 1개 (CH₄ UI 정리) |
+| 🔑 API 키 필요 (graceful degradation) | 6개 |
+| ⏸ P1 보류 | 2개 |
 
-### 미구현 2개 처리
+- NOAA CtaG city API: 404 확인 → Climate Normals 영구 fallback
+- TROPOMI CH₄: UI 텍스트 `"Satellite data coming soon"` 처리
 
-**NOAA CtaG City Series** (Block 2):
-- 검증: `/access/monitoring/climate-at-a-glance/city/time-series/` — HTTP 404 all URL patterns
-- 결론: CtaG city는 JavaScript UI 전용, 공개 REST/CSV API 없음
-- 조치: `noaa_ctag.py` 도큐스트링에 발견 사항 기록, Climate Normals 영구 fallback 유지
+---
 
-**TROPOMI CH₄**:
-- 기존 `available=false` 마킹 유지
-- 사용자 노출 텍스트: `"TROPOMI CH₄ not in GIBS..."` → **`"Satellite data coming soon"`**
-- GHG 카테고리는 OCO-2 CO₂ 레이어로 비어있지 않음 ✅
+### C.1 — API 키 등록 + OpenAQ 버그 수정 (2026-04-11)
 
-### config.py 보완
-- `gfw_api_key: str | None = None` 추가 → .env에서 `GFW_API_KEY` 값 인식 가능
+**등록 완료:**
 
-### 라이브 엔드포인트 상태 (2026-04-11 기준)
+| 키 | 서비스 |
+|----|--------|
+| `AIRNOW_API_KEY` | AirNow |
+| `FIRMS_MAP_KEY` | NASA FIRMS |
+| `OPENAQ_API_KEY` | OpenAQ v3 |
+| `CMEMS_USERNAME/PASSWORD` | Copernicus Marine |
+| `GFW_API_KEY` | Global Forest Watch |
+
+**OpenAQ v3 마이그레이션 수정 (`abbf159`):**
+- 구 endpoint: `/v3/locations?parameters_id=2` → `latest: null` (데이터 없음)
+- 신 endpoint: `/v3/parameters/2/latest` → **25,000개 실시간 PM2.5 스테이션**
+- 결과: `count: 0` → **`count: 47`** (limit=100)
+
+---
+
+### C.2 — CMEMS Marine Data Store 마이그레이션 (2026-04-11, P1 보류)
+
+**근본 원인:** `nrt.cmems-du.eu` 도메인 폐기 → 301Domains 파킹
+
+**신규 인프라:**
+- Auth: `auth.marine.copernicus.eu/realms/MIS` (Keycloak)
+- 데이터: CloudFerro S3 ARCO Zarr (데이터 청크 auth 필요)
+- 접근 패키지: `copernicusmarine` (P1)
+
+**현재 상태:** `status: "pending"` — Globe SLA 레이어 토글 비활성, 마이그레이션 안내 메시지 표시
+
+---
+
+### C.3 — Born-in Interactive 완성 (`ca9e738`, 2026-04-12) ✅
+
+**`GET /api/trends/born-in?year=YYYY`**
+
+| 지표 | 소스 | "then" 계산 | Record start |
+|------|------|------------|-------------|
+| CO₂ | NOAA GML | 출생연도 연간 평균 | 1958 (clamped) |
+| Temp Anomaly | NOAAGlobalTemp CDR | 출생연도 연간 평균 | 1850 |
+| Arctic Sea Ice | NSIDC G02135 | 출생연도 9월 평균 | 1979 (clamped) |
+
+**검증 (year=1990):**
+```
+CO₂:      354.45 ppm → 429.35 ppm  (+74.9 ppm, +21.1%)
+Temp:      -0.19 °C  →   +0.64 °C  (+0.83 °C)
+Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
+```
+
+**Frontend:** 연도 입력 + Compare → 3개 카드 (then/now/delta, 색상 코딩)
+
+---
+
+## 라이브 엔드포인트 상태 (2026-04-12)
 
 | 엔드포인트 | 상태 |
 |-----------|------|
-| `/api/earth-now/air-monitors` | ✅ **47개 실시간 PM2.5** (OPENAQ_API_KEY 등록 완료) |
-| `/api/earth-now/sea-level-anomaly` | ⚠️ CMEMS THREDDS HTML 리다이렉트 — ToU 동의 필요 |
-| `/api/earth-now/fires` | ✅ **live** (FIRMS_MAP_KEY 등록 완료) |
-| `/api/earth-now/storms` | ✅ IBTrACS live |
-| `/api/earth-now/coral` | ✅ NOAA CRW live |
-| `/api/earth-now/sst` | ✅ NOAA OISST live |
-| `/api/trends` | ✅ 5개 지표 모두 live |
-| `/api/layers/catalog` | ✅ 6 GIBS layers (tropomi_ch4 available=False) |
+| `GET /api/trends` | ✅ 5카드 모두 live |
+| `GET /api/trends/born-in?year=` | ✅ live |
+| `GET /api/earth-now/fires` | ✅ FIRMS live |
+| `GET /api/earth-now/sst` | ✅ OISST live |
+| `GET /api/earth-now/air-monitors` | ✅ OpenAQ ~25k PM2.5 |
+| `GET /api/earth-now/storms` | ✅ IBTrACS live |
+| `GET /api/earth-now/coral` | ✅ CRW live |
+| `GET /api/earth-now/sea-level-anomaly` | ⏳ pending (CMEMS P1) |
+| `GET /api/reports/{slug}` | ✅ 50개 metro live |
+| `GET /api/rankings/epa-violations` | ✅ live |
+| `GET /api/rankings/pm25` | ✅ live |
+| `GET /api/layers/catalog` | ✅ GIBS 6 layers |
 
 ---
 
-## Phase C.2 — CMEMS 엔드포인트 마이그레이션 수정 (`8a3d2e0`, 2026-04-11) ✅
+## 알려진 랜드마인
 
-### 근본 원인 확인
-- `nrt.cmems-du.eu` → DNS: 172.67.145.239 (Cloudflare / **301Domains 파킹 서비스**)
-- 도메인 **완전 폐기** — HTTP 200이지만 `<title>Domain Intercepted by 301Domains</title>` 반환
-- 모든 대안 도메인 DNS FAIL: `tds.`, `thredds.`, `opendap.`, `nrt.marine.copernicus.eu`
+| 소스 | 함정 | 해결책 |
+|------|------|--------|
+| EPA ECHO | `ofmpub.epa.gov` 차단 | `echodata.epa.gov` 사용 |
+| EPA ECHO | 단일 요청으로 시설 목록 불가 | Two-hop: `get_facilities` → `get_qid` |
+| EPA ECHO | 대도시 bbox queryset 초과 | `p_act=Y` 필수 |
+| WQP | legacy `/data/` 2024-03-11 이후 데이터 없음 | `/wqx3/` beta 필수 |
+| WQP | `providers=` comma-join → 0 rows | repeated params |
+| pydantic-settings | `list[str]` plain URL 파싱 실패 | `str` 타입 + `_parse_origins()` |
+| OpenAQ v3 | `/v3/locations` `latest: null` | `/v3/parameters/2/latest` 사용 |
+| CMEMS | `nrt.cmems-du.eu` 폐기 | `copernicusmarine` 패키지 (P1) |
+| NOAA Sea Level | `_txj1j2_90.csv` 사망 | `_free_all_66.csv` 사용 |
+| GFW | GET → 405 | POST-only query |
+| JRC Drought | `edo.jrc.ec.europa.eu` 이전 | `drought.emergency.copernicus.eu` |
+| IBTrACS | `LAST3YR` → 404 | `last3years` (소문자) |
 
-### CMEMS Marine Data Store 신규 인프라 (2024~)
-| 항목 | 주소 |
+---
+
+## P1 보류 항목
+
+| 항목 | 이유 |
 |------|------|
-| Keycloak Auth | `https://auth.marine.copernicus.eu/realms/MIS/protocol/openid-connect/token` |
-| 데이터 | CloudFerro S3 (`s3.waw3-1.cloudferro.com`) ARCO Zarr |
-| Zarr 메타데이터 | **공개 접근 가능** (auth 불필요) |
-| Zarr 데이터 청크 | **403 AccessDenied** — `copernicusmarine` 패키지 내부 S3 credentials 필요 |
-| REST subset API | **존재하지 않음** — 패키지가 유일한 데이터 접근 방식 |
-
-### 구현 변경사항
-
-**`backend/connectors/cmems.py` 재작성:**
-- 죽은 OPeNDAP 엔드포인트 모두 제거
-- 신규 Keycloak 토큰 endpoint로 자격증명 검증
-- CloudFerro S3 공개 Zarr `.zattrs` 메타데이터로 서비스 가용성 확인
-- `status: "pending"` 반환 (실제 데이터 청크는 `copernicusmarine` 패키지 필요)
-
-**`frontend/src/components/earth-now/Globe.tsx` 업데이트:**
-- `SlaResponse`에 `message?: string` 추가
-- `slaConfigured = configured && status === 'ok'` (pending/error 시 토글 비활성화)
-- `statusMessage`: "Sea Level Anomaly: endpoint migration in progress — full data integration coming soon."
-- `LayerPanel` 툴팁: not_configured / pending / error 상태별 구별
-
-### 현재 자격증명 상태
-- 저장된 `.env` 자격증명이 신규 Keycloak에서 **`invalid_grant`** 반환
-- 조치 필요: https://data.marine.copernicus.eu/ 로그인 확인/비밀번호 재설정
-
-### 향후 P1 과제
-- `copernicusmarine` 패키지를 `requirements.txt`에 추가
-- `fetch()` 메서드를 `copernicusmarine.open_dataset()` 기반으로 재구현
-- Globe 레이어 `status: "ok"` 전환
+| CMEMS SLA Globe 레이어 | `copernicusmarine` 패키지 + 신규 인증 체계 |
+| CAMS Smoke 레이어 | Copernicus ADS 계정 수동 승인 대기 |
+| TROPOMI CH₄ 레이어 | GIBS 미지원 → Copernicus GES DISC 대안 |
+| Deforestation Globe 레이어 | GFW 폴리곤 쿼리 구현 필요 |
+| Drought Globe 레이어 | JRC WMS → 수치화 파이프라인 필요 |
+| EPA AQS | 10 req/min, 별도 이메일 등록 |
+| AdSense 신청 | 콘텐츠 충분 — 신청 가능 |
+| 커스텀 도메인 | CF Pages + Render 양쪽 설정 |
+| Render cold start | 15분 비활성 → 30초 지연 (UptimeRobot or $7/월) |
 
 ---
 
-## Phase C.3 — Born-in Interactive 완성 (`ca9e738`, 2026-04-12) ✅
+## 다음 단계 후보
 
-### 구현 내용
+### 높음
+- **AdSense 신청** — 50개 리포트 + 6개 SEO 페이지로 조건 충족
+- **CMEMS P1** — `copernicusmarine` 추가, Globe SLA 레이어 활성화
 
-**Backend:** `GET /api/trends/born-in?year=YYYY`
+### 중간
+- **추가 랭킹:** `/rankings/coral-bleaching`, `/rankings/ghg-emissions`
+- **추가 가이드:** "Understanding Coral Bleaching", "Reading Storm Data"
+- **Bundle 코드 스플리팅** — 현재 599 KB gzip (600 KB 가드레일 직전)
 
-| 지표 | 소스 | "then" 계산법 | record start |
-|------|------|--------------|-------------|
-| CO₂ | NOAA GML Mauna Loa | 출생연도 연간 평균 | 1958 (clamped) |
-| Global Temp Anomaly | NOAAGlobalTemp CDR | 출생연도 연간 평균 | 1850 |
-| Arctic Sea Ice | NSIDC G02135 | 출생연도 9월 평균 (연간 최솟값) | 1979 (clamped) |
-
-- 레코드 시작 이전 출생연도는 자동 clamp + `clamped: true` + `birth_year_used` 반환
-- 온도 이상값은 % 변화 의미 없으므로 `delta_pct: null`
-
-**검증 결과 (year=1990):**
-```
-CO₂:     354.45 ppm → 429.35 ppm (+74.9 ppm, +21.1%)
-Temp:    -0.19°C    → +0.64°C   (+0.83°C)
-Sea ice:  6.14 Mkm² →  4.75 Mkm² (-1.39 Mkm², -22.6%)
-```
-
-**Frontend:** `BornIn.tsx` 완전 교체 (placeholder → 인터랙티브)
-- 연도 입력 (Enter 또는 버튼 클릭)
-- 3개 카드: 출생연도 → 현재 + 색상 코딩 델타 (나쁜 방향 = 빨간색)
-- clamp 발동 시 주석 표시
-- 로딩/에러 상태 처리
-
----
-
-## Phase C — 다음 단계 ← 현재 위치
-
-### C.0 선택지 (사용자 결정 필요)
-- **Phase C-디자인**: 디자인 폴리시 (카드 hover/애니메이션, 다크모드, 모바일 최적화)
-- **Phase C-콘텐츠**: 추가 랭킹 + 가이드 (산호/IBTrACS/GHG), 가이드 SEO 확장
-- **두 가지 병행** 가능
-
-### C.1 인프라 (높음)
-1. **AIRNOW_API_KEY** → PM2.5 랭킹 실제 데이터 활성화
-2. **GFW_API_KEY** → 산림 손실 데이터 활성화
-3. **CMEMS_USERNAME/PASSWORD** → ⛔ P1 보류 (Marine Data Store 마이그레이션, copernicusmarine 패키지 필요)
-4. **AdSense 신청** — 콘텐츠 충분 (50개 리포트 + 5개 SEO 페이지)
-5. **커스텀 도메인** — CF Pages + Render 양쪽 설정
-
-### C.2 콘텐츠/랭킹 (중간)
-- `/rankings/deforestation` — GFW 연간 산림 손실 국가별 랭킹
-- `/rankings/coral-bleaching` — CRW 산호 표백 경보 레벨 지도
-- `/rankings/ghg-emissions` — Climate TRACE 국가별 GHG 배출 랭킹
-- 가이드: "Understanding Coral Bleaching Alerts", "Reading IBTrACS Storm Data"
-
-### C.4 SEO/인터랙티브 (다음)
-- Story Panel 프리셋 확장 (현재 1개 → 5~10개)
-- CAMS Smoke 레이어 (Copernicus 계정 승인 후)
-- Drought 레이어 (JRC WMS → Phase P1)
-
----
-
-## Phase C.1 — API 키 등록 + 버그 수정 (`abbf159`, `0a14c54`, 2026-04-11) ✅
-
-### 등록 완료 API 키 (.env + Render 환경변수)
-- `AIRNOW_API_KEY` ✅, `FIRMS_MAP_KEY` ✅, `OPENAQ_API_KEY` ✅
-- `CMEMS_USERNAME/PASSWORD` ✅, `GFW_API_KEY` ✅
-
-### OpenAQ v3 API 마이그레이션 버그 수정 (`abbf159`)
-- **발견**: `/v3/locations?parameters_id=2` → sensors에 `latest: null` (v3 마이그레이션 후 데이터 없음)
-- **수정**: `/v3/parameters/2/latest` 엔드포인트로 전환 → **25,000개 실시간 PM2.5 스테이션**
-- 결과: `count: 0` → **`count: 47`** (limit=100 기준, 실제 ~25k)
-
-### CMEMS SLA 상태
-- **현상**: THREDDS OPeNDAP → HTML 페이지 반환 (Cloudflare WAF 또는 ToU 미동의)
-- **로컬**: HTTP 403 / error code: 1010 (Cloudflare가 Python 요청 차단)
-- **Render 서버**: 200 HTML → parse 실패
-- **조치**: `cmems.py`에 HTML 감지 추가 → 명확한 에러 메시지 (`0a14c54`)
-- **해결책**: https://data.marine.copernicus.eu/ 로그인 → SEALEVEL_GLO_PHY_L4_NRT_008_046 Terms of Use 동의
-
----
-
-## 블로커
-
-| 항목 | 내용 | 해결 방법 |
-|------|------|-----------|
-| Render Free tier 슬립 | 15분 비활성 → 30초 cold start | UptimeRobot 핑 or Starter $7/월 전환 |
-| CAMS Smoke | Copernicus ADS 계정 수동 승인 | 신청 완료 후 대기 |
-| EPA AQS | 이메일 + 키 등록 필요 (10 req/min) | 등록 후 `epa_aqs_email/key` .env 추가 |
-| FIRMS / OpenAQ | 키 미등록 → 해당 레이어 비활성 | 무료 등록 필요 |
-| GFW API key | 연간 갱신 필요 (무료) | globalforestwatch.org 계정 생성 |
-| CMEMS 계정 | 가입 후 `CMEMS_USERNAME/PASSWORD` | marine.copernicus.eu 무료 등록 |
-| TROPOMI CH4 GIBS | GIBS 미지원 — `available=False` 마킹 | Copernicus GES DISC `S5P_L2__CH4____HiR` 대안 |
+### 낮음
+- **Story Panel 프리셋 확장** (1개 → 5~10개)
+- **디자인 폴리시** (hover/애니메이션, 모바일 최적화)
