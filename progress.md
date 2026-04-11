@@ -13,7 +13,7 @@
 | 항목 | 수치 |
 |------|------|
 | Git commits | 23 |
-| Backend connectors | 24 구현 (21 live, 3 not_configured/tiles_only) |
+| Backend connectors | 28개 (14 기존 + 14 신규) |
 | API endpoints | 18개 |
 | Frontend components / pages | ~28개 |
 | Local Reports metros | 50 / 50 목표 ✅ |
@@ -192,41 +192,55 @@
 
 ---
 
-## Phase A — 글로벌 데이터 커넥터 14개 (2026-04-11) ✅
+## Phase A — 글로벌 데이터 커넥터 14개 추가 (`a5e897d`, 2026-04-11) ✅
+
+커넥터 총 **28개** (14 기존 + 14 신규). 전체 신규 목록:
 
 ### A.1 GIBS Layer Catalog
 - `backend/connectors/gibs.py` — `LAYER_CATALOG` dict 추가
-  - blue_marble (static), modis_aod (daily), pm25 MERRA-2 (monthly), oco2_xco2 (daily), modis_flood (daily)
-  - `tropomi_ch4` → GIBS 미지원 확인, `available=False` 마킹
-- `backend/api/layers.py` — `GET /api/layers/catalog` 생성 (WMTS tile URL template 포함)
+
+| 레이어 키 | GIBS Layer ID | 주기 | 상태 |
+|-----------|---------------|------|------|
+| `modis_aod` | `MODIS_Terra_Aerosol` | daily | ✅ live |
+| `pm25` | `MERRA2_Dust_Surface_Mass_Concentration_PM25_Monthly` | monthly | ✅ live (먼지 성분만) |
+| `oco2_xco2` | `OCO-2_Carbon_Dioxide_Total_Column_Average` | daily (swath) | ✅ live |
+| `modis_flood` | `MODIS_Combined_Flood_2-Day` | daily | ✅ live |
+| `tropomi_ch4` | — | — | ❌ GIBS 미지원 → Copernicus GES DISC 대안 |
+
+- `backend/api/layers.py` — `GET /api/layers/catalog` (WMTS tile_url_template 포함)
 - `backend/main.py` — `/api/layers` 라우터 등록
 
-### A.2 해양/기후 커넥터
+### A.2 해양/기후 커넥터 4개
+
 | 커넥터 | 소스 | 인증 | 태그 |
 |--------|------|------|------|
 | `noaa_gml_ch4.py` | NOAA GML CH₄ monthly global | 없음 | observed |
 | `noaa_sea_level.py` | NOAA NESDIS GMSL (`_free_all_66.csv`) | 없음 | observed |
-| `coral_reef_watch.py` | CRW ERDDAP `NOAA_DHW` | 없음 | near-real-time |
-| `cmems.py` | Copernicus Marine `SEALEVEL_GLO_PHY_L4_NRT_008_046` | `CMEMS_USERNAME/PASSWORD` | observed |
+| `coral_reef_watch.py` | CRW ERDDAP `NOAA_DHW` (BAA, DHW, SST) | 없음 | near-real-time |
+| `cmems.py` | Copernicus Marine SLA L4 NRT | `CMEMS_USERNAME/PASSWORD` | observed |
 
-### A.3 육지/생태 커넥터
+### A.3 육지/생태 커넥터 2개
+
 | 커넥터 | 소스 | 인증 | 태그 |
 |--------|------|------|------|
-| `global_forest_watch.py` | GFW Data API / Hansen UMD | `GFW_API_KEY` (무료) | derived |
-| `jrc_drought.py` | JRC EDO WMS (`drought.emergency.copernicus.eu`) | 없음 | derived |
+| `global_forest_watch.py` | GFW Data API / Hansen UMD | `GFW_API_KEY` (무료, 1년 만료) | derived |
+| `jrc_drought.py` | JRC EDO WMS (drought.emergency.copernicus.eu) | 없음 | derived |
 
-### A.4 기상/배출 커넥터
+JRC: REST API 없음 — WMS/WCS 타일 URL 카탈로그(`status: tiles_only`)로 구현
+
+### A.4 기상/배출 커넥터 2개
+
 | 커넥터 | 소스 | 인증 | 태그 |
 |--------|------|------|------|
 | `ibtracs.py` | NOAA IBTrACS v04r01 ACTIVE + LAST3YEARS CSV | 없음 | observed |
-| `climate_trace.py` | Climate TRACE API v6 | 없음 | estimated |
+| `climate_trace.py` | Climate TRACE API v6 (국가별 연간 GHG) | 없음 | estimated |
 
-### 랜드마인 기록 (docs/connectors.md 상세)
+### 주요 랜드마인 (docs/connectors.md 상세)
 - NOAA Sea Level 구 URL `_txj1j2_90.csv` → 사망, `_free_all_66.csv` 사용
-- GFW query POST-only (GET → 405), 컬럼명 이중 언더스코어
-- JRC domain: `edo.jrc.ec.europa.eu` → `drought.emergency.copernicus.eu` (2024-04-03)
-- IBTrACS 파일명: `last3years` (소문자), 2-헤더-행 CSV 처리
-- Climate TRACE 쿼리 파라미터: `countries` (복수), 단위 metric tons
+- GFW: POST-only query (GET → 405), 컬럼명 이중 언더스코어
+- JRC: 도메인 이전 `edo.jrc.ec.europa.eu` → `drought.emergency.copernicus.eu` (2024-04-03)
+- IBTrACS: 파일명 `last3years` (소문자, `LAST3YR` → 404), 2-헤더-행 CSV
+- Climate TRACE: 파라미터 `countries` (복수), 단위 metric tons (기가톤 아님)
 
 ---
 
@@ -252,23 +266,33 @@
 
 ---
 
-## 3차 작업 목록
+## Phase B — Globe UI 레이어 확장 (다음)
 
-### 우선순위 높음
-1. **AdSense 신청** — 콘텐츠 충분 (50개 리포트 + 5개 SEO 페이지)
-2. **커스텀 도메인** — CF Pages + Render 양쪽 설정
-3. **AIRNOW_API_KEY 등록** → PM2.5 랭킹 실제 데이터 활성화
+백엔드 커넥터 14개 완료 → UI 레이어 토글 확장이 다음 단계.
 
-### 우선순위 중간
-4. **Born-in Interactive 완성** (P1 바이럴)
-   - CO₂ / 기온 / 해빙 then vs now 비교
-   - OG image 자동 생성 → SNS 공유
-5. **Story Panel 프리셋 확장** — 5~10개 (현재 1개)
-6. **Block 2 도시 시계열** — NOAAGlobalTemp city product 연동
+### B.1 Globe 레이어 추가 (우선순위 높음)
+- AOD 레이어 토글 (MODIS_Terra_Aerosol GIBS)
+- OCO-2 CO₂ 컬럼 레이어 토글
+- MODIS Flood 2-Day 레이어 토글
+- IBTrACS 열대폭풍 포인트 오버레이 (FIRMS 스타일)
 
-### 우선순위 낮음
-7. **CAMS Smoke 레이어** — Copernicus 계정 승인 후
-8. **EPA AQS 연간 PM2.5** — 별도 랭킹 (현재 랭킹은 AirNow 실시간)
+### B.2 글로벌 데이터 랭킹/가이드 (우선순위 중간)
+- `/rankings/deforestation` — GFW 연간 산림 손실 국가별 랭킹
+- `/rankings/coral-bleaching` — CRW 산호 표백 경보 레벨 지도
+- `/rankings/ghg-emissions` — Climate TRACE 국가별 GHG 배출 랭킹
+- 가이드: "Understanding Coral Bleaching Alerts", "Reading IBTrACS Storm Data"
+
+### B.3 인프라 (우선순위 높음)
+1. **AIRNOW_API_KEY** → PM2.5 랭킹 실제 데이터 활성화
+2. **GFW_API_KEY** → 산림 손실 데이터 활성화
+3. **CMEMS_USERNAME/PASSWORD** → 해수면 이상 데이터 활성화
+4. **AdSense 신청** — 콘텐츠 충분 (50개 리포트 + 5개 SEO 페이지)
+5. **커스텀 도메인** — CF Pages + Render 양쪽 설정
+
+### B.4 SEO/콘텐츠 (우선순위 낮음)
+- Born-in Interactive 완성 (CO₂ / 기온 / 해빙 then vs now)
+- Story Panel 프리셋 확장 (현재 1개 → 5~10개)
+- CAMS Smoke 레이어 (Copernicus 계정 승인 후)
 
 ---
 
@@ -280,3 +304,6 @@
 | CAMS Smoke | Copernicus ADS 계정 수동 승인 | 신청 완료 후 대기 |
 | EPA AQS | 이메일 + 키 등록 필요 (10 req/min) | 등록 후 `epa_aqs_email/key` .env 추가 |
 | FIRMS / OpenAQ | 키 미등록 → 해당 레이어 비활성 | 무료 등록 필요 |
+| GFW API key | 연간 갱신 필요 (무료) | globalforestwatch.org 계정 생성 |
+| CMEMS 계정 | 가입 후 `CMEMS_USERNAME/PASSWORD` | marine.copernicus.eu 무료 등록 |
+| TROPOMI CH4 GIBS | GIBS 미지원 — `available=False` 마킹 | Copernicus GES DISC `S5P_L2__CH4____HiR` 대안 |
