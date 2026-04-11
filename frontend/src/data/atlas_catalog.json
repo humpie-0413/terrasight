@@ -81,10 +81,10 @@
           "url": "https://www.epa.gov/enviro/sdwis-search",
           "update_frequency": "Quarterly",
           "trust_tag": "observed",
-          "description": "Compliance and violation records for public water systems. Tracks health-based violations, monitoring failures, and enforcement actions.",
+          "description": "Compliance and violation records for public water systems. Tracks health-based violations, monitoring failures, and enforcement actions. Served via Envirofacts REST at data.epa.gov/efservice/. Mandatory disclaimer: regulatory violations ≠ unsafe water at the tap.",
           "spatial_coverage": "U.S. public water systems",
           "license": "Public domain (US EPA)",
-          "status": "planned"
+          "status": "live"
         }
       ]
     },
@@ -171,6 +171,30 @@
       "description": "Global soil property maps, national land cover, and contaminated site inventories.",
       "datasets": [
         {
+          "id": "superfund",
+          "name": "EPA SEMS / Superfund NPL — Contaminated Sites",
+          "source": "US EPA Superfund Enterprise Management System",
+          "url": "https://www.epa.gov/superfund",
+          "update_frequency": "Monthly",
+          "trust_tag": "observed",
+          "description": "Active and archived Superfund sites on the National Priorities List (NPL), including site boundaries, NPL status, and contaminants of concern. Served via the EPA FAC_Superfund_Site_Boundaries ArcGIS FeatureServer — polygon centroids computed client-side for map placement.",
+          "spatial_coverage": "U.S. + territories, site-level",
+          "license": "Public domain (US EPA)",
+          "status": "live"
+        },
+        {
+          "id": "brownfields",
+          "name": "EPA ACRES — Brownfields Properties",
+          "source": "US EPA Brownfields Program",
+          "url": "https://www.epa.gov/brownfields",
+          "update_frequency": "Monthly",
+          "trust_tag": "observed",
+          "description": "Grantee-reported Brownfields sites (formerly industrial/commercial properties with real or perceived contamination that complicate redevelopment). Served via the EPA EMEF/efpoints ArcGIS MapServer Layer 5. Cleanup status lives on a separate ACRES endpoint and is not yet joined.",
+          "spatial_coverage": "U.S. Brownfields grantees, point-level",
+          "license": "Public domain (US EPA)",
+          "status": "live"
+        },
+        {
           "id": "soilgrids",
           "name": "SoilGrids — Global Soil Properties",
           "source": "ISRIC — World Soil Information",
@@ -209,10 +233,10 @@
           "url": "https://www.epa.gov/toxics-release-inventory-tri-program",
           "update_frequency": "Annual (reported by October)",
           "trust_tag": "observed",
-          "description": "Annual facility-level reports of releases, transfers, and disposal of ~800 listed toxic chemicals to air, water, and land. Publicly available back to 1987.",
+          "description": "Annual facility-level reports of releases, transfers, and disposal of ~800 listed toxic chemicals to air, water, and land. Publicly available back to 1987. Served via Envirofacts REST (tri_facility + tri_reporting_form) at data.epa.gov/efservice/. Self-reported — facilities below reporting thresholds are invisible.",
           "spatial_coverage": "U.S. facilities",
           "license": "Public domain (US EPA)",
-          "status": "planned"
+          "status": "live"
         },
         {
           "id": "rcrainfo",
@@ -257,6 +281,18 @@
           "spatial_coverage": "Global facility-level",
           "license": "CC BY 4.0",
           "status": "planned"
+        },
+        {
+          "id": "ghgrp",
+          "name": "EPA GHGRP (FLIGHT) — Facility GHG Emissions",
+          "source": "US EPA Greenhouse Gas Reporting Program",
+          "url": "https://www.epa.gov/ghgreporting",
+          "update_frequency": "Annual",
+          "trust_tag": "observed",
+          "description": "Self-reported facility-level greenhouse gas emissions under 40 CFR Part 98, covering facilities emitting ≥25,000 tCO₂e/yr. Surfaced via the Envirofacts GHG REST service (pub_dim_facility + pub_facts_sector_ghg_emission). Complements Climate TRACE estimated emissions for U.S. facilities.",
+          "spatial_coverage": "U.S. reporting facilities (≥25k tCO₂e/yr)",
+          "license": "Public domain (US EPA)",
+          "status": "live"
         },
         {
           "id": "egrid",

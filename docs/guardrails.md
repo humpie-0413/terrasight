@@ -106,6 +106,18 @@ Run these in order.
 | NSIDC CSV column contains commas | `connectors/nsidc.py` | Parse via `csv` module, not `.split(",")` |
 | CtaG has no REST API | `connectors/noaa_ctag.py` | Pivot to NOAAGlobalTemp CDR v6.1 ASCII |
 | `USW00012918` is Houston Hobby, not IAH | `data/cbsa_mapping.json` | Already corrected — watch for similar mislabels on other stations |
+| Envirofacts `iaspub.epa.gov/enviro/efservice/` dead | `connectors/tri.py`, `ghgrp.py`, `sdwis.py` | Use `data.epa.gov/efservice/` only |
+| Envirofacts mandatory pagination slug | `connectors/tri.py`, `ghgrp.py`, `sdwis.py` | Append `/rows/{first}:{last}/JSON` — required, not optional |
+| Envirofacts latency non-linear | `connectors/sdwis.py` | Shard requests to ≤500 rows/slice, fan out with `asyncio.gather` |
+| TRI `fac_latitude`/`fac_longitude` often garbage (0, null, DMS-packed) | `connectors/tri.py` | `_pick_coord()` walks candidate keys; rejects 0 and out-of-range floats |
+| TRI has no annual release total column | `connectors/tri.py` | `total_release_lb` left `None` — `one_time_release_qty` is one-time-event, not annual aggregate |
+| GHGRP emissions table not state-filterable | `connectors/ghgrp.py` | `pub_facts_sector_ghg_emission` has no state col; fetch year-windowed slice and aggregate by `facility_id` |
+| SDWIS `violation/state_code/TX` returns wrong state silently | `connectors/sdwis.py` | Use joined path `water_system/state_code/{ST}/violation/...` |
+| SDWIS `zip_code/BEGINNING/77/` is the correct metro-narrowing operator | `connectors/sdwis.py` | 500-row cap per prefix — fan out in parallel |
+| SDWIS joined rows duplicate `(pwsid, violation_id)` | `connectors/sdwis.py` | De-dupe on `violation_id` during aggregation |
+| Superfund FeatureServer returns polygons, not points | `connectors/superfund.py` | Compute centroid via simple vertex averaging; skip shapely |
+| ArcGIS bbox query needs `inSR=4326` explicitly | `connectors/superfund.py`, `brownfields.py` | Omitting defaults to Web Mercator → empty for WGS84 envelopes |
+| Brownfields `cleanup_status` not on spatial layer | `connectors/brownfields.py` | `EMEF/efpoints/MapServer/5` only has identification fields; cleanup status needs ACRES second-hop join |
 
 Any new landmine discovered during implementation must be added
 **to this table and to the relevant connector docstring** before the

@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-12
+**최종 업데이트:** 2026-04-12 (Phase D.1 완료)
 
 ---
 
@@ -18,9 +18,10 @@
 
 | 항목 | 수치 |
 |------|------|
-| Git commits | **47** |
-| Backend connectors | **28개** (14 기존 + 14 글로벌) |
-| API endpoints | **27개** |
+| Git commits | **47+** (Phase D.1 pending commit) |
+| Backend connectors | **29개** (14 기존 + 14 글로벌 + 5 Phase D.1 EPA 규제/사이트) |
+| API endpoints | **32개** (+5: releases/tri · releases/ghgrp · sites/superfund · sites/brownfields · drinking-water/sdwis) |
+| Atlas 라이브 데이터셋 | **16개** (+5: tri · ghgrp · superfund · brownfields · sdwis) |
 | Frontend components / pages | **~32개** |
 | Local Reports metros | **50개** ✅ |
 | Globe 레이어 | **13개** (5카테고리 어코디언) |
@@ -241,6 +242,64 @@
 
 ---
 
+### D.1 — P0 커넥터 5개 — EPA 규제 + 사이트 (2026-04-12) ✅
+
+`docs/NEXT_STEPS.md` Phase D P0 배치 완료. Waste, Soil/Land, 음용수,
+시설 배출 네 개의 공백 카테고리를 한 번에 채움. 백엔드 전용 구현
+(UI 연결은 Phase E). 세 개 sub-agent 병렬 분담.
+
+**신규 커넥터 5개:**
+
+| 커넥터 | 소스 | 엔드포인트 | 태그 |
+|--------|------|------------|------|
+| `tri.py` | EPA TRI | `data.epa.gov/efservice/tri_facility/...` | observed |
+| `ghgrp.py` | EPA GHGRP (FLIGHT) | `data.epa.gov/efservice/pub_dim_facility/...` | observed |
+| `superfund.py` | EPA SEMS / NPL | ArcGIS `FAC_Superfund_Site_Boundaries_EPA_Public` | observed |
+| `brownfields.py` | EPA ACRES | ArcGIS `EMEF/efpoints/MapServer/5` | observed |
+| `sdwis.py` | EPA SDWIS | `data.epa.gov/efservice/water_system/.../violation/...` | observed |
+
+**신규 엔드포인트 5개 (모두 graceful degradation):**
+
+- `GET /api/releases/tri?state=TX&year=&limit=`
+- `GET /api/releases/ghgrp?state=TX&year=2023&limit=`
+- `GET /api/sites/superfund?west=&south=&east=&north=&limit=`
+- `GET /api/sites/brownfields?west=&south=&east=&north=&limit=`
+- `GET /api/drinking-water/sdwis?state=TX&zip_prefix=770,771,...&limit=`
+
+**Houston CBSA 스모크 테스트 결과 (FastAPI TestClient):**
+```
+TRI         HTTP 200  count=5  status=ok  (sample: HEP JAVELINA SMR LLC)
+GHGRP       HTTP 200  count=5  status=ok  (sample: ISP TECHNOLOGIES TEXAS CITY PLANT, 35437.92 tCO₂e, 2023)
+Superfund   HTTP 200  count=5  status=ok  (sample: SOUTH CAVALCADE STREET, NPL Final)
+Brownfields HTTP 200  count=5  status=ok  (sample: 9929 HOMESTEAD ROAD, Houston)
+SDWIS       HTTP 200  count=5  status=ok  (Houston 10개 ZIP 프리픽스 fan-out, 2908 systems + 3852 violations raw)
+```
+
+**새 랜드마인 (모두 `docs/guardrails.md` + 각 커넥터 docstring 기록):**
+
+- Envirofacts 호스트 마이그레이션: `iaspub.epa.gov` 사망 → `data.epa.gov/efservice/` 만
+- Envirofacts 필수 페이지네이션: `/rows/{a}:{b}/JSON` 슬러그 없으면 타임아웃
+- Envirofacts 초당 응답 비선형: `rows/0:500` ≈ 10s vs `rows/0:1500` ≈ 80-95s → 병렬 샤딩 필수
+- TRI `fac_latitude`/`fac_longitude` 대부분 쓰레기 (0, null, DMS-packed): `_pick_coord()` fallback
+- TRI 연간 release 합계 컬럼 부재: `one_time_release_qty`는 일회성 이벤트 필드 (주의)
+- GHGRP 배출 테이블 state 필터 불가: `facility_id` 기준 window aggregation
+- SDWIS `violation/state_code/TX` 필터가 조용히 무시됨 → joined path `water_system/state_code/{ST}/violation/...` 필수
+- SDWIS `zip_code/BEGINNING/77/` 연산자로 메트로 좁히기 (프리픽스당 500행 캡 → 병렬 fan-out)
+- SDWIS joined 행 중복 `(pwsid, violation_id)` → `violation_id`로 중복 제거
+- SDWIS 필수 공지: "위반 ≠ 수도꼭지 위험" (connector notes에 강제 포함)
+- Superfund FeatureServer는 폴리곤 (점 아님) → centroid 평균 계산 (shapely 없이)
+- ArcGIS bbox 쿼리 `inSR=4326` 필수 (누락 시 Web Mercator 기본값으로 빈 결과)
+- Brownfields `cleanup_status`는 공간 레이어에 없음 → ACRES 별도 엔드포인트 필요 (P2)
+
+**Atlas catalog (`frontend/src/data/atlas_catalog.json`) 업데이트:**
+- `waste/tri`: `planned` → `live`
+- `water/sdwis`: `planned` → `live`
+- `soil-land`: 신규 `superfund`, `brownfields` 추가
+- `emissions`: 신규 `ghgrp` 추가
+- 총 라이브 데이터셋: 11 → **16**
+
+---
+
 ### C.3 — Born-in Interactive 완성 (`ca9e738`, 2026-04-12) ✅
 
 **`GET /api/trends/born-in?year=YYYY`**
@@ -278,6 +337,11 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 | `GET /api/rankings/epa-violations` | ✅ live |
 | `GET /api/rankings/pm25` | ✅ live |
 | `GET /api/layers/catalog` | ✅ GIBS 6 layers |
+| `GET /api/releases/tri` | ✅ D.1 Envirofacts TRI |
+| `GET /api/releases/ghgrp` | ✅ D.1 Envirofacts GHGRP/FLIGHT |
+| `GET /api/sites/superfund` | ✅ D.1 ArcGIS NPL sites |
+| `GET /api/sites/brownfields` | ✅ D.1 ArcGIS ACRES |
+| `GET /api/drinking-water/sdwis` | ✅ D.1 Envirofacts SDWIS |
 
 ---
 

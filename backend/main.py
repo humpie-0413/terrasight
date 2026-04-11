@@ -4,7 +4,17 @@ import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import atlas, earth_now, layers, rankings, reports, trends
+from backend.api import (
+    atlas,
+    drinking_water,
+    earth_now,
+    layers,
+    rankings,
+    releases,
+    reports,
+    sites,
+    trends,
+)
 from backend.config import get_settings
 
 
@@ -41,3 +51,9 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(atlas.router, prefix="/api/atlas", tags=["atlas"])
 app.include_router(rankings.router, prefix="/api/rankings", tags=["rankings"])
 app.include_router(layers.router, prefix="/api/layers", tags=["layers"])
+# Phase D.1 — EPA regulatory + site datasets (TRI, GHGRP, Superfund, Brownfields, SDWIS)
+app.include_router(releases.router, prefix="/api/releases", tags=["releases"])
+app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
+app.include_router(
+    drinking_water.router, prefix="/api/drinking-water", tags=["drinking-water"]
+)

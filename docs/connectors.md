@@ -302,3 +302,45 @@ HTTP 404. The CtaG city interface is JavaScript-rendered only. Block 2 uses
 `GFW_API_KEY` added to `backend/config.py` (`gfw_api_key` field) 2026-04-11.
 To activate: set `GFW_API_KEY=...` in `.env` and add a `/api/earth-now/deforestation`
 endpoint that calls `GlobalForestWatchConnector(api_key=settings.gfw_api_key)`.
+
+---
+
+## Phase D.1 — EPA regulatory + site datasets (2026-04-12)
+
+Five new connectors that close the Waste, Soil/Land, Water (drinking), and
+Facility Emissions gaps identified in `docs/NEXT_STEPS.md` §D.1. All served
+by EPA services, no auth required for any of them. Trust tag: `observed`
+(self-reported under statute or EPA-curated, but regulator-recorded facts).
+
+| Connector | Source | Endpoint | Auth | Cadence |
+|---|---|---|---|---|
+| `tri.py` | EPA TRI | `data.epa.gov/efservice/tri_facility/...` + `tri_reporting_form` | None | annual |
+| `ghgrp.py` | EPA GHGRP (FLIGHT) | `data.epa.gov/efservice/pub_dim_facility/...` + `pub_facts_sector_ghg_emission` | None | annual |
+| `superfund.py` | EPA SEMS / NPL | ArcGIS FeatureServer `FAC_Superfund_Site_Boundaries_EPA_Public/FeatureServer/0/query` | None | monthly |
+| `brownfields.py` | EPA ACRES | ArcGIS MapServer `EMEF/efpoints/MapServer/5/query` | None | monthly |
+| `sdwis.py` | EPA SDWIS | `data.epa.gov/efservice/water_system/state_code/{ST}/violation/...` | None | quarterly |
+
+Live endpoints (registered in `backend/main.py`):
+
+- `GET /api/releases/tri?state=TX&year=&limit=` — facility rows with chemicals and self-reported releases
+- `GET /api/releases/ghgrp?state=TX&year=2023&limit=` — facility rows with total CO₂e
+- `GET /api/sites/superfund?west=&south=&east=&north=&limit=` — NPL / SEMS sites in bbox, polygon centroids
+- `GET /api/sites/brownfields?west=&south=&east=&north=&limit=` — Brownfields points in bbox
+- `GET /api/drinking-water/sdwis?state=TX&zip_prefix=770,771,...&limit=` — PWS with aggregated violation counts
+
+Landmines:
+
+- **Envirofacts host migrated** — `iaspub.epa.gov/enviro/efservice/` is dead; use `data.epa.gov/efservice/` only
+- **Envirofacts mandatory pagination** — trailing `/rows/{first}:{last}/JSON` slug is required or queries time out; append `/JSON` to force JSON (default is XML)
+- **Envirofacts latency scales super-linearly** — `rows/0:500` ≈ 10s, `rows/0:1500` ≈ 80–95s. Fan out per-slice with `asyncio.gather` instead of one giant slice
+- **TRI `fac_latitude`/`fac_longitude` are frequently garbage** — zeros, nulls, or DMS-packed integers. `_pick_coord()` fallback walks candidate keys, rejects 0 and out-of-range values
+- **TRI has no single "annual release total" column** — `one_time_release_qty` is a one-time-event field, NOT the annual total. True aggregate requires a second join across `tri_release_qty` media types; `total_release_lb` is left `None` until that's wired
+- **GHGRP emissions table is not state-filterable** — `pub_facts_sector_ghg_emission` has no `state` column; fetch a year-windowed slice and aggregate by `facility_id`
+- **SDWIS `violation` table `state_code` filter is silently ignored** — querying `violation/state_code/TX/...` returns CT rows with no warning. Use the joined path `water_system/state_code/{ST}/violation/...` instead
+- **SDWIS `zip_code` operator `BEGINNING`** is the correct way to narrow water systems to a metro (e.g. `zip_code/BEGINNING/77/...`); per-prefix 500-row cap is real — fan out in parallel per prefix
+- **SDWIS joined rows may duplicate `(pwsid, violation_id)`** — de-dupe on `violation_id` during aggregation or violation counts inflate
+- **SDWIS mandatory disclaimer** — "SDWIS violations are regulatory compliance records. A violation does NOT necessarily indicate unsafe water at the tap." Must appear in `result.notes`
+- **Superfund FeatureServer returns polygons** — the `FAC_Superfund_Site_Boundaries_EPA_Public` layer is MultiPolygon/Polygon; compute centroid via simple vertex averaging (no shapely dependency)
+- **Superfund bbox query needs `inSR=4326` explicitly** — omitting it defaults to Web Mercator and returns empty for WGS84 envelopes
+- **Brownfields `cleanup_status` lives on a separate ACRES endpoint** — the EMEF efpoints MapServer Layer 5 only exposes facility identification fields; cleanup status needs a second-hop join via `pgm_sys_id`, deferred for now
+- **Brownfields layer ID 5** is current under `EMEF/efpoints/MapServer`; if it moves, inspect parent MapServer with `?f=json` to rediscover the layer index
