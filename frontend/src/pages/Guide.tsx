@@ -99,12 +99,302 @@ const POLLUTANTS = [
   { name: 'CO', full: 'Carbon monoxide', why: 'From incomplete combustion; reduces blood oxygen at high levels.' },
 ];
 
+// ── EPA Compliance Guide ───────────────────────────────────────────────────────
+
+function EpaComplianceGuide() {
+  return (
+    <main style={pageStyle}>
+      <div style={breadcrumbStyle}>
+        <Link to="/" style={bcrumbLinkStyle}>Home</Link>
+        <span style={sepStyle}>›</span>
+        <span>Guides</span>
+        <span style={sepStyle}>›</span>
+        <span>Understanding EPA Compliance Data</span>
+      </div>
+      <h1 style={h1Style}>Understanding EPA Compliance Data</h1>
+      <p style={subtitleStyle}>
+        EPA ECHO tracks regulatory compliance across tens of thousands of U.S. facilities.
+        Here's how to read it — and what it doesn't tell you.
+      </p>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>What Is EPA ECHO?</h2>
+        <p style={bodyStyle}>
+          ECHO (Enforcement and Compliance History Online) aggregates compliance data for
+          facilities regulated under four major EPA programs: Clean Air Act (CAA), Clean
+          Water Act (CWA), Resource Conservation and Recovery Act (RCRA), and Safe Drinking
+          Water Act (SDWA). It covers permit conditions, inspection history, violations, and
+          enforcement actions for over 800,000 regulated entities.
+        </p>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Significant Non-Compliance (SNC)</h2>
+        <p style={bodyStyle}>
+          The most serious violation classification in ECHO is{' '}
+          <strong>Significant Non-Compliance</strong>. A facility reaches SNC when it exceeds
+          effluent or emission limits by a threshold amount, fails to submit required reports,
+          or has unresolved formal enforcement actions. This site uses <code>FacSNCFlg = Y</code>{' '}
+          as the violation indicator.
+        </p>
+        <p style={bodyStyle}>
+          Non-SNC violations exist below this threshold — minor exceedances, late reports,
+          and administrative issues. These appear in ECHO but are not counted in our rankings.
+        </p>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Key Caveats</h2>
+        <ul style={listStyle}>
+          <li>
+            <strong>Compliance ≠ exposure or health risk.</strong> Regulatory limits are set
+            conservatively, so a violation doesn't necessarily mean nearby residents are harmed.
+          </li>
+          <li>
+            <strong>Reporting lags.</strong> ECHO data typically lags real-world events by
+            weeks to months. Facilities may have already corrected a violation before ECHO
+            reflects it.
+          </li>
+          <li>
+            <strong>Sampled, not complete.</strong> This site queries up to 500 active
+            facilities per metro bounding box. Large metros have far more regulated entities.
+          </li>
+          <li>
+            <strong>Boundary mismatch.</strong> Metro bounding boxes may include facilities
+            outside the CBSA or miss edge facilities. Use ECHO directly for exact searches.
+          </li>
+        </ul>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Enforcement Progression</h2>
+        <ul style={listStyle}>
+          <li>Informal action — notice of violation, warning letter</li>
+          <li>Formal administrative action — compliance order, penalty assessment</li>
+          <li>Judicial action — consent decree, civil penalty, criminal referral</li>
+        </ul>
+        <p style={bodyStyle}>
+          Most violations are resolved informally before formal action. A high violation
+          count warrants closer examination but does not equal severe environmental impact.
+        </p>
+      </section>
+      <div style={footerStyle}>
+        <p style={footerTextStyle}>
+          Source: EPA ECHO (echodata.epa.gov) · ECHO REST Services v2.
+          For facility-level detail, visit{' '}
+          <a href="https://echo.epa.gov" target="_blank" rel="noopener noreferrer" style={linkStyle}>
+            echo.epa.gov
+          </a>.
+        </p>
+        <div style={relatedStyle}>
+          <strong>Related:</strong>{' '}
+          <Link to="/rankings/epa-violations" style={linkStyle}>EPA Violations Ranking</Link>
+          {' · '}
+          <Link to="/" style={linkStyle}>Local Reports</Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ── Water Quality Samples Guide ───────────────────────────────────────────────
+
+function WaterQualitySamplesGuide() {
+  const WQP_PARAMS = [
+    { name: 'pH', range: '6.5–8.5', why: 'Acidity/alkalinity balance; extremes harm aquatic life and indicate pollution.' },
+    { name: 'Dissolved Oxygen', range: '> 5 mg/L', why: 'Oxygen available for aquatic organisms; low DO causes fish kills.' },
+    { name: 'Nitrate (NO₃)', range: '< 10 mg/L (drinking water)', why: 'From fertilizer runoff; drives algal blooms; harmful to infants at high levels.' },
+    { name: 'Total Phosphorus', range: 'Waterbody-specific', why: 'Primary nutrient driver of algal blooms and eutrophication.' },
+    { name: 'E. coli / Fecal Coliform', range: '< 126 CFU/100 mL (swimming)', why: 'Sewage contamination indicator; key for beach closures.' },
+    { name: 'Turbidity', range: 'Site-specific', why: 'Water clarity; elevated by sediment, reduces light, clogs fish gills.' },
+    { name: 'Conductance', range: 'Varies widely', why: 'Dissolved mineral content; elevated by road salt, mining, industrial discharge.' },
+  ];
+
+  return (
+    <main style={pageStyle}>
+      <div style={breadcrumbStyle}>
+        <Link to="/" style={bcrumbLinkStyle}>Home</Link>
+        <span style={sepStyle}>›</span>
+        <span>Guides</span>
+        <span style={sepStyle}>›</span>
+        <span>How to Interpret Water Quality Samples</span>
+      </div>
+      <h1 style={h1Style}>How to Interpret Water Quality Samples</h1>
+      <p style={subtitleStyle}>
+        The Water Quality Portal (WQP) aggregates millions of water chemistry measurements
+        from federal, state, and local agencies. "Discrete samples" are point-in-time
+        snapshots — understanding their limits is essential for correct interpretation.
+      </p>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>What Is the Water Quality Portal?</h2>
+        <p style={bodyStyle}>
+          WQP is a cooperative service of the USGS, EPA, and USDA providing unified access
+          to water quality data from over 400 agencies. Data comes from three main networks:
+        </p>
+        <ul style={listStyle}>
+          <li><strong>NWIS</strong> — USGS National Water Information System (federal)</li>
+          <li><strong>STORET</strong> — EPA Storage and Retrieval (state and local)</li>
+          <li><strong>STEWARDS</strong> — USDA watershed monitoring</li>
+        </ul>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>What Is a Discrete Sample?</h2>
+        <p style={bodyStyle}>
+          A discrete sample is a single measurement taken at one location, date, and time — a
+          snapshot, not continuous monitoring. A station might be sampled monthly, quarterly,
+          or just once. <strong>Do not interpret a single sample as a trend.</strong> Look for
+          patterns across multiple dates, stations, and years before drawing conclusions.
+        </p>
+        <p style={bodyStyle}>
+          High nitrate on one date may reflect a storm runoff event. Low dissolved oxygen
+          in summer often reflects seasonal thermal stratification — not permanent pollution.
+        </p>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Key Parameters</h2>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Parameter</th>
+              <th style={{ ...thStyle, textAlign: 'left' }}>Typical benchmark</th>
+              <th style={{ ...thStyle, textAlign: 'left' }}>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            {WQP_PARAMS.map((p, i) => (
+              <tr key={p.name} style={i % 2 === 0 ? rowEven : rowOdd}>
+                <td style={{ ...tdC, fontWeight: 600 }}>{p.name}</td>
+                <td style={tdL}>{p.range}</td>
+                <td style={tdL}>{p.why}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Detection Limits and Quality Codes</h2>
+        <p style={bodyStyle}>WQP results include a detection condition flag:</p>
+        <ul style={listStyle}>
+          <li><strong>Detected and quantified</strong> — measured above the method detection limit (MDL)</li>
+          <li><strong>Not detected</strong> — below the MDL; reported as &lt; MDL, not zero</li>
+          <li><strong>Present but not quantified</strong> — detected but below quantification threshold</li>
+        </ul>
+        <p style={bodyStyle}>
+          Treat "not detected" carefully. It means the method couldn't measure at that
+          concentration — not that the chemical is absent.
+        </p>
+      </section>
+      <div style={footerStyle}>
+        <p style={footerTextStyle}>
+          Source: Water Quality Portal (waterqualitydata.us) · USGS NWIS · EPA STORET.
+          Discrete sample dates may span decades — always check the result date field.
+        </p>
+        <div style={relatedStyle}>
+          <strong>Related:</strong>{' '}
+          <Link to="/guides/how-to-read-aqi" style={linkStyle}>How to Read an AQI Report</Link>
+          {' · '}
+          <Link to="/" style={linkStyle}>Local Reports</Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ── Climate Normals Guide ─────────────────────────────────────────────────────
+
+function ClimateNormalsGuide() {
+  return (
+    <main style={pageStyle}>
+      <div style={breadcrumbStyle}>
+        <Link to="/" style={bcrumbLinkStyle}>Home</Link>
+        <span style={sepStyle}>›</span>
+        <span>Guides</span>
+        <span style={sepStyle}>›</span>
+        <span>Understanding Climate Normals</span>
+      </div>
+      <h1 style={h1Style}>Understanding Climate Normals</h1>
+      <p style={subtitleStyle}>
+        Climate normals are 30-year statistical averages of temperature, precipitation, and
+        other variables. They're the baseline against which any single day, month, or year
+        of weather is compared.
+      </p>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>What Is a Climate Normal?</h2>
+        <p style={bodyStyle}>
+          A climate normal is calculated over a WMO-standard 30-year period. The current
+          standard is <strong>1991–2020</strong>, replacing 1981–2010 in 2021. Normals are
+          recalculated every decade to capture shifting climate conditions.
+        </p>
+        <p style={bodyStyle}>
+          Normals are not predictions — they describe historical typical conditions. A
+          January mean normal of 32°F is the 30-year average of January means at that
+          station, not a forecast for next January.
+        </p>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Why the Period Matters</h2>
+        <p style={bodyStyle}>
+          Because global temperatures have risen, the 1991–2020 normals are generally warmer
+          than 1981–2010. This has real consequences:
+        </p>
+        <ul style={listStyle}>
+          <li>
+            A temperature that was "above normal" in 2015 using the old baseline may appear
+            closer to normal on the 1991–2020 baseline — the reference shifted upward.
+          </li>
+          <li>
+            Infrastructure designed to the 1981–2010 normals (storm drains, HVAC, pipe
+            burial depth) may be undersized for the current climate envelope.
+          </li>
+          <li>
+            This site uses NOAA NCEI 1991–2020 normals — the current official standard.
+          </li>
+        </ul>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Temperature vs Precipitation</h2>
+        <p style={bodyStyle}>
+          <strong>Temperature normals</strong> report annual, monthly, and daily averages of
+          maximum, minimum, and mean temperatures. Annual mean temperature characterizes
+          a location's broad climate tier.
+        </p>
+        <p style={bodyStyle}>
+          <strong>Precipitation normals</strong> measure total water equivalent (rain +
+          snowmelt). Annual totals are highly variable — one standard deviation is typically
+          15–25% of the mean. A dry year in a wet city can still exceed the annual total of
+          a wet year in a desert city.
+        </p>
+      </section>
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Engineering Applications</h2>
+        <ul style={listStyle}>
+          <li><strong>Design storm depths</strong> — 10-year, 100-year return period events derived from normals-era records</li>
+          <li><strong>Heating/cooling degree days</strong> — energy load estimates for HVAC sizing</li>
+          <li><strong>Frost-free season length</strong> — affects agriculture, pavement design, pipe burial depth</li>
+          <li><strong>Drought frequency</strong> — Palmer Drought Severity Index uses normals as the reference baseline</li>
+        </ul>
+      </section>
+      <div style={footerStyle}>
+        <p style={footerTextStyle}>
+          Source: NOAA NCEI 1991–2020 U.S. Climate Normals · Published 2021.
+          Data via NCEI Data Access API v1.
+        </p>
+        <div style={relatedStyle}>
+          <strong>Related:</strong>{' '}
+          <Link to="/guides/how-to-read-aqi" style={linkStyle}>How to Read an AQI Report</Link>
+          {' · '}
+          <Link to="/" style={linkStyle}>Local Reports</Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Guide() {
   const { guideSlug } = useParams<{ guideSlug: string }>();
 
-  // Only /guides/how-to-read-aqi is implemented. Redirect others to a stub.
+  if (guideSlug === 'understanding-epa-compliance') return <EpaComplianceGuide />;
+  if (guideSlug === 'water-quality-samples') return <WaterQualitySamplesGuide />;
+  if (guideSlug === 'climate-normals') return <ClimateNormalsGuide />;
+
   if (guideSlug !== 'how-to-read-aqi') {
     return (
       <main style={pageStyle}>

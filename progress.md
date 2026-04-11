@@ -12,11 +12,11 @@
 ### 핵심 수치
 | 항목 | 수치 |
 |------|------|
-| Git commits | 21 |
+| Git commits | 22 |
 | Backend connectors | 14 구현 (12 live, 2 stub) |
-| API endpoints | 16개 |
-| Frontend components / pages | ~25개 |
-| Local Reports metros | 10 / 50 목표 |
+| API endpoints | 17개 |
+| Frontend components / pages | ~28개 |
+| Local Reports metros | 50 / 50 목표 ✅ |
 | Bundle size | 591 KB gzipped (< 600 KB 가드레일) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
 
@@ -161,28 +161,52 @@
 
 ---
 
-## 2차 작업 목록
+## Phase 8 — 2차 작업: Metro 확장 + SEO 콘텐츠 (2026-04-11) ✅
+
+### 8.1 Metro 40개 추가 (총 50개)
+- `data/cbsa_mapping.json` → 10 → **50개** CBSA 추가 완료
+- 4개 병렬 에이전트로 NOAA 스테이션 ID, AirNow ZIP, ZIP prefix, bbox 조사
+- **추가된 40개:** Atlanta, Austin, Baltimore, Birmingham, Boston, Buffalo,
+  Cincinnati, Cleveland, Columbus OH, Denver, Detroit, Hartford, Indianapolis,
+  Jacksonville, Kansas City, Las Vegas, Louisville, Memphis, Miami, Milwaukee,
+  Minneapolis, Nashville, New Orleans, Oklahoma City, Orlando, Pittsburgh,
+  Portland OR, Providence, Raleigh, Richmond, Riverside, Sacramento, St. Louis,
+  Salt Lake City, San Francisco, Seattle, Tampa, Tucson, Virginia Beach, Washington DC
+- ZIP prefix 중복 제거: Riverside ["922"-"925"] / Richmond ["230","232","238"] / Virginia Beach ["233"-"237"]
+
+### 8.2 PM2.5 랭킹
+- `GET /api/rankings/pm25` — AirNow ZIP 기반, 50개 metro 병렬, pm25_aqi 내림차순
+- `AIRNOW_API_KEY` 미설정 시 `not_configured` graceful response
+- `PM25Ranking.tsx` — AQI 카테고리 색상 배지, 테이블 표시
+- App.tsx: `/rankings/pm25` 전용 라우트 (catch-all 앞에 위치)
+
+### 8.3 교육 가이드 3개
+- `/guides/understanding-epa-compliance` — ECHO SNC 기준, 위반 유형, 면책
+- `/guides/water-quality-samples` — WQP 이산 샘플, 파라미터 테이블, 검출 한계
+- `/guides/climate-normals` — 1991-2020 기준, 기온 vs 강수, 공학 응용
+
+### 8.4 홈 업데이트
+- 랭킹/가이드 빠른 링크 6개: EPA Violations, PM2.5, AQI 가이드, EPA Compliance, Water Quality, Climate Normals
+
+---
+
+## 3차 작업 목록
 
 ### 우선순위 높음
-1. **Metro 40개 추가** — 50개 채우기 (현재 10/50)
-   - 상위 50개 CBSA 선정, CBSA code / NOAA 스테이션 / ZIP prefix 조사
-2. **PM2.5 연간 랭킹** — EPA AQS key 등록 후 `GET /api/rankings/pm25`
-3. **AdSense 신청** — 콘텐츠 충분 (10개 리포트 + 2개 SEO 페이지)
-4. **커스텀 도메인** — CF Pages + Render 양쪽 설정
+1. **AdSense 신청** — 콘텐츠 충분 (50개 리포트 + 5개 SEO 페이지)
+2. **커스텀 도메인** — CF Pages + Render 양쪽 설정
+3. **AIRNOW_API_KEY 등록** → PM2.5 랭킹 실제 데이터 활성화
 
 ### 우선순위 중간
-5. **가이드 3~4개 추가**
-   - "What Your Water Quality Samples Mean"
-   - "How to Interpret ECHO Compliance Data"
-   - "Understanding Climate Normals"
-6. **Born-in Interactive 완성** (P1 바이럴)
+4. **Born-in Interactive 완성** (P1 바이럴)
    - CO₂ / 기온 / 해빙 then vs now 비교
    - OG image 자동 생성 → SNS 공유
+5. **Story Panel 프리셋 확장** — 5~10개 (현재 1개)
+6. **Block 2 도시 시계열** — NOAAGlobalTemp city product 연동
 
 ### 우선순위 낮음
-7. **Story Panel 프리셋 확장** — 5~10개 (현재 1개)
-8. **Block 2 도시 시계열** — NOAAGlobalTemp city product 연동
-9. **CAMS Smoke 레이어** — Copernicus 계정 승인 후
+7. **CAMS Smoke 레이어** — Copernicus 계정 승인 후
+8. **EPA AQS 연간 PM2.5** — 별도 랭킹 (현재 랭킹은 AirNow 실시간)
 
 ---
 

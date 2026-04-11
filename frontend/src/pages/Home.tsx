@@ -147,8 +147,20 @@ function LocalReportsSection() {
         <a href="/rankings/epa-violations" style={quickLinkStyle}>
           📊 EPA Violations Ranking
         </a>
+        <a href="/rankings/pm25" style={quickLinkStyle}>
+          💨 PM2.5 Levels Ranking
+        </a>
         <a href="/guides/how-to-read-aqi" style={quickLinkStyle}>
           📖 How to Read an AQI Report
+        </a>
+        <a href="/guides/understanding-epa-compliance" style={quickLinkStyle}>
+          🏭 Understanding EPA Compliance
+        </a>
+        <a href="/guides/water-quality-samples" style={quickLinkStyle}>
+          💧 Water Quality Samples
+        </a>
+        <a href="/guides/climate-normals" style={quickLinkStyle}>
+          🌡️ Climate Normals Explained
         </a>
       </div>
 

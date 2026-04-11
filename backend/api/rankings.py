@@ -14,6 +14,8 @@ from typing import Any
 from fastapi import APIRouter
 
 from backend.connectors.echo import EchoConnector
+from backend.connectors.airnow import AirNowConnector
+from backend.config import get_settings
 
 router = APIRouter()
 
@@ -99,6 +101,88 @@ async def epa_violations_ranking() -> dict[str, Any]:
         "source_url": "https://echo.epa.gov/",
         "tag": "regulatory",
         "rows": ok_rows + err_rows,
+    }
+
+
+async def _pm25_for_metro(cbsa: dict[str, Any], api_key: str) -> dict[str, Any]:
+    """Fetch current PM2.5 AQI for one metro via AirNow."""
+    zip_code = (cbsa.get("airnow") or {}).get("sample_zip")
+    if not zip_code:
+        return {
+            "slug": cbsa["slug"], "name": cbsa["name"], "state": cbsa.get("state"),
+            "pm25_aqi": None, "pm25_category": None, "reporting_area": None,
+            "observed_at": None, "status": "no_zip",
+        }
+    connector = AirNowConnector(api_key=api_key)
+    try:
+        raw = await asyncio.wait_for(connector.fetch(zip_code=zip_code), timeout=30)
+        result = connector.normalize(raw)
+        pm25 = [r for r in result.values if r.pollutant == "PM2.5"]
+        if not pm25:
+            return {
+                "slug": cbsa["slug"], "name": cbsa["name"], "state": cbsa.get("state"),
+                "pm25_aqi": None, "pm25_category": None, "reporting_area": None,
+                "observed_at": None, "status": "no_data",
+            }
+        r = pm25[0]
+        return {
+            "slug": cbsa["slug"], "name": cbsa["name"], "state": cbsa.get("state"),
+            "pm25_aqi": r.aqi, "pm25_category": r.category,
+            "reporting_area": r.reporting_area, "observed_at": r.observed_at,
+            "status": "ok",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "slug": cbsa["slug"], "name": cbsa["name"], "state": cbsa.get("state"),
+            "pm25_aqi": None, "pm25_category": None, "reporting_area": None,
+            "observed_at": None, "status": "error",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+@router.get("/pm25")
+async def pm25_ranking() -> dict[str, Any]:
+    """Return all metros sorted by current PM2.5 AQI (descending).
+
+    Source: AirNow (EPA, USFS, NPS, NOAA) — real-time monitoring stations.
+    Requires AIRNOW_API_KEY. Returns not_configured if key is absent.
+    """
+    settings = get_settings()
+    if not settings.airnow_api_key:
+        return {
+            "slug": "pm25",
+            "title": "U.S. Metros by Current PM2.5 Levels",
+            "status": "not_configured",
+            "message": (
+                "AIRNOW_API_KEY is not set. Register at https://docs.airnowapi.org/ "
+                "and add AIRNOW_API_KEY to your environment variables."
+            ),
+            "rows": [],
+        }
+    mapping = _load_cbsa_mapping()
+    tasks = [_pm25_for_metro(cbsa, settings.airnow_api_key) for cbsa in mapping.values()]
+    rows: list[dict[str, Any]] = await asyncio.gather(*tasks)
+
+    ok_rows = sorted(
+        [r for r in rows if r["status"] == "ok"],
+        key=lambda r: r["pm25_aqi"] or 0,
+        reverse=True,
+    )
+    other_rows = [r for r in rows if r["status"] != "ok"]
+
+    return {
+        "slug": "pm25",
+        "title": "U.S. Metros by Current PM2.5 Levels",
+        "criterion": "Current PM2.5 AQI from AirNow real-time monitoring stations",
+        "note": (
+            "PM2.5 values reflect the most recent hourly observation for each metro's "
+            "representative ZIP code. Reporting area boundaries ≠ CBSA boundaries."
+        ),
+        "retrieved_date": date.today().isoformat(),
+        "source": "AirNow (EPA, USFS, NPS, NOAA)",
+        "source_url": "https://www.airnow.gov/",
+        "tag": "observed",
+        "rows": ok_rows + other_rows,
     }
 
 
