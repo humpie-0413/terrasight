@@ -1,8 +1,8 @@
-"""Climate Trends API — CO2 / Global Temp Anomaly / Arctic Sea Ice.
+"""Climate Trends API — CO₂ / Global Temp / Sea Ice / CH₄ / Sea Level Rise.
 
-Three slow-moving signals surfaced by the home page Climate Trends strip.
+Five slow-moving signals surfaced by the home page Climate Trends strip.
 The strip issues a single request to `GET /api/trends` which fans out to
-all three connectors in parallel; individual endpoints remain available
+all five connectors in parallel; individual endpoints remain available
 for debugging and for deep-link contexts.
 """
 from __future__ import annotations
@@ -14,6 +14,8 @@ from fastapi import APIRouter, HTTPException
 
 from backend.connectors.noaa_ctag import NoaaCtagConnector
 from backend.connectors.noaa_gml import NoaaGmlConnector
+from backend.connectors.noaa_gml_ch4 import NoaaGmlCh4Connector
+from backend.connectors.noaa_sea_level import NoaaSeaLevelConnector
 from backend.connectors.nsidc import NsidcConnector, five_day_mean, monthly_means
 
 router = APIRouter()
@@ -108,7 +110,6 @@ async def _sea_ice_payload() -> dict[str, Any]:
 
 
 async def _ch4_payload() -> dict[str, Any]:
-    from backend.connectors.noaa_gml_ch4 import NoaaGmlCh4Connector
     connector = NoaaGmlCh4Connector()
     result = await connector.run()
     points = result.values
@@ -132,7 +133,6 @@ async def _ch4_payload() -> dict[str, Any]:
 
 
 async def _sea_level_payload() -> dict[str, Any]:
-    from backend.connectors.noaa_sea_level import NoaaSeaLevelConnector
     connector = NoaaSeaLevelConnector()
     result = await connector.run()
     if isinstance(result.values, dict):
