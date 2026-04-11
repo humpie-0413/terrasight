@@ -107,11 +107,65 @@ async def _sea_ice_payload() -> dict[str, Any]:
     }
 
 
+async def _ch4_payload() -> dict[str, Any]:
+    from backend.connectors.noaa_gml_ch4 import NoaaGmlCh4Connector
+    connector = NoaaGmlCh4Connector()
+    result = await connector.run()
+    points = result.values
+    if not points:
+        raise HTTPException(status_code=502, detail="NOAA GML CH4 returned no data")
+    latest = points[-1]
+    sparkline = points[-12:]
+    return {
+        "id": "ch4",
+        "label": "CH₄ (Methane)",
+        "unit": "ppb",
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "record_start": "1983",
+        "latest": {"date": latest.iso_month, "value": latest.value_ppb},
+        "series": [{"date": p.iso_month, "value": p.value_ppb} for p in sparkline],
+        "notes": result.notes,
+    }
+
+
+async def _sea_level_payload() -> dict[str, Any]:
+    from backend.connectors.noaa_sea_level import NoaaSeaLevelConnector
+    connector = NoaaSeaLevelConnector()
+    result = await connector.run()
+    if isinstance(result.values, dict):
+        raise HTTPException(
+            status_code=502,
+            detail=f"NOAA sea level fetch failed: {result.values.get('message', 'unknown error')}",
+        )
+    points = result.values
+    if not points:
+        raise HTTPException(status_code=502, detail="NOAA sea level returned no data")
+    latest = points[-1]
+    sparkline = points[-24:]
+    return {
+        "id": "sea-level",
+        "label": "Sea Level Rise",
+        "unit": "mm",
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "record_start": "1992",
+        "baseline": "1993–2012 mean",
+        "latest": {"date": latest.date_str, "value": round(latest.gmsl_mm, 1)},
+        "series": [{"date": p.date_str, "value": round(p.gmsl_mm, 1)} for p in sparkline],
+        "notes": result.notes,
+    }
+
+
 @router.get("")
 async def get_trends() -> dict[str, Any]:
     """Fan-out endpoint for the Climate Trends home-page strip.
 
-    Runs all three connectors in parallel. A failure in any single
+    Runs all five connectors in parallel. A failure in any single
     indicator is reported as `error` on its entry without blocking the
     others — the UI can render partial strips.
     """
@@ -119,10 +173,12 @@ async def get_trends() -> dict[str, Any]:
         _co2_payload(),
         _temperature_payload(),
         _sea_ice_payload(),
+        _ch4_payload(),
+        _sea_level_payload(),
         return_exceptions=True,
     )
     indicators: list[dict[str, Any]] = []
-    ids = ("co2", "temp", "sea-ice")
+    ids = ("co2", "temp", "sea-ice", "ch4", "sea-level")
     for indicator_id, outcome in zip(ids, results):
         if isinstance(outcome, Exception):
             indicators.append({"id": indicator_id, "error": str(outcome)})
@@ -169,3 +225,25 @@ async def get_sea_ice() -> dict[str, Any]:
         raise HTTPException(
             status_code=502, detail=f"Failed to fetch sea ice series: {exc}"
         ) from exc
+
+
+@router.get("/ch4")
+async def get_ch4() -> dict[str, Any]:
+    """NOAA GML global CH₄ monthly mean — observed, since 1983."""
+    try:
+        return await _ch4_payload()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch CH4 series: {exc}") from exc
+
+
+@router.get("/sea-level")
+async def get_sea_level() -> dict[str, Any]:
+    """NOAA NESDIS GMSL — observed altimetry, since 1992."""
+    try:
+        return await _sea_level_payload()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch sea level series: {exc}") from exc
