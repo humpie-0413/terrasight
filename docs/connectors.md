@@ -273,3 +273,32 @@ Landmines:
 
 ECHO, NSIDC, NOAA GML/CtaG/Normals, USGS, WQP, NASA GIBS, IBTrACS, Climate TRACE,
 NOAA Sea Level, NOAA Coral Reef Watch, JRC Drought all require **no key**.
+
+---
+
+## Live endpoint status (verified 2026-04-11)
+
+| Endpoint | Key available? | Status | Notes |
+|---|---|---|---|
+| `GET /api/earth-now/air-monitors` | ❌ OPENAQ_API_KEY missing | `not_configured` | Graceful degradation OK |
+| `GET /api/earth-now/sea-level-anomaly` | ❌ CMEMS credentials missing | `not_configured` | Graceful degradation OK |
+| `GET /api/earth-now/fires` | ❌ FIRMS_MAP_KEY missing | `not_configured` | Graceful degradation OK |
+| `GET /api/earth-now/storms` | No key needed | ✅ live | IBTrACS |
+| `GET /api/earth-now/coral` | No key needed | ✅ live | NOAA CRW |
+| `GET /api/earth-now/sst` | No key needed | ✅ live | NOAA OISST |
+| `GET /api/trends` | No key needed | ✅ live | 5 indicators |
+| `GET /api/layers/catalog` | No key needed | ✅ 6 layers | GIBS only; tropomi_ch4 available=False |
+| GFW deforestation | ❌ No endpoint yet | — | Connector exists; needs `/api/earth-now/deforestation` route |
+
+### CtaG city-level time series (Block 2 finding)
+
+Verified 2026-04-11: NOAA Climate at a Glance has **no public REST/CSV API for
+city-level time series**. All URL patterns (USW station ID, state+code) return
+HTTP 404. The CtaG city interface is JavaScript-rendered only. Block 2 uses
+**Climate Normals** (`climate_normals.py`) as the permanent baseline fallback.
+
+### GFW API key config
+
+`GFW_API_KEY` added to `backend/config.py` (`gfw_api_key` field) 2026-04-11.
+To activate: set `GFW_API_KEY=...` in `.env` and add a `/api/earth-now/deforestation`
+endpoint that calls `GlobalForestWatchConnector(api_key=settings.gfw_api_key)`.

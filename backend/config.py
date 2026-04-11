@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     cams_ads_key: str | None = None         # Copernicus ADS — smoke/AOD layer
     cmems_username: str | None = None       # Copernicus Marine (CMEMS) — sea level anomaly
     cmems_password: str | None = None       # Copernicus Marine (CMEMS) — sea level anomaly
+    gfw_api_key: str | None = None          # Global Forest Watch — deforestation data
 
 
 @lru_cache

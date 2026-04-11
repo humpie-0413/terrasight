@@ -31,7 +31,16 @@ popular products (HadCRUT, GISTEMP) use different baselines — remember
 this when comparing magnitudes against other sources.
 
 City-level time series (the original CtaG use case for Local Reports
-Block 2) is a separate spike — not solved by this connector.
+Block 2):
+
+  Verified 2026-04-11: NOAA Climate at a Glance city/time-series endpoint
+  returns HTTP 404 for all URL patterns tested:
+    - /access/monitoring/climate-at-a-glance/city/time-series/{USW_STATION}/…
+    - /cag/city/time-series/{STATE-CODE}/…
+  The CtaG city interface is JavaScript-rendered with no public REST/CSV
+  API. Climate Normals (climate_normals.py) is the Block 2 baseline
+  fallback and will remain so until NOAA exposes a programmatic city-
+  series endpoint or a scraping solution is approved.
 =============================================================================
 """
 from __future__ import annotations

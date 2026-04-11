@@ -325,7 +325,7 @@ const CATEGORIES: CategoryDef[] = [
         source: 'Copernicus GES DISC',
         sourceUrl: 'https://disc.gsfc.nasa.gov/',
         available: false,
-        note: 'TROPOMI CH₄ not in GIBS — Copernicus GES DISC (P1)',
+        note: 'Satellite data coming soon',
       },
     ],
   },
