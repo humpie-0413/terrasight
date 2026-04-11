@@ -33,7 +33,7 @@ export default function Home() {
   ) => {
     if (layerOn === 'firms') setActiveEvent('fires');
     if (layerOn === 'oisst') setActiveContinuous('ocean-heat');
-    if (layerOn === 'openaq') setActiveContinuous('air-monitors');
+    if (layerOn === 'openaq') setActiveEvent('monitors');
     globeRef.current?.flyTo(camera.lat, camera.lng, camera.altitude);
   };
 
