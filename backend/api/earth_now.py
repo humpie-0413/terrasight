@@ -224,6 +224,169 @@ async def get_air_monitors(
     }
 
 
+@router.get("/storms")
+async def get_storms() -> dict[str, Any]:
+    """NOAA IBTrACS active tropical storms — latest track point per storm."""
+    from backend.connectors.ibtracs import IbtracsCsvConnector
+
+    connector = IbtracsCsvConnector()
+    try:
+        raw = await connector.fetch(source="ACTIVE")
+        result = connector.normalize(raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch IBTrACS feed: {exc}"
+        ) from exc
+
+    storms_out = []
+    for storm in result.values:
+        pt = storm.latest_point
+        if pt is None:
+            continue
+        storms_out.append(
+            {
+                "sid": storm.sid,
+                "name": storm.name,
+                "basin": storm.basin,
+                "season": storm.season,
+                "lat": pt.lat,
+                "lon": pt.lon,
+                "wind_kt": pt.wind_kt,
+                "pres_hpa": pt.pres_hpa,
+                "sshs": pt.sshs,
+                "iso_time": pt.iso_time,
+            }
+        )
+
+    return {
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "count": len(storms_out),
+        "configured": True,
+        "storms": storms_out,
+    }
+
+
+@router.get("/coral")
+async def get_coral() -> dict[str, Any]:
+    """NOAA Coral Reef Watch daily bleaching heat stress grid."""
+    from backend.connectors.coral_reef_watch import CoralReefWatchConnector
+
+    connector = CoralReefWatchConnector()
+    try:
+        raw = await connector.fetch()
+        result = connector.normalize(raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch Coral Reef Watch feed: {exc}"
+        ) from exc
+
+    if isinstance(result.values, dict):
+        return {
+            "source": result.source,
+            "source_url": result.source_url,
+            "cadence": result.cadence,
+            "tag": result.tag,
+            "count": 0,
+            "configured": True,
+            "status": "error",
+            "message": result.values.get("message", "Unknown error from Coral Reef Watch."),
+            "points": [],
+        }
+
+    return {
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "count": len(result.values),
+        "configured": True,
+        "status": "ok",
+        "points": [
+            {
+                "lat": p.lat,
+                "lon": p.lon,
+                "bleaching_alert": p.bleaching_alert,
+                "dhw": round(p.dhw, 2),
+                "sst_c": round(p.sst_c, 2),
+                "sst_anomaly_c": round(p.sst_anomaly_c, 2),
+            }
+            for p in result.values
+        ],
+    }
+
+
+@router.get("/sea-level-anomaly")
+async def get_sea_level_anomaly() -> dict[str, Any]:
+    """Copernicus Marine CMEMS daily SLA — not_configured if no credentials."""
+    from backend.connectors.cmems import CmemsConnector
+
+    settings = get_settings()
+
+    if not settings.cmems_username:
+        connector = CmemsConnector()
+        return {
+            "source": connector.source,
+            "source_url": connector.source_url,
+            "cadence": connector.cadence,
+            "tag": connector.tag,
+            "count": 0,
+            "configured": False,
+            "status": "not_configured",
+            "message": (
+                "CMEMS credentials are required but not set. "
+                "Register for free at https://marine.copernicus.eu/ and set "
+                "CMEMS_USERNAME and CMEMS_PASSWORD in the project-root .env."
+            ),
+            "points": [],
+        }
+
+    connector = CmemsConnector(
+        username=settings.cmems_username,
+        password=settings.cmems_password,
+    )
+    try:
+        raw = await connector.fetch()
+        result = connector.normalize(raw)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch CMEMS SLA feed: {exc}"
+        ) from exc
+
+    if isinstance(result.values, dict):
+        return {
+            "source": result.source,
+            "source_url": result.source_url,
+            "cadence": result.cadence,
+            "tag": result.tag,
+            "count": 0,
+            "configured": True,
+            "status": result.values.get("status", "error"),
+            "message": result.values.get("message", "Unknown error from CMEMS."),
+            "points": [],
+        }
+
+    return {
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "count": len(result.values),
+        "configured": True,
+        "status": "ok",
+        "points": [
+            {
+                "lat": p.lat,
+                "lon": p.lon,
+                "sla_m": p.sla_m,
+            }
+            for p in result.values
+        ],
+    }
+
+
 @router.get("/story")
 async def get_story() -> dict:
     """This month's climate story (preset-driven editorial).

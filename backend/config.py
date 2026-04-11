@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     epa_aqs_email: str | None = None        # EPA AQS — annual PM2.5/ozone trend
     epa_aqs_key: str | None = None          # EPA AQS — paired with email above
     cams_ads_key: str | None = None         # Copernicus ADS — smoke/AOD layer
+    cmems_username: str | None = None       # Copernicus Marine (CMEMS) — sea level anomaly
+    cmems_password: str | None = None       # Copernicus Marine (CMEMS) — sea level anomaly
 
 
 @lru_cache
