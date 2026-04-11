@@ -39,7 +39,7 @@ const ORDER: Array<TrendIndicator['id']> = ['co2', 'temp', 'sea-ice', 'ch4', 'se
 export default function TrendsStrip() {
   const { data, loading, error } = useApi<TrendsResponse>('/trends');
 
-  // Keep deterministic CO₂ → Temp → Sea Ice order regardless of backend ordering.
+  // Keep deterministic CO₂ → Temp → Sea Ice → CH₄ → Sea Level order regardless of backend ordering.
   const byId = new Map<TrendIndicator['id'], TrendIndicator>(
     data?.indicators.map((i) => [i.id, i]) ?? [],
   );
