@@ -9,16 +9,22 @@ Auth:    X-API-Key header (free registration at https://explore.openaq.org/)
 Note: Home globe labels this "Air monitors", NOT "AQI" (AQI is Local Reports only).
 
 =============================================================================
-Implementation notes (verified 2026-04-10 via API docs subagent):
+Implementation notes (updated 2026-04-11 — API migration finding):
 
-Endpoint: GET /v3/locations?parameters_id=2&limit=1000
-- parameters_id=2 → PM2.5 in OpenAQ v3
-- Returns Location objects with `sensors[].latest.{datetime, value}`,
-  `coordinates.{latitude, longitude}`, and human-readable `name`.
-- One request gives us {name, lat, lon, pm25_latest} without a second
-  hop to `/v3/measurements` or `/v3/latest`. Trade-off: no `datetime_min`
-  filter, so we may see a handful of stale stations — acceptable for a
-  globe overview.
+Endpoint: GET /v3/parameters/2/latest?limit=1000
+- parameter_id 2 = PM2.5 in OpenAQ v3
+- Returns flat array of {datetime, value, coordinates, sensorsId, locationsId}
+- Found: ~25,000 real-time PM2.5 readings globally
+
+MIGRATION NOTE: The original endpoint GET /v3/locations?parameters_id=2
+was verified to return sensors with `latest: null` for all stations —
+OpenAQ v3 did not carry over latest-reading data into the locations
+response. The correct endpoint is /v3/parameters/{id}/latest which
+returns actual measurement values.
+
+location_name and country are not available in this endpoint response
+(would require a second hop to /v3/locations/{locationsId}). We
+synthesize a name from the locationsId to avoid the N+1 call.
 
 Rate limits: 60 req/min, 2000 req/hr, 401 without key, 429 when exceeded.
 
@@ -72,11 +78,10 @@ class OpenAqConnector(BaseConnector):
                 "OPENAQ_API_KEY is not configured. Register at "
                 "https://explore.openaq.org/ and set OPENAQ_API_KEY in .env."
             )
-        url = f"{OPENAQ_BASE}/locations"
-        params = {
-            "parameters_id": parameters_id,
-            "limit": limit,
-        }
+        # Use /v3/parameters/{id}/latest — the only endpoint that returns
+        # actual current measurement values (~25k stations globally).
+        url = f"{OPENAQ_BASE}/parameters/{parameters_id}/latest"
+        params: dict[str, Any] = {"limit": limit}
         headers = {
             "X-API-Key": self.api_key,
             "Accept": "application/json",
@@ -88,52 +93,42 @@ class OpenAqConnector(BaseConnector):
             return response.json()
 
     def normalize(self, raw: dict[str, Any]) -> ConnectorResult:
+        # /v3/parameters/{id}/latest response: flat list of measurement records.
+        # Each record: {datetime:{utc,local}, value, coordinates:{latitude,longitude},
+        #               sensorsId, locationsId}
         monitors: list[AirMonitor] = []
-        for loc in raw.get("results", []):
-            coords = loc.get("coordinates") or {}
+        for record in raw.get("results", []):
+            coords = record.get("coordinates") or {}
             lat = coords.get("latitude")
             lon = coords.get("longitude")
             if lat is None or lon is None:
                 continue
 
-            # Pick the PM2.5 sensor's latest reading from `sensors[]`.
-            pm25_value: float | None = None
-            pm25_time: str = ""
-            for sensor in loc.get("sensors") or []:
-                param = sensor.get("parameter") or {}
-                if param.get("id") != PM25_PARAMETER_ID:
-                    continue
-                latest = sensor.get("latest") or {}
-                value = latest.get("value")
-                if value is None:
-                    continue
-                try:
-                    pm25_value = float(value)
-                except (TypeError, ValueError):
-                    continue
-                dt = latest.get("datetime") or {}
-                pm25_time = dt.get("utc") or ""
-                break
-
-            if pm25_value is None:
+            value = record.get("value")
+            if value is None:
+                continue
+            try:
+                pm25_value = float(value)
+            except (TypeError, ValueError):
                 continue
             # OpenAQ occasionally returns negative values from sensor glitches.
             if pm25_value < 0:
                 continue
 
-            country = None
-            country_obj = loc.get("country") or {}
-            if isinstance(country_obj, dict):
-                country = country_obj.get("name") or country_obj.get("code")
+            dt = record.get("datetime") or {}
+            pm25_time = dt.get("utc") or ""
+
+            location_id = record.get("locationsId")
+            location_name = f"Monitor #{location_id}" if location_id else "PM2.5 Monitor"
 
             monitors.append(
                 AirMonitor(
                     lat=float(lat),
                     lon=float(lon),
                     pm25=pm25_value,
-                    location_name=str(loc.get("name") or "Unknown station"),
+                    location_name=location_name,
                     datetime_utc=pm25_time,
-                    country=country,
+                    country=None,
                 )
             )
 

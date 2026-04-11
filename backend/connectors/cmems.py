@@ -192,6 +192,17 @@ class CmemsConnector(BaseConnector):
                             "Check CMEMS_USERNAME and CMEMS_PASSWORD environment variables."
                         ),
                     }
+                if response.status_code == 403:
+                    return {
+                        "status": "error",
+                        "message": (
+                            "CMEMS access denied (HTTP 403). "
+                            "Your account may need to accept product-specific Terms of Use "
+                            "for SEALEVEL_GLO_PHY_L4_NRT_008_046. "
+                            "Log in at https://data.marine.copernicus.eu/ and accept the "
+                            "terms for the product before retrying."
+                        ),
+                    }
                 if response.status_code == 404:
                     return {
                         "status": "error",
