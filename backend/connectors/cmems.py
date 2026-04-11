@@ -266,6 +266,28 @@ class CmemsConnector(BaseConnector):
         raw_text: str = raw.get("raw_text", "")
         date_fetched: str = raw.get("date_fetched", "unknown")
 
+        # Detect HTML redirect/error page (THREDDS login or Cloudflare block)
+        if raw_text.lstrip().startswith(("<!DOCTYPE", "<html", "<HTML", "<!doctype")):
+            return ConnectorResult(
+                values={
+                    "status": "error",
+                    "message": (
+                        "CMEMS THREDDS returned an HTML page instead of OPeNDAP data. "
+                        "This usually means the server requires product Terms of Use "
+                        "acceptance. Log in at https://data.marine.copernicus.eu/ → "
+                        "My account → accept terms for SEALEVEL_GLO_PHY_L4_NRT_008_046, "
+                        "then retry."
+                    ),
+                },
+                source=self.source,
+                source_url=self.source_url,
+                cadence=self.cadence,
+                tag=self.tag,
+                spatial_scope="Global (0.25°)",
+                license="Copernicus Marine Open Data Licence",
+                notes=["THREDDS returned HTML — product ToU acceptance needed."],
+            )
+
         points: list[SeaLevelAnomalyPoint] = []
 
         # OPeNDAP ASCII is complex to parse generically; provide a minimal parse
