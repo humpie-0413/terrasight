@@ -4,7 +4,7 @@ import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import atlas, earth_now, rankings, reports, trends
+from backend.api import atlas, earth_now, layers, rankings, reports, trends
 from backend.config import get_settings
 
 
@@ -40,3 +40,4 @@ app.include_router(earth_now.router, prefix="/api/earth-now", tags=["earth-now"]
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(atlas.router, prefix="/api/atlas", tags=["atlas"])
 app.include_router(rankings.router, prefix="/api/rankings", tags=["rankings"])
+app.include_router(layers.router, prefix="/api/layers", tags=["layers"])

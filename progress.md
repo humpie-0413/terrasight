@@ -12,9 +12,9 @@
 ### 핵심 수치
 | 항목 | 수치 |
 |------|------|
-| Git commits | 22 |
-| Backend connectors | 14 구현 (12 live, 2 stub) |
-| API endpoints | 17개 |
+| Git commits | 23 |
+| Backend connectors | 24 구현 (21 live, 3 not_configured/tiles_only) |
+| API endpoints | 18개 |
 | Frontend components / pages | ~28개 |
 | Local Reports metros | 50 / 50 목표 ✅ |
 | Bundle size | 591 KB gzipped (< 600 KB 가드레일) |
@@ -187,6 +187,68 @@
 
 ### 8.4 홈 업데이트
 - 랭킹/가이드 빠른 링크 6개: EPA Violations, PM2.5, AQI 가이드, EPA Compliance, Water Quality, Climate Normals
+
+---
+
+---
+
+## Phase A — 글로벌 데이터 커넥터 14개 (2026-04-11) ✅
+
+### A.1 GIBS Layer Catalog
+- `backend/connectors/gibs.py` — `LAYER_CATALOG` dict 추가
+  - blue_marble (static), modis_aod (daily), pm25 MERRA-2 (monthly), oco2_xco2 (daily), modis_flood (daily)
+  - `tropomi_ch4` → GIBS 미지원 확인, `available=False` 마킹
+- `backend/api/layers.py` — `GET /api/layers/catalog` 생성 (WMTS tile URL template 포함)
+- `backend/main.py` — `/api/layers` 라우터 등록
+
+### A.2 해양/기후 커넥터
+| 커넥터 | 소스 | 인증 | 태그 |
+|--------|------|------|------|
+| `noaa_gml_ch4.py` | NOAA GML CH₄ monthly global | 없음 | observed |
+| `noaa_sea_level.py` | NOAA NESDIS GMSL (`_free_all_66.csv`) | 없음 | observed |
+| `coral_reef_watch.py` | CRW ERDDAP `NOAA_DHW` | 없음 | near-real-time |
+| `cmems.py` | Copernicus Marine `SEALEVEL_GLO_PHY_L4_NRT_008_046` | `CMEMS_USERNAME/PASSWORD` | observed |
+
+### A.3 육지/생태 커넥터
+| 커넥터 | 소스 | 인증 | 태그 |
+|--------|------|------|------|
+| `global_forest_watch.py` | GFW Data API / Hansen UMD | `GFW_API_KEY` (무료) | derived |
+| `jrc_drought.py` | JRC EDO WMS (`drought.emergency.copernicus.eu`) | 없음 | derived |
+
+### A.4 기상/배출 커넥터
+| 커넥터 | 소스 | 인증 | 태그 |
+|--------|------|------|------|
+| `ibtracs.py` | NOAA IBTrACS v04r01 ACTIVE + LAST3YEARS CSV | 없음 | observed |
+| `climate_trace.py` | Climate TRACE API v6 | 없음 | estimated |
+
+### 랜드마인 기록 (docs/connectors.md 상세)
+- NOAA Sea Level 구 URL `_txj1j2_90.csv` → 사망, `_free_all_66.csv` 사용
+- GFW query POST-only (GET → 405), 컬럼명 이중 언더스코어
+- JRC domain: `edo.jrc.ec.europa.eu` → `drought.emergency.copernicus.eu` (2024-04-03)
+- IBTrACS 파일명: `last3years` (소문자), 2-헤더-행 CSV 처리
+- Climate TRACE 쿼리 파라미터: `countries` (복수), 단위 metric tons
+
+---
+
+## Phase 9 — Land/Ecology Connectors (2026-04-11) ✅
+
+### 9.1 Global Forest Watch connector (`backend/connectors/global_forest_watch.py`)
+- **Endpoint:** `POST https://data-api.globalforestwatch.org/dataset/umd_tree_cover_loss/{version}/query/json`
+- **Auth:** `x-api-key` header required — free account at globalforestwatch.org; keys expire after 1 year
+- **Data:** Annual global tree cover loss (ha) aggregated worldwide; version auto-detected from `/dataset/umd_tree_cover_loss` metadata
+- **Graceful degradation:** returns `status: not_configured` when `api_key` is absent or HTTP 401/403 received
+- **Tag:** `derived` | **Cadence:** annual | **License:** CC BY 4.0
+- **Landmines:** (1) POST-only query endpoint — GET `?sql=` returns 405; (2) country-level queries require posting a polygon geometry; (3) `area__ha` column name uses double underscores; (4) dataset version must be exact string from metadata list ("v1.12", not "1.12")
+
+### 9.2 JRC Global Drought Observatory connector (`backend/connectors/jrc_drought.py`)
+- **API type:** WMS (tiles) + WCS (GeoTIFF rasters) only — NO public JSON/REST tabular API as of 2026-04-11
+- **WMS endpoint:** `https://drought.emergency.copernicus.eu/api/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.1.1`
+- **WCS endpoint:** `https://drought.emergency.copernicus.eu/api/wcs?map=DO_WCS&...`
+- **Available layers:** spaST/spaLT (SPI ERA5), spcST/spcLT (SPI CHIRPS), spgTS (SPI GPCC), smian/smang/smand (Soil Moisture), fpanv (fAPAR), cdiad (CDI Europe), twsan (GRACE TWS), rdria (Drought/Agriculture risk)
+- **Returns:** `DroughtLayer` objects with WMS tile URL templates and WCS GeoTIFF URL templates; `status: tiles_only` in notes
+- **Fallback:** hardcoded `_KNOWN_LAYERS` used if WMS GetCapabilities fetch fails
+- **Tag:** `derived` | **Cadence:** dekadal (most layers), monthly (SPI-LT, GRACE) | **License:** CC BY 4.0
+- **Landmines:** (1) Domain migrated from `edo.jrc.ec.europa.eu` to `drought.emergency.copernicus.eu` on 2024-04-03; (2) SPI GPCC (`spgTS`) requires `SELECTED_TIMESCALE` param ("01","03","06","09","12"); (3) `cdiad` is Europe-only; (4) pixel-to-tabular stats need rasterio/GDAL
 
 ---
 

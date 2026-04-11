@@ -192,6 +192,73 @@ handle them exactly as described.
 
 ---
 
+---
+
+## Phase A — Global data connectors (2026-04-11)
+
+### GIBS Layer Catalog (`backend/connectors/gibs.py`)
+
+| Catalog key | GIBS Layer ID | TileMatrixSet | Cadence | Available |
+|---|---|---|---|---|
+| `blue_marble` | `BlueMarble_ShadedRelief_Bathymetry` | 500m | static | ✅ |
+| `modis_aod` | `MODIS_Terra_Aerosol` | 2km | daily | ✅ |
+| `pm25` | `MERRA2_Dust_Surface_Mass_Concentration_PM25_Monthly` | 2km | monthly | ✅ |
+| `oco2_xco2` | `OCO-2_Carbon_Dioxide_Total_Column_Average` | 500m | daily (sparse swath) | ✅ |
+| `modis_flood` | `MODIS_Combined_Flood_2-Day` | 250m | daily | ✅ |
+| `tropomi_ch4` | — | — | — | ❌ Not in GIBS — use Copernicus GES DISC `S5P_L2__CH4____HiR` |
+
+Landmines:
+- `pm25` layer is **dust fraction only** (MERRA-2), not total PM2.5
+- `pm25` time param must be `YYYY-MM-DD`, not `YYYY-MM`
+- OCO-2 has sparse daily swath — large blank regions are normal
+- `blue_marble` has no `{Time}` segment (static layer) — `layers.py` handles this
+
+### Ocean/Climate Connectors
+
+| Connector | Source | Endpoint | Auth | Tag | Cadence |
+|---|---|---|---|---|---|
+| `noaa_gml_ch4.py` | NOAA GML CH₄ | `gml.noaa.gov/webdata/ccgg/trends/ch4/ch4_mm_gl.txt` | None | observed | monthly |
+| `noaa_sea_level.py` | NOAA NESDIS GMSL | `star.nesdis.noaa.gov/.../slr_sla_gbl_free_all_66.csv` | None | observed | ~10-day |
+| `coral_reef_watch.py` | NOAA CRW via ERDDAP | `coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW` | None | near-real-time | daily |
+| `cmems.py` | Copernicus Marine CMEMS | THREDDS OPeNDAP, product `SEALEVEL_GLO_PHY_L4_NRT_008_046` | `CMEMS_USERNAME` + `CMEMS_PASSWORD` | observed | daily |
+
+Landmines:
+- **NOAA Sea Level** old URL `_txj1j2_90.csv` → ECONNREFUSED. Use `_free_all_66.csv`
+- **CRW**: ERDDAP dataset ID `NOAA_DHW`; auto-retries previous day if latest 404
+- **CMEMS**: Free registration at marine.copernicus.eu — `not_configured` fallback if absent
+
+### Land/Ecology Connectors
+
+| Connector | Source | Endpoint | Auth | Tag | Cadence |
+|---|---|---|---|---|---|
+| `global_forest_watch.py` | GFW / Hansen UMD | `POST data-api.globalforestwatch.org/dataset/umd_tree_cover_loss/{ver}/query/json` | `GFW_API_KEY` (free, expires 1yr) | derived | annual |
+| `jrc_drought.py` | EU JRC / Copernicus EDO | `drought.emergency.copernicus.eu/api/wms` (WMS only) | None | derived | dekadal |
+
+Landmines:
+- **GFW**: POST-only query (GET `?sql=` → 405); column name uses double underscores (`umd_tree_cover_loss__year`)
+- **GFW**: Country-level stats require polygon geometry — global aggregate only without geometry
+- **JRC**: Domain migrated from `edo.jrc.ec.europa.eu` to `drought.emergency.copernicus.eu` (2024-04-03)
+- **JRC**: SPI GPCC layer (`spgTS`) requires `SELECTED_TIMESCALE` param ("01","03","06","09","12")
+- **JRC**: CDI layer (`cdiad`) is Europe-only, not global
+- **JRC**: No JSON/REST API — WMS/WCS tiles only (`status: tiles_only` in response)
+
+### Weather/Emissions Connectors
+
+| Connector | Source | Endpoint | Auth | Tag | Cadence |
+|---|---|---|---|---|---|
+| `ibtracs.py` | NOAA IBTrACS v04r01 | NCEI CSV (ACTIVE + LAST3YEARS) | None | observed | NRT ~6h (active) |
+| `climate_trace.py` | Climate TRACE | `api.climatetrace.org/v6/countries/emissions` | None | estimated | annual |
+
+Landmines:
+- **IBTrACS**: Filename is `ibtracs.last3years...` (lowercase) — `LAST3YR` → 404
+- **IBTrACS**: CSV has 2 header rows — row 1 is units, must skip before DictReader
+- **IBTrACS**: LAST3YEARS file is ~8.8MB; use 120s timeout
+- **Climate TRACE**: Query param is `countries` (plural, comma CSV) — `country` (singular) silently returns world aggregate
+- **Climate TRACE**: Values are metric tons (not gigatons) — divide by 1e9 for display
+- **Climate TRACE**: `continent` field returns string `"null"` (not JSON null) when `countries` param is used
+
+---
+
 ## API key registration (free)
 
 | Source | Env var | Register |
@@ -201,6 +268,8 @@ handle them exactly as described.
 | AirNow | `AIRNOW_API_KEY` | https://docs.airnowapi.org/ |
 | EPA AQS | `AQS_EMAIL` + `AQS_KEY` | https://aqs.epa.gov/aqsweb/documents/data_api.html |
 | Copernicus ADS (CAMS) | ADS account + cdsapi | https://ads.atmosphere.copernicus.eu/ |
+| CMEMS (Sea Level) | `CMEMS_USERNAME` + `CMEMS_PASSWORD` | https://marine.copernicus.eu/ |
+| Global Forest Watch | `GFW_API_KEY` | https://www.globalforestwatch.org/ (free, 1yr expiry) |
 
-ECHO, NSIDC, NOAA GML/CtaG/Normals, USGS, WQP, NASA GIBS all require
-**no key**.
+ECHO, NSIDC, NOAA GML/CtaG/Normals, USGS, WQP, NASA GIBS, IBTrACS, Climate TRACE,
+NOAA Sea Level, NOAA Coral Reef Watch, JRC Drought all require **no key**.
