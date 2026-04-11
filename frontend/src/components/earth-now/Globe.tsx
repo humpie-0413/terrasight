@@ -161,6 +161,7 @@ interface SlaResponse {
   count: number;
   configured: boolean;
   status: string;
+  message?: string;
   points: SlaPoint[];
 }
 
@@ -611,6 +612,7 @@ interface LayerPanelProps {
   activeContinuous: ActiveContinuous;
   onLayerChange: (type: 'event' | 'continuous', key: string | null) => void;
   slaConfigured: boolean;
+  slaStatus?: string;
   airConfigured: boolean;
 }
 
@@ -619,6 +621,7 @@ function LayerPanel({
   activeContinuous,
   onLayerChange,
   slaConfigured,
+  slaStatus,
   airConfigured,
 }: LayerPanelProps) {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
@@ -734,7 +737,11 @@ function LayerPanel({
                     const tooltipNote = disabled
                       ? (layer.note ??
                         (layer.key === 'cmems-sla'
-                          ? 'CMEMS credentials not configured'
+                          ? slaStatus === 'pending'
+                            ? 'Sea level data migration in progress — coming soon'
+                            : slaStatus === 'error'
+                              ? 'Sea level service error — check backend logs'
+                              : 'CMEMS credentials not configured'
                           : layer.key === 'monitors'
                             ? 'OPENAQ_API_KEY not configured'
                             : undefined))
@@ -969,12 +976,16 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
     if (activeEvent === 'monitors' && airData && !airData.configured) {
       return 'OPENAQ_API_KEY not configured — air monitors disabled. See .env.example.';
     }
-    if (
-      activeContinuous === 'cmems-sla' &&
-      slaData &&
-      !slaData.configured
-    ) {
-      return 'CMEMS credentials not configured — sea level layer disabled.';
+    if (activeContinuous === 'cmems-sla' && slaData) {
+      if (!slaData.configured) {
+        return 'CMEMS credentials not configured — sea level layer disabled.';
+      }
+      if (slaData.status === 'pending') {
+        return 'Sea Level Anomaly: endpoint migration in progress — full data integration coming soon.';
+      }
+      if (slaData.status === 'error') {
+        return `Sea Level Anomaly error: ${slaData.message ?? 'service unavailable.'}`;
+      }
     }
     return null;
   }, [
@@ -1081,7 +1092,11 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
     `;
   }
 
-  const slaConfigured = slaData ? slaData.configured : true;
+  // slaConfigured = credentials present AND actual data is available (status 'ok').
+  // 'pending' (endpoint migration) and 'error' both disable the toggle.
+  const slaConfigured = slaData
+    ? slaData.configured && slaData.status === 'ok'
+    : true; // optimistic while loading
   const airConfigured = airData ? airData.configured : true;
 
   return (
@@ -1190,6 +1205,7 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
         activeContinuous={activeContinuous}
         onLayerChange={onLayerChange}
         slaConfigured={slaConfigured}
+        slaStatus={slaData?.status}
         airConfigured={airConfigured}
       />
 

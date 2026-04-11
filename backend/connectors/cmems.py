@@ -7,64 +7,72 @@ Cadence:  daily (NRT, ~1–2 day lag)
 Tag:      observed  (satellite altimetry-derived)
 
 =============================================================================
-Auth status (verified 2026-04-11):
-  ⚠️  CMEMS requires a FREE registered account.
-     All data-download services (OPeNDAP, Subset, Files) require
-     CMEMS credentials. A registration-free WMTS endpoint exists for
-     *map tiles only* (not numerical data).
+Infrastructure note (updated 2026-04-11 — CMEMS endpoint migration):
 
-  Authentication: HTTP Basic Auth (username + password) sent via the
-  Copernicus Marine Toolbox or direct HTTPS calls to the OPeNDAP endpoint.
+  The old THREDDS OPeNDAP endpoint at nrt.cmems-du.eu is DECOMMISSIONED.
+  DNS for nrt.cmems-du.eu resolves to 172.67.145.239 (301Domains parking
+  service) — all data requests return an HTML landing page, not data.
 
-  New (post-2023) endpoint pattern uses the copernicusmarine Python package
-  or equivalent REST calls to:
-    https://nrt.cmems-du.eu/thredds/dodsC/
-      cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D
-  This is the primary NRT L4 gridded SSH/SLA product (daily, 0.25°).
+  New access pattern (Marine Data Store, post-2024):
+    Auth:
+      POST https://auth.marine.copernicus.eu/realms/MIS/protocol/openid-connect/token
+      client_id=toolbox, grant_type=password
+      (Keycloak OAuth2; realm is "MIS" — old docs showing keycloak.marine.copernicus.eu
+       or realm "CMEMS" are stale)
 
-  Product dataset ID: cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D
-  Variables: sla (sea level anomaly, m), adt (absolute dynamic topography, m),
-             ugos, vgos (geostrophic velocity anomalies, m/s),
-             err_sla (formal mapping error, m)
+    Data:
+      ARCO Zarr on CloudFerro S3 at s3.waw3-1.cloudferro.com
+        - Zarr metadata (.zattrs, .zmetadata): publicly accessible, no auth
+        - Zarr data chunks: 403 AccessDenied — require S3 credentials
+          managed internally by the copernicusmarine Python package
 
-  Graceful degradation: if CMEMS_USERNAME or CMEMS_PASSWORD env vars are
-  absent, returns status='not_configured' with setup instructions.
-  On auth failure (401), returns status='error'.
+    No standalone REST subset API exists. The subset operation is
+    implemented inside the copernicusmarine package only.
 
-Landmines / quirks:
-  - CMEMS renamed products in 2023; old product ID
-    SEALEVEL_GLO_PHY_L4_NRT_OBSERVATIONS_008_046 now resolves to
-    SEALEVEL_GLO_PHY_L4_NRT_008_046. Both may appear in docs.
-  - The OPeNDAP URL above may change with product reprocessing versions;
-    check https://data.marine.copernicus.eu/product/SEALEVEL_GLO_PHY_L4_NRT_008_046/services
-    for the current dataset ID.
-  - SLA values are in metres (not mm). Multiply by 1000 for mm if needed.
-  - Global 0.25° grid = 1440 × 721 cells per day; fetch a bounding box
-    rather than the full global field to keep response times reasonable.
-  - The Copernicus Marine Toolbox (pip install copernicusmarine) is the
-    recommended Python access method; this connector uses httpx + OPeNDAP
-    ASCII to avoid a heavyweight dependency.
+  This connector:
+    1. Validates credentials via Keycloak (confirms account is working)
+    2. Confirms service availability via public Zarr metadata
+    3. Returns status='pending' since actual data chunks require
+       the copernicusmarine package (not yet integrated)
+
+  To fully enable this layer, add copernicusmarine to requirements.txt
+  and rewrite the fetch() to use copernicusmarine.open_dataset().
+
+Product dataset ID: cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D
+Variables: sla (sea level anomaly, m), adt (absolute dynamic topography, m),
+           ugos, vgos (geostrophic velocity anomalies, m/s), err_sla (error, m)
+
+Graceful degradation:
+  - CMEMS_USERNAME / CMEMS_PASSWORD absent → status='not_configured'
+  - Auth failure (401/400) → status='error' with message
+  - Auth service unreachable → status='error' with message
+  - Credentials valid but data access requires package → status='pending'
 =============================================================================
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date, timedelta
 from typing import Any
 
 import httpx
 
 from backend.connectors.base import BaseConnector, ConnectorResult
 
-# NRT L4 gridded SSH/SLA dataset — daily, 0.25°, global
-_OPENDAP_BASE = (
-    "https://nrt.cmems-du.eu/thredds/dodsC/"
-    "cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D"
+# New Keycloak OAuth2 token endpoint (Marine Data Store, post-2024)
+# Realm is "MIS" — old docs referencing keycloak.marine.copernicus.eu or realm "CMEMS" are stale.
+_KEYCLOAK_TOKEN_URL = (
+    "https://auth.marine.copernicus.eu/realms/MIS/protocol/openid-connect/token"
 )
 
-# OPeNDAP ASCII (text) endpoint — append .ascii to the dataset path
-_ASCII_URL = _OPENDAP_BASE + ".ascii"
+# Public Zarr metadata (no auth required) — confirms service availability.
+# The 0.25° NRT L4 DUACS product. Version suffix _202311 indicates the processing version.
+_ZARR_ZATTRS_URL = (
+    "https://s3.waw3-1.cloudferro.com/mdl-arco-time-045/arco/"
+    "SEALEVEL_GLO_PHY_L4_NRT_008_046/"
+    "cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D_202311/"
+    "timeChunked.zarr/.zattrs"
+)
 
 PRODUCT_PAGE = (
     "https://data.marine.copernicus.eu/product/"
@@ -95,8 +103,7 @@ def _not_configured_result(source: str, source_url: str, cadence: str, tag: str)
                 "1. Visit https://marine.copernicus.eu/ → Register (free)",
                 "2. Set CMEMS_USERNAME=<your_email> in your environment",
                 "3. Set CMEMS_PASSWORD=<your_password> in your environment",
-                "4. (Optional) Install the official client: pip install copernicusmarine",
-                "5. Product: SEALEVEL_GLO_PHY_L4_NRT_008_046",
+                "4. Product: SEALEVEL_GLO_PHY_L4_NRT_008_046",
             ],
         },
         source=source,
@@ -112,8 +119,9 @@ def _not_configured_result(source: str, source_url: str, cadence: str, tag: str)
 class CmemsConnector(BaseConnector):
     """Copernicus Marine Service (CMEMS) sea level anomaly connector.
 
-    Fetches the daily NRT L4 gridded sea level anomaly product
-    (SEALEVEL_GLO_PHY_L4_NRT_008_046) via OPeNDAP ASCII.
+    Validates credentials via Keycloak and confirms data availability
+    via public Zarr metadata. Returns status='pending' until the
+    copernicusmarine package is integrated for actual data download.
 
     Requires CMEMS_USERNAME and CMEMS_PASSWORD environment variables.
     Returns status='not_configured' if credentials are absent.
@@ -133,124 +141,90 @@ class CmemsConnector(BaseConnector):
         self.username: str | None = username or os.environ.get("CMEMS_USERNAME")
         self.password: str | None = password or os.environ.get("CMEMS_PASSWORD")
 
-    async def fetch(
-        self,
-        *,
-        target_date: date | None = None,
-        lat_min: float = -90.0,
-        lat_max: float = 90.0,
-        lon_min: float = -180.0,
-        lon_max: float = 180.0,
-        **params: Any,
-    ) -> Any:
-        """Fetch sea level anomaly data from CMEMS OPeNDAP ASCII endpoint.
+    async def fetch(self, **_params: Any) -> Any:
+        """Validate CMEMS credentials and confirm data service availability.
 
-        Args:
-            target_date: Date to fetch (default: 2 days ago, to account for NRT lag).
-            lat_min, lat_max, lon_min, lon_max: Bounding box (default: global).
-
-        Returns:
-            dict with 'raw_text', 'date_fetched', and bounding box params on success.
-            dict with 'status': 'not_configured' if credentials are absent.
-            dict with 'status': 'error' on HTTP / connection failure.
+        Returns a status dict:
+          - 'not_configured': credentials missing
+          - 'error': auth failed or service unreachable
+          - 'pending': credentials valid, data requires copernicusmarine package
         """
         if not self.username or not self.password:
             return {"status": "not_configured"}
 
-        if target_date is None:
-            target_date = date.today() - timedelta(days=2)
-
-        # OPeNDAP ASCII constraint expression for a lat/lon bounding box
-        # Format: variable[time_index][lat_range][lon_range]
-        # We query sla and adt for the given day; use a simple date-based request.
-        # The ASCII endpoint accepts OPeNDAP CE (Constraint Expression) syntax.
-        constraint = (
-            f"?sla[0][({lat_min}):1:({lat_max})][({lon_min}):1:({lon_max})],"
-            f"adt[0][({lat_min}):1:({lat_max})][({lon_min}):1:({lon_max})]"
-        )
-        # For date selection we use the THREDDS catalog time-based URL pattern
-        # (date suffix on the dataset path, which CMEMS OPeNDAP supports)
-        date_str = target_date.strftime("%Y%m%d")
-        dataset_url = (
-            "https://nrt.cmems-du.eu/thredds/dodsC/"
-            f"cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D_{date_str}.ascii"
-        )
-
-        auth = (self.username, self.password)
-        timeout = httpx.Timeout(120.0, connect=20.0)
-
-        try:
-            async with httpx.AsyncClient(
-                timeout=timeout, follow_redirects=True, auth=auth
-            ) as client:
-                response = await client.get(dataset_url + constraint)
-                if response.status_code == 401:
+        timeout = httpx.Timeout(30.0, connect=10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            # Step 1: Validate credentials via Keycloak OAuth2
+            try:
+                token_resp = await client.post(
+                    _KEYCLOAK_TOKEN_URL,
+                    data={
+                        "grant_type": "password",
+                        "client_id": "toolbox",
+                        "username": self.username,
+                        "password": self.password,
+                        "scope": "openid profile email",
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                if token_resp.status_code in (400, 401):
+                    # 400 = invalid_grant (wrong credentials), 401 = unauthorized
+                    body = token_resp.json() if token_resp.content else {}
+                    error_desc = body.get("error_description", "invalid credentials")
                     return {
                         "status": "error",
                         "message": (
-                            "CMEMS authentication failed (HTTP 401). "
-                            "Check CMEMS_USERNAME and CMEMS_PASSWORD environment variables."
+                            f"CMEMS authentication failed: {error_desc}. "
+                            "Check CMEMS_USERNAME and CMEMS_PASSWORD."
                         ),
                     }
-                if response.status_code == 403:
-                    return {
-                        "status": "error",
-                        "message": (
-                            "CMEMS access denied (HTTP 403). "
-                            "Your account may need to accept product-specific Terms of Use "
-                            "for SEALEVEL_GLO_PHY_L4_NRT_008_046. "
-                            "Log in at https://data.marine.copernicus.eu/ and accept the "
-                            "terms for the product before retrying."
-                        ),
-                    }
-                if response.status_code == 404:
-                    return {
-                        "status": "error",
-                        "message": (
-                            f"CMEMS: no data found for {target_date.isoformat()} "
-                            f"(HTTP 404). The NRT product may have a longer lag."
-                        ),
-                    }
-                response.raise_for_status()
+                token_resp.raise_for_status()
+                credentials_valid = True
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
                 return {
-                    "raw_text": response.text,
-                    "date_fetched": target_date.isoformat(),
-                    "lat_min": lat_min,
-                    "lat_max": lat_max,
-                    "lon_min": lon_min,
-                    "lon_max": lon_max,
+                    "status": "error",
+                    "message": (
+                        f"CMEMS auth service unreachable: {exc}. "
+                        "The Marine Data Store Keycloak endpoint may be temporarily down."
+                    ),
                 }
-        except (httpx.ConnectError, httpx.TimeoutException) as exc:
-            return {
-                "status": "error",
-                "message": (
-                    f"CMEMS OPeNDAP connection failed: {exc}. "
-                    f"Endpoint: {dataset_url}"
-                ),
-            }
-        except httpx.HTTPStatusError as exc:
-            return {
-                "status": "error",
-                "message": f"CMEMS HTTP {exc.response.status_code}: {exc}",
-            }
+            except httpx.HTTPStatusError as exc:
+                return {
+                    "status": "error",
+                    "message": (
+                        f"CMEMS auth HTTP {exc.response.status_code}: {exc}"
+                    ),
+                }
+
+            # Step 2: Confirm data availability via public Zarr metadata
+            data_service_ok = False
+            try:
+                meta_resp = await client.get(_ZARR_ZATTRS_URL)
+                data_service_ok = meta_resp.status_code == 200
+            except Exception:
+                pass  # non-critical — credentials already validated
+
+        return {
+            "status": "pending",
+            "credentials_valid": credentials_valid,
+            "data_service_ok": data_service_ok,
+            "message": (
+                "CMEMS credentials are valid and the Marine Data Store is reachable. "
+                "Sea level anomaly data is available but requires the copernicusmarine "
+                "Python package to download data chunks from the CloudFerro S3 store. "
+                "Full integration is planned for a future release."
+            ),
+        }
 
     def normalize(self, raw: Any) -> ConnectorResult:
-        """Parse CMEMS OPeNDAP ASCII response into SeaLevelAnomalyPoint instances.
-
-        OPeNDAP ASCII format interleaves variable names, array dimensions, and
-        comma-separated values. We do a simple line-by-line parse for the
-        grid values.
-
-        Handles graceful degradation for not_configured and error states.
-        """
-        # --- not_configured path ---
-        if isinstance(raw, dict) and raw.get("status") == "not_configured":
-            return _not_configured_result(
-                self.source, self.source_url, self.cadence, self.tag
-            )
-
-        # --- error path ---
-        if isinstance(raw, dict) and raw.get("status") == "error":
+        """Pass through status dicts; return empty list for actual data (future)."""
+        if isinstance(raw, dict):
+            status = raw.get("status", "error")
+            if status == "not_configured":
+                return _not_configured_result(
+                    self.source, self.source_url, self.cadence, self.tag
+                )
+            # error or pending — pass through the dict
             return ConnectorResult(
                 values=raw,
                 source=self.source,
@@ -259,143 +233,15 @@ class CmemsConnector(BaseConnector):
                 tag=self.tag,
                 spatial_scope="Global (0.25°)",
                 license="Copernicus Marine Open Data Licence — free for registered users",
-                notes=["Fetch failed — see values.message for details."],
+                notes=[
+                    f"Status: {status}.",
+                    "Full data access requires copernicusmarine package integration.",
+                    "Product: SEALEVEL_GLO_PHY_L4_NRT_008_046 (DUACS L4 altimetry, 0.25°).",
+                ],
             )
 
-        # --- Normal parse path ---
-        raw_text: str = raw.get("raw_text", "")
-        date_fetched: str = raw.get("date_fetched", "unknown")
-
-        # Detect HTML redirect/error page (THREDDS login or Cloudflare block)
-        if raw_text.lstrip().startswith(("<!DOCTYPE", "<html", "<HTML", "<!doctype")):
-            return ConnectorResult(
-                values={
-                    "status": "error",
-                    "message": (
-                        "CMEMS THREDDS returned an HTML page instead of OPeNDAP data. "
-                        "This usually means the server requires product Terms of Use "
-                        "acceptance. Log in at https://data.marine.copernicus.eu/ → "
-                        "My account → accept terms for SEALEVEL_GLO_PHY_L4_NRT_008_046, "
-                        "then retry."
-                    ),
-                },
-                source=self.source,
-                source_url=self.source_url,
-                cadence=self.cadence,
-                tag=self.tag,
-                spatial_scope="Global (0.25°)",
-                license="Copernicus Marine Open Data Licence",
-                notes=["THREDDS returned HTML — product ToU acceptance needed."],
-            )
-
-        points: list[SeaLevelAnomalyPoint] = []
-
-        # OPeNDAP ASCII is complex to parse generically; provide a minimal parse
-        # that extracts (lat, lon, sla, adt) triplets.
-        # The format looks like:
-        #   Dataset {
-        #       Array { Float32 sla[latitude=721][longitude=1440]; } sla;
-        #       ...
-        #   } ...;
-        #   sla, [721][1440]
-        #   <csv of values row by row>
-        #   ...
-        # We parse the value blocks for 'sla' and 'adt'.
-        sla_values: list[float] = []
-        adt_values: list[float] = []
-        lat_values: list[float] = []
-        lon_values: list[float] = []
-        current_var: str | None = None
-        in_data = False
-
-        for line in raw_text.splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            # Detect variable name lines (start of a data block)
-            if stripped.startswith("sla,"):
-                current_var = "sla"
-                in_data = False
-                continue
-            if stripped.startswith("adt,"):
-                current_var = "adt"
-                in_data = False
-                continue
-            if stripped.startswith("latitude,"):
-                current_var = "latitude"
-                in_data = False
-                continue
-            if stripped.startswith("longitude,"):
-                current_var = "longitude"
-                in_data = False
-                continue
-            # The dimension line like "[721][1440]" signals data follows
-            if stripped.startswith("[") and current_var:
-                in_data = True
-                continue
-            if in_data and current_var:
-                # Parse comma-separated floats
-                for token in stripped.split(","):
-                    token = token.strip()
-                    if not token:
-                        continue
-                    try:
-                        val = float(token)
-                        if current_var == "sla":
-                            sla_values.append(val)
-                        elif current_var == "adt":
-                            adt_values.append(val)
-                        elif current_var == "latitude":
-                            lat_values.append(val)
-                        elif current_var == "longitude":
-                            lon_values.append(val)
-                    except ValueError:
-                        in_data = False  # hit a non-numeric line — end of block
-                        current_var = None
-
-        # Reconstruct grid points if we have coordinate arrays
-        n_lat = len(lat_values)
-        n_lon = len(lon_values)
-        if n_lat > 0 and n_lon > 0 and len(sla_values) == n_lat * n_lon:
-            for i, lat in enumerate(lat_values):
-                for j, lon in enumerate(lon_values):
-                    idx = i * n_lon + j
-                    sla = sla_values[idx]
-                    adt = adt_values[idx] if idx < len(adt_values) else float("nan")
-                    # Skip fill values (CMEMS uses ~9.96921e+36 as _FillValue)
-                    if abs(sla) > 1e10 or abs(adt) > 1e10:
-                        continue
-                    points.append(
-                        SeaLevelAnomalyPoint(
-                            lat=lat,
-                            lon=lon,
-                            sla_m=sla,
-                            adt_m=adt,
-                            date_utc=date_fetched,
-                        )
-                    )
-        else:
-            # Parse failed or empty — return raw text in values for debugging
-            points = []  # type: ignore[assignment]
-            return ConnectorResult(
-                values={
-                    "status": "error",
-                    "message": (
-                        "CMEMS OPeNDAP ASCII parse failed: could not extract grid arrays. "
-                        "The OPeNDAP ASCII response format may have changed. "
-                        "Consider switching to the copernicusmarine Python package for robust access."
-                    ),
-                    "raw_preview": raw_text[:2000],
-                },
-                source=self.source,
-                source_url=self.source_url,
-                cadence=self.cadence,
-                tag=self.tag,
-                spatial_scope="Global (0.25°)",
-                license="Copernicus Marine Open Data Licence — free for registered users",
-                notes=["OPeNDAP ASCII parse failed. See values.message."],
-            )
-
+        # Future: actual SeaLevelAnomalyPoint list from copernicusmarine
+        points: list[SeaLevelAnomalyPoint] = raw if isinstance(raw, list) else []
         return ConnectorResult(
             values=points,
             source=self.source,
@@ -405,15 +251,8 @@ class CmemsConnector(BaseConnector):
             spatial_scope="Global (0.25° L4 gridded altimetry)",
             license="Copernicus Marine Open Data Licence — free for registered users",
             notes=[
-                f"Data date: {date_fetched}. Product: SEALEVEL_GLO_PHY_L4_NRT_008_046.",
-                "sla_m: sea level anomaly (m) vs. 1993–2012 mean. "
-                "adt_m: absolute dynamic topography (m).",
-                "Data from merged multi-mission altimetry (DUACS processing, CNES/CLS).",
-                "Known limitation: NRT product has ~1–2 day lag; coastlines and "
-                "shallow seas have reduced accuracy. For climate analysis use the "
-                "reprocessed MY product (SEALEVEL_GLO_PHY_L4_MY_008_047).",
-                "Note: OPeNDAP ASCII endpoint URL may change with product version updates; "
-                "check https://data.marine.copernicus.eu/product/SEALEVEL_GLO_PHY_L4_NRT_008_046/services "
-                "for the current dataset ID.",
+                "Product: SEALEVEL_GLO_PHY_L4_NRT_008_046.",
+                "sla_m: sea level anomaly (m) vs. 1993–2012 mean.",
+                "Data from merged multi-mission altimetry (DUACS processing).",
             ],
         )
