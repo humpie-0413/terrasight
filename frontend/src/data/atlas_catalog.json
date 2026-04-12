@@ -86,6 +86,19 @@
           "license": "Public domain (US EPA)",
           "status": "live",
           "api_endpoint": "/api/drinking-water/sdwis?state=TX&zip_prefix=770,771,772,773,774,775,776,777,778,779&limit=100"
+        },
+        {
+          "id": "pfas",
+          "name": "EPA PFAS Analytic Tools — PFAS Monitoring",
+          "source": "US EPA",
+          "url": "https://www.epa.gov/pfas",
+          "update_frequency": "Quarterly",
+          "trust_tag": "observed",
+          "description": "PFAS (per- and polyfluoroalkyl substances) drinking water monitoring results from UCMR5 and related EPA programs. Cross-cuts Air, Water, Soil, Waste, and Emissions categories. Served via ArcGIS FeatureServer (PFAS Analytic Tools Layers).",
+          "spatial_coverage": "U.S. monitoring sites",
+          "license": "Public domain (US EPA)",
+          "status": "live",
+          "api_endpoint": "/api/sites/pfas?west=-96.2&south=29.0&east=-94.5&north=30.5&limit=100"
         }
       ]
     },
@@ -106,6 +119,19 @@
           "spatial_coverage": "U.S. and territories",
           "license": "Public domain (USGS)",
           "status": "live"
+        },
+        {
+          "id": "usdm",
+          "name": "US Drought Monitor — Drought Severity",
+          "source": "UNL / USDA / NOAA",
+          "url": "https://droughtmonitor.unl.edu/",
+          "update_frequency": "Weekly (Thursday)",
+          "trust_tag": "observed",
+          "description": "Weekly drought severity statistics by area percent for CONUS. Categories D0 (abnormally dry) through D4 (exceptional drought). Potential Climate Trends card: '% CONUS in drought'.",
+          "spatial_coverage": "CONUS",
+          "license": "Public domain",
+          "status": "live",
+          "api_endpoint": "/api/hazards/drought?aoi=US&weeks=4"
         },
         {
           "id": "noaa-rfc",
@@ -146,10 +172,11 @@
           "url": "https://tidesandcurrents.noaa.gov/",
           "update_frequency": "6-minute intervals",
           "trust_tag": "observed",
-          "description": "Tidal predictions, observed water levels, and storm surge data from the U.S. coastal gauge network.",
+          "description": "Observed water levels, water temperature, and storm surge data from the U.S. coastal gauge network (~200 stations). Served via CO-OPS API datagetter with per-station parallel fetch.",
           "spatial_coverage": "U.S. coastlines and territories",
           "license": "Public domain (NOAA)",
-          "status": "planned"
+          "status": "live",
+          "api_endpoint": "/api/coast/tides?west=-95.5&south=29.0&east=-94.5&north=29.8&limit=20"
         },
         {
           "id": "ndbc",
@@ -367,6 +394,45 @@
           "spatial_coverage": "Arctic and Antarctic",
           "license": "Public domain (NSIDC)",
           "status": "live"
+        },
+        {
+          "id": "usgs-earthquake",
+          "name": "USGS Earthquake Hazards — Global Seismicity",
+          "source": "USGS Earthquake Hazards Program",
+          "url": "https://earthquake.usgs.gov/",
+          "update_frequency": "Near-real-time (~5 min)",
+          "trust_tag": "observed",
+          "description": "Global earthquake catalog from the USGS FDSNWS ComCat. Real-time seismic events with magnitude, depth, location, and tsunami flags. Globe event layer for Hazards category.",
+          "spatial_coverage": "Global",
+          "license": "Public domain (USGS)",
+          "status": "live",
+          "api_endpoint": "/api/hazards/earthquakes?min_magnitude=4&limit=500&days=30"
+        },
+        {
+          "id": "nws-alerts",
+          "name": "NWS Active Alerts — Weather Warnings",
+          "source": "NOAA National Weather Service",
+          "url": "https://www.weather.gov/",
+          "update_frequency": "Near-real-time",
+          "trust_tag": "observed",
+          "description": "Active weather alerts (warnings, watches, advisories) across the U.S. and territories. Includes severity, urgency, certainty, and affected areas. Globe event overlay for Hazards category.",
+          "spatial_coverage": "U.S. + territories",
+          "license": "Public domain (NOAA)",
+          "status": "live",
+          "api_endpoint": "/api/hazards/alerts"
+        },
+        {
+          "id": "openfema",
+          "name": "OpenFEMA — Disaster Declarations",
+          "source": "FEMA",
+          "url": "https://www.fema.gov/disaster/declarations",
+          "update_frequency": "Continuous",
+          "trust_tag": "observed",
+          "description": "Federal disaster declarations (Major Disaster, Emergency, Fire Management) with incident type, dates, and designated areas. Historical timeline of U.S. disaster response.",
+          "spatial_coverage": "U.S. states and territories",
+          "license": "Public domain (FEMA)",
+          "status": "live",
+          "api_endpoint": "/api/disasters/declarations?state=TX&years=5&limit=100"
         },
         {
           "id": "fema-nri",

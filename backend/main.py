@@ -6,8 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import (
     atlas,
+    coast,
+    disasters,
     drinking_water,
     earth_now,
+    hazards,
     layers,
     rankings,
     releases,
@@ -57,3 +60,7 @@ app.include_router(sites.router, prefix="/api/sites", tags=["sites"])
 app.include_router(
     drinking_water.router, prefix="/api/drinking-water", tags=["drinking-water"]
 )
+# Phase D.2 — P0 connectors (Earthquake, NWS Alerts, USDM, CO-OPS, OpenFEMA, PFAS)
+app.include_router(hazards.router, prefix="/api/hazards", tags=["hazards"])
+app.include_router(coast.router, prefix="/api/coast", tags=["coast"])
+app.include_router(disasters.router, prefix="/api/disasters", tags=["disasters"])

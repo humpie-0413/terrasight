@@ -129,6 +129,17 @@ Run these in order.
 | RCRA BR_REPORTING has no lat/lon columns | `connectors/rcra.py` | Coordinates always None; geocoding via second table deferred |
 | RCRA BR_REPORTING rows = per-waste-stream, not per-facility | `connectors/rcra.py` | Single `handler_id` can have many rows; aggregation is caller's responsibility |
 | RCRA `report_cycle` not `year` | `connectors/rcra.py` | Biennial year column is `report_cycle`, not `year`; filter URL uses `/report_cycle/{N}` |
+| PFAS FeatureServer layer 0 does not exist (400) | `connectors/pfas.py` | Default to layer 1 (`PAT_Unregulated_Contaminant_Monitoring`); layer 0 returns 400 Bad Request |
+| PFAS State field has leading space | `connectors/pfas.py` | `" TX"` — must `.strip()` (handled by `_first_match`) |
+| PFAS rows are per-sample, not per-site | `connectors/pfas.py` | Same `F_PWS_ID` appears for each contaminant/date; de-duplication is caller's responsibility |
+| ArcGIS bbox query needs `inSR=4326` explicitly | `connectors/pfas.py` | Same landmine as Superfund/Brownfields — omitting defaults to Web Mercator |
+| NWS API requires `User-Agent` header | `connectors/nws_alerts.py` | Without UA, api.weather.gov returns HTTP 403; use descriptive UA string |
+| USDM requires `Accept: application/json` header | `connectors/usdm.py` | Without it, API returns text/csv with empty body → JSON parse error |
+| USDM uses separate endpoints for national vs state | `connectors/usdm.py` | `USStatistics` for `aoi=US`, `StateStatistics` for state FIPS codes |
+| USDM field names are camelCase, not PascalCase | `connectors/usdm.py` | `mapDate`, `none`, `d0` (not `MapDate`, `None`, `D0` as some docs suggest) |
+| OpenFEMA `state` field requires 2-letter abbreviation | `connectors/openfema.py` | Full state names (e.g. `Texas`) return 0 results; use `TX` |
+| CO-OPS mdapi stations with lat=0/lng=0 | `connectors/coops.py` | Filter out bogus coordinates; some stations are decommissioned |
+| CO-OPS datagetter `v` field is string | `connectors/coops.py` | Water level value returned as string `"1.234"`, not float; empty string = missing data |
 
 Any new landmine discovered during implementation must be added
 **to this table and to the relevant connector docstring** before the

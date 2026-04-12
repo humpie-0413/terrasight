@@ -344,3 +344,41 @@ Landmines:
 - **Superfund bbox query needs `inSR=4326` explicitly** — omitting it defaults to Web Mercator and returns empty for WGS84 envelopes
 - **Brownfields `cleanup_status` lives on a separate ACRES endpoint** — the EMEF efpoints MapServer Layer 5 only exposes facility identification fields; cleanup status needs a second-hop join via `pgm_sys_id`, deferred for now
 - **Brownfields layer ID 5** is current under `EMEF/efpoints/MapServer`; if it moves, inspect parent MapServer with `?f=json` to rediscover the layer index
+
+---
+
+## Phase D.2 — P0 hazards, coast, drought, PFAS (2026-04-12)
+
+Six new connectors closing the remaining critical gaps: seismic hazards,
+weather alerts, drought, coastal observations, disaster history, and PFAS.
+
+| Connector | Source | Endpoint | Auth | Tag | Cadence |
+|---|---|---|---|---|---|
+| `earthquake.py` | USGS FDSNWS ComCat | `earthquake.usgs.gov/fdsnws/event/1/query` | None | observed | NRT ~5 min |
+| `nws_alerts.py` | NWS Active Alerts | `api.weather.gov/alerts/active` | None (UA required) | observed | NRT |
+| `usdm.py` | US Drought Monitor | `usdmdataservices.unl.edu/api/USStatistics/...` | None | observed | weekly (Thu) |
+| `coops.py` | NOAA CO-OPS | `api.tidesandcurrents.noaa.gov/api/prod/datagetter` | None | observed | 6-min |
+| `openfema.py` | OpenFEMA | `fema.gov/api/open/v2/DisasterDeclarationsSummaries` | None | observed | continuous |
+| `pfas.py` | EPA PFAS Analytic Tools | ArcGIS FeatureServer `PFAS_Analytic_Tools_Layers/FeatureServer/1` | None | observed | quarterly |
+
+Live endpoints:
+
+- `GET /api/hazards/earthquakes?min_magnitude=4&limit=500&days=30`
+- `GET /api/hazards/alerts?severity=`
+- `GET /api/hazards/drought?aoi=US&weeks=4`
+- `GET /api/coast/tides?west=&south=&east=&north=&limit=20`
+- `GET /api/disasters/declarations?state=TX&years=5&limit=100`
+- `GET /api/sites/pfas?west=&south=&east=&north=&limit=100`
+
+Landmines:
+
+- **NWS API requires User-Agent** — api.weather.gov returns 403 without it
+- **USDM requires Accept: application/json** — without it returns empty CSV body
+- **USDM separate endpoints for national vs state** — `USStatistics` vs `StateStatistics`
+- **USDM field names are camelCase** — `mapDate`, `d0` (not `MapDate`, `D0`)
+- **OpenFEMA state field uses 2-letter codes** — full state names return 0 results
+- **CO-OPS mdapi has bogus lat=0/lng=0 stations** — filter during bbox narrowing
+- **CO-OPS datagetter value is string** — `"v": "1.234"` not float; empty = missing
+- **PFAS FeatureServer layer 0 → 400** — use layer 1 (UCMR5 drinking water)
+- **PFAS State field has leading space** — `" TX"` — must strip
+- **PFAS rows are per-sample** — same PWS repeats for each contaminant/date

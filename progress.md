@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-12 (Phase E 완료)
+**최종 업데이트:** 2026-04-12 (Phase D.2 완료)
 
 ---
 
@@ -19,9 +19,9 @@
 | 항목 | 수치 |
 |------|------|
 | Git commits | **48+** (`48f0482` Phase D.1, Phase E commit pending push) |
-| Backend connectors | **34개** (28 기존 + 5 Phase D.1 + 1 RCRA) |
-| API endpoints | **37개** (+4 Phase E 랭킹 + 1 RCRA: /api/releases/rcra) |
-| Atlas 라이브 데이터셋 | **17개** (+ RCRA Biennial Report live) |
+| Backend connectors | **40개** (28 기존 + 5 D.1 + 1 RCRA + 6 D.2) |
+| API endpoints | **43개** (+6 D.2: earthquakes, alerts, drought, tides, declarations, pfas) |
+| Atlas 라이브 데이터셋 | **23개** (+6 D.2: earthquake, NWS, USDM, CO-OPS, OpenFEMA, PFAS) |
 | Atlas 카테고리 | **8개** — Waste & Materials, Soil/Land 공백 해소 ✅ |
 | Local Reports 블록 | **10개** (6 → **10**: +Toxic Releases, Site Cleanup, Facility GHG, Drinking Water) |
 | Frontend components / pages | **~34개** |
@@ -529,6 +529,64 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 
 ---
 
+### D.2 — P0 커넥터 6개 추가 (2026-04-12) ✅
+
+`docs/NEXT_STEPS.md` §D.3 NEW P0 배치 완료. 전수조사에서 발굴한
+6개 검증 후보를 백엔드 커넥터 + API 엔드포인트로 구현. 3개 sub-agent
+병렬 분담. UI 없이 백엔드만 (시각화는 Phase G 이후).
+
+**신규 커넥터 6개:**
+
+| 커넥터 | 소스 | 태그 | 주기 | 카테고리 |
+|--------|------|------|------|----------|
+| `earthquake.py` | USGS FDSNWS ComCat | observed | NRT ~5min | Climate Hazards |
+| `nws_alerts.py` | NWS Active Alerts | observed | NRT | Climate Hazards |
+| `usdm.py` | US Drought Monitor (UNL) | observed | weekly (Thu) | Hydrology |
+| `coops.py` | NOAA CO-OPS Tides | observed | 6-min | Coast & Ocean |
+| `openfema.py` | OpenFEMA Disaster Declarations | observed | continuous | Climate Hazards |
+| `pfas.py` | EPA PFAS Analytic Tools (ArcGIS) | observed | quarterly | Water (cross-cutting) |
+
+**신규 엔드포인트 6개:**
+
+- `GET /api/hazards/earthquakes?min_magnitude=4&limit=500&days=30`
+- `GET /api/hazards/alerts?severity=`
+- `GET /api/hazards/drought?aoi=US&weeks=4`
+- `GET /api/coast/tides?west=&south=&east=&north=&limit=20`
+- `GET /api/disasters/declarations?state=TX&years=5&limit=100`
+- `GET /api/sites/pfas?west=&south=&east=&north=&limit=100`
+
+**스모크 테스트 결과:**
+```
+Earthquake  count=5+  M4+ global 7일 — USGS GeoJSON
+NWS Alerts  count=활성 경보 수 — severity/event/area
+USDM        count=1+  D0~D4 % — camelCase 필드명 주의
+CO-OPS      count=3+  Galveston 주변 수위/수온 — per-station parallel
+OpenFEMA    count=5+  TX 최근 5년 재난 선언
+PFAS        count=5+  Houston bbox UCMR5 레이어 1 — per-sample 행
+```
+
+**새 랜드마인 (모두 `docs/guardrails.md` + 각 커넥터 docstring 기록):**
+
+- NWS: `User-Agent` 헤더 필수 (없으면 403)
+- USDM: `Accept: application/json` 헤더 필수 (없으면 빈 CSV 반환)
+- USDM: 국가 vs 주 별도 엔드포인트 (`USStatistics` vs `StateStatistics`)
+- USDM: 필드명 camelCase (`mapDate`, `d0`, not `MapDate`, `D0`)
+- OpenFEMA: `state` 필드 2글자 코드 (`TX`, not `Texas`)
+- CO-OPS: mdapi 스테이션 lat=0/lng=0 보거스 데이터 필터 필요
+- CO-OPS: datagetter `v` 값이 string (`"1.234"`, not float)
+- PFAS: FeatureServer layer 0 → 400, layer 1 사용 (UCMR5)
+- PFAS: State 필드 앞에 공백 (`" TX"` → strip 필요)
+- PFAS: 행 = per-sample (같은 PWS가 contaminant마다 반복)
+
+**Atlas catalog 업데이트:**
+- `coast-ocean/noaa-coops`: `planned` → `live`
+- `hydrology`: 신규 `usdm` 추가
+- `water`: 신규 `pfas` 추가
+- `climate-hazards`: 신규 `usgs-earthquake`, `nws-alerts`, `openfema` 추가
+- 총 라이브 데이터셋: 17 → **23**
+
+---
+
 ## 라이브 엔드포인트 상태 (2026-04-12)
 
 | 엔드포인트 | 상태 |
@@ -555,6 +613,12 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 | `GET /api/rankings/superfund` | ✅ **E** per-metro bbox |
 | `GET /api/rankings/drinking-water-violations` | ✅ **E** state-level SDWIS |
 | `GET /api/releases/rcra` | ✅ Envirofacts BR_REPORTING |
+| `GET /api/sites/pfas` | ✅ EPA PFAS Analytic Tools (UCMR5 Layer 1) |
+| `GET /api/hazards/earthquakes` | ✅ **D.2** USGS FDSNWS ComCat |
+| `GET /api/hazards/alerts` | ✅ **D.2** NWS Active Alerts |
+| `GET /api/hazards/drought` | ✅ **D.2** US Drought Monitor |
+| `GET /api/coast/tides` | ✅ **D.2** NOAA CO-OPS Tides |
+| `GET /api/disasters/declarations` | ✅ **D.2** OpenFEMA |
 
 ---
 
@@ -577,6 +641,16 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 | RCRA BR_REPORTING | 대형 주(TX 등) state-only 쿼리 → HTTP 500 | 항상 `/report_cycle/{year}` 포함 (기본 2023) |
 | RCRA BR_REPORTING | lat/lon 없음 | 좌표 항상 None, geocoding 별도 필요 |
 | RCRA BR_REPORTING | 행 = waste stream (facility가 아님) | handler_id로 집계 필요 시 caller 책임 |
+| PFAS FeatureServer layer 0 | 400 Bad Request 반환 | layer 1 (UCMR5) 사용 |
+| PFAS State 필드 | 선행 공백 (" TX") | strip() 처리 |
+| PFAS 행 = per-sample | 동일 PWS_ID가 오염물질/날짜별 반복 | caller가 de-dupe |
+| NWS API | `User-Agent` 헤더 없으면 403 | 서술적 UA 헤더 필수 |
+| USDM | `Accept: application/json` 없으면 빈 CSV | 헤더 추가 |
+| USDM | 국가/주 엔드포인트 분리 | `USStatistics` vs `StateStatistics` |
+| USDM | 필드명 camelCase | `mapDate`, `d0` (not `MapDate`, `D0`) |
+| OpenFEMA | state 필드 2글자 | `TX` (not `Texas`) |
+| CO-OPS | mdapi lat=0/lng=0 보거스 | 필터링 필요 |
+| CO-OPS | datagetter `v` string | float 변환 필요 |
 
 ---
 
