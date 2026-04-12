@@ -179,11 +179,25 @@ interface ToxicReleasesFacility {
   year: number | null;
 }
 
+interface RcraHandler {
+  name: string;
+  city: string | null;
+  state: string | null;
+  waste_tons: number | null;
+  year: number | null;
+}
+
+interface RcraSummary {
+  handler_count: number;
+  top_handlers: RcraHandler[];
+}
+
 interface ToxicReleasesBlock extends BlockBase {
   values: {
     facility_count: number;
     top_facilities: ToxicReleasesFacility[];
     chemicals_sampled: number;
+    rcra_summary: RcraSummary | null;
   } | null;
 }
 
@@ -290,6 +304,52 @@ interface PfasBlock extends BlockBase {
   } | null;
 }
 
+// ── Phase E.5: Hazards & Disasters + Coastal Conditions ─────────────────
+
+interface DisasterItem {
+  disaster_number: number;
+  declaration_type: string;
+  declaration_date: string;
+  incident_type: string;
+  title: string;
+  designated_area: string;
+}
+
+interface EarthquakeItem {
+  magnitude: number;
+  place: string;
+  depth_km: number;
+  time_utc: string;
+}
+
+interface HazardsBlock extends BlockBase {
+  values: {
+    total_disasters: number;
+    most_common_type: string | null;
+    largest_quake_magnitude: number | null;
+    largest_quake_place: string | null;
+    recent_disasters: DisasterItem[];
+    recent_earthquakes: EarthquakeItem[];
+  } | null;
+}
+
+interface CoastalStation {
+  station_id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  water_level_ft: number | null;
+  water_temp_f: number | null;
+  timestamp: string;
+}
+
+interface CoastalBlock extends BlockBase {
+  values: {
+    station_count: number;
+    stations: CoastalStation[];
+  } | null;
+}
+
 interface MethodologySource {
   block: string;
   source: string;
@@ -321,6 +381,8 @@ interface ReportResponse {
     facility_ghg: FacilityGhgBlock;
     drinking_water: DrinkingWaterBlock;
     water: WaterBlock;
+    hazards_disasters: HazardsBlock;
+    coastal_conditions?: CoastalBlock;
     methodology: MethodologyBlock;
     related: { status: string; message: string };
   };
@@ -423,8 +485,16 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
       {/* Block 4 — Water Snapshot */}
       <Block4Water block={blocks.water} />
 
+      {/* Block 14 — Coastal Conditions (CO-OPS) — conditional */}
+      {blocks.coastal_conditions && (
+        <Block14Coastal block={blocks.coastal_conditions} />
+      )}
+
       {/* AdSense slot #5 */}
       <AdSlot id="ad-5" />
+
+      {/* Block 12 — Hazards & Disaster History */}
+      <Block12Hazards block={blocks.hazards_disasters} />
 
       {/* Block 5 — Methodology */}
       <Block5Methodology block={blocks.methodology} />
@@ -757,6 +827,33 @@ function ToxicReleasesBody({
             ))}
           </tbody>
         </table>
+      )}
+      {/* RCRA Hazardous Waste Generators sub-section */}
+      {values.rcra_summary && values.rcra_summary.handler_count > 0 && (
+        <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+          <h3 style={h3Style}>Hazardous Waste Generators (RCRA)</h3>
+          <p style={noteStyle}>{values.rcra_summary.handler_count} large-quantity generators (biennial report)</p>
+          <table style={tableStyle}>
+            <thead><tr>
+              <th style={thStyle}>Handler</th>
+              <th style={thStyle}>City</th>
+              <th style={{...thStyle, textAlign: 'right'}}>Waste (tons)</th>
+              <th style={thStyle}>Year</th>
+            </tr></thead>
+            <tbody>
+              {values.rcra_summary.top_handlers.map((h, i) => (
+                <tr key={`rcra-${i}`}>
+                  <td style={tdStyle}>{h.name}</td>
+                  <td style={tdStyle}>{h.city ?? '—'}</td>
+                  <td style={{...tdStyle, textAlign: 'right'}}>
+                    {h.waste_tons != null ? h.waste_tons.toLocaleString() : '—'}
+                  </td>
+                  <td style={tdStyle}>{h.year ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );
@@ -1130,6 +1227,129 @@ function Block13ActiveAlerts({ block }: { block: ActiveAlertsBlock }) {
             </div>
           ))}
         </div>
+      )}
+    </section>
+  );
+}
+
+// ── Block 12: Hazards & Disaster History ──────────────────────────────────
+
+function Block12Hazards({ block }: { block: HazardsBlock }) {
+  if (block.status !== 'ok' || !block.values) {
+    return (
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Hazards & Disaster History</h2>
+        <BlockNonOk block={block} />
+      </section>
+    );
+  }
+  const v = block.values;
+  return (
+    <section style={sectionStyle}>
+      <MetaLine
+        cadence={block.cadence ?? 'Continuous / NRT'}
+        tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+        source={block.source ?? 'FEMA / USGS'}
+        sourceUrl={block.source_url}
+      />
+      <h2 style={h2Style}>Hazards & Disaster History</h2>
+      <div style={statsGrid}>
+        <Stat label="Federal Disasters (5 yr)" value={String(v.total_disasters)} />
+        <Stat label="Most Common Type" value={v.most_common_type ?? '—'} />
+        <Stat label="Largest Quake (30d)"
+          value={v.largest_quake_magnitude != null ? `M${v.largest_quake_magnitude}` : 'None'} />
+      </div>
+      {v.recent_disasters.length > 0 && (
+        <>
+          <h3 style={h3Style}>Recent Disaster Declarations</h3>
+          <table style={tableStyle}>
+            <thead><tr>
+              <th style={thStyle}>Date</th>
+              <th style={thStyle}>Type</th>
+              <th style={thStyle}>Title</th>
+              <th style={thStyle}>Area</th>
+            </tr></thead>
+            <tbody>
+              {v.recent_disasters.map((d, i) => (
+                <tr key={`dis-${i}`}>
+                  <td style={tdStyle}>{d.declaration_date?.slice(0, 10) ?? '—'}</td>
+                  <td style={tdStyle}>{d.incident_type}</td>
+                  <td style={tdStyle}>{d.title}</td>
+                  <td style={tdStyle}>{d.designated_area}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+      {v.recent_earthquakes.length > 0 && (
+        <>
+          <h3 style={h3Style}>Recent Earthquakes Near Metro</h3>
+          <table style={tableStyle}>
+            <thead><tr>
+              <th style={thStyle}>Mag</th>
+              <th style={thStyle}>Location</th>
+              <th style={thStyle}>Depth</th>
+              <th style={thStyle}>Time (UTC)</th>
+            </tr></thead>
+            <tbody>
+              {v.recent_earthquakes.map((q, i) => (
+                <tr key={`eq-${i}`}>
+                  <td style={{...tdStyle, fontWeight: 600}}>M{q.magnitude}</td>
+                  <td style={tdStyle}>{q.place}</td>
+                  <td style={tdStyle}>{q.depth_km.toFixed(1)} km</td>
+                  <td style={tdStyle}>{q.time_utc?.slice(0, 16).replace('T', ' ') ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  );
+}
+
+// ── Block 14: Coastal Conditions (NOAA CO-OPS) ───────────────────────────
+
+function Block14Coastal({ block }: { block: CoastalBlock }) {
+  if (block.status !== 'ok' || !block.values) {
+    return (
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Coastal Conditions</h2>
+        <BlockNonOk block={block} />
+      </section>
+    );
+  }
+  const v = block.values;
+  return (
+    <section style={sectionStyle}>
+      <MetaLine
+        cadence={block.cadence ?? '6-minute'}
+        tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+        source={block.source ?? 'NOAA CO-OPS'}
+        sourceUrl={block.source_url}
+      />
+      <h2 style={h2Style}>Coastal Conditions</h2>
+      <p style={noteStyle}>{v.station_count} tide station{v.station_count !== 1 ? 's' : ''} near this metro</p>
+      {v.stations.length > 0 && (
+        <table style={tableStyle}>
+          <thead><tr>
+            <th style={thStyle}>Station</th>
+            <th style={{...thStyle, textAlign: 'right'}}>Water Level (ft)</th>
+            <th style={{...thStyle, textAlign: 'right'}}>Water Temp (\u00b0F)</th>
+            <th style={thStyle}>Last Reading</th>
+          </tr></thead>
+          <tbody>
+            {v.stations.map((s, i) => (
+              <tr key={`coast-${i}`}>
+                <td style={tdStyle}>{s.name}</td>
+                <td style={{...tdStyle, textAlign: 'right'}}>{s.water_level_ft?.toFixed(2) ?? '—'}</td>
+                <td style={{...tdStyle, textAlign: 'right'}}>{s.water_temp_f?.toFixed(1) ?? '—'}</td>
+                <td style={tdStyle}>{s.timestamp?.replace('T', ' ').slice(0, 16) ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </section>
   );

@@ -21,6 +21,8 @@ Block map (CLAUDE.md → "3층: Local Environmental Reports"):
  10. Drinking Water               → EPA SDWIS
  11. PFAS Monitoring              → EPA PFAS Analytic Tools
  13. Active Weather Alerts        → NOAA NWS
+ 14. Hazards & Disasters          → OpenFEMA + USGS Earthquake
+ 15. Coastal Conditions            → NOAA CO-OPS (coastal CBSAs only)
 
 Mandatory disclaimers from CLAUDE.md are attached to the relevant blocks.
 """
@@ -48,6 +50,10 @@ from backend.connectors.superfund import SuperfundConnector
 from backend.connectors.tri import TriConnector
 from backend.connectors.usgs import UsgsConnector
 from backend.connectors.wqp import WqpConnector
+from backend.connectors.openfema import OpenfemaConnector
+from backend.connectors.earthquake import EarthquakeConnector
+from backend.connectors.coops import CoopsConnector
+from backend.connectors.rcra import RcraConnector
 
 router = APIRouter()
 
@@ -108,12 +114,15 @@ def _block_from_result(result: Any) -> dict[str, Any]:
 
 
 def _build_toxic_releases_block(
-    result: Any, core_city: str | None = None
+    result: Any, rcra_result: Any = None, core_city: str | None = None
 ) -> dict[str, Any]:
     """Shape a TRI ConnectorResult into the `toxic_releases` block.
 
     Sort preference: facilities matching the CBSA's core city come
     first, then the rest preserved in connector order. Capped at 5.
+
+    Optionally includes an `rcra_summary` sub-section when RCRA data
+    is available.
     """
     if isinstance(result, Exception):
         return {
@@ -146,12 +155,32 @@ def _build_toxic_releases_block(
     for f in facilities:
         for c in (f.chemicals or []):
             all_chems.add(c)
-    return {
+
+    # RCRA sub-section
+    rcra_data = None
+    if rcra_result and not isinstance(rcra_result, Exception) and hasattr(rcra_result, 'values'):
+        handlers = rcra_result.values or []
+        rcra_data = {
+            "handler_count": len(handlers),
+            "top_handlers": [
+                {
+                    "name": h.handler_name,
+                    "city": h.city,
+                    "state": h.state,
+                    "waste_tons": h.waste_generated_tons,
+                    "year": h.reporting_year,
+                }
+                for h in handlers[:5]
+            ],
+        }
+
+    block = {
         "status": "ok",
         "values": {
             "facility_count": len(facilities),
             "top_facilities": top,
             "chemicals_sampled": len(all_chems),
+            "rcra_summary": rcra_data,
         },
         "source": result.source,
         "source_url": result.source_url,
@@ -161,6 +190,7 @@ def _build_toxic_releases_block(
         "license": result.license,
         "notes": list(result.notes),
     }
+    return block
 
 
 def _build_site_cleanup_block(
@@ -579,6 +609,37 @@ async def _run_pfas(bbox: dict[str, float], limit: int = 100) -> Any:
     return connector.normalize(raw)
 
 
+async def _run_openfema(state: str, years: int = 5, limit: int = 50):
+    connector = OpenfemaConnector()
+    raw = await connector.fetch(state=state, years=years, limit=limit)
+    return connector.normalize(raw)
+
+
+async def _run_earthquake(west, south, east, north, days=30, min_magnitude=2.5, limit=50):
+    connector = EarthquakeConnector()
+    raw = await connector.fetch(min_magnitude=min_magnitude, limit=limit, days=days)
+    result = connector.normalize(raw)
+    # Filter to bbox
+    filtered = [e for e in result.values
+                if south <= e.lat <= north and west <= e.lon <= east]
+    return ConnectorResult(
+        values=filtered, source=result.source, source_url=result.source_url,
+        cadence=result.cadence, tag=result.tag, spatial_scope=result.spatial_scope,
+        license=result.license, notes=result.notes)
+
+
+async def _run_coops(west, south, east, north, limit=10):
+    connector = CoopsConnector()
+    raw = await connector.fetch(west=west, south=south, east=east, north=north, limit=limit)
+    return connector.normalize(raw)
+
+
+async def _run_rcra(state: str, limit: int = 50, year: int | None = None):
+    connector = RcraConnector()
+    raw = await connector.fetch(state=state, limit=limit, year=year)
+    return connector.normalize(raw)
+
+
 def _build_active_alerts_block(result: Any) -> dict[str, Any]:
     """Build Active Alerts block from NWS connector result."""
     if isinstance(result, Exception):
@@ -662,6 +723,103 @@ def _build_pfas_block(result: Any) -> dict[str, Any]:
             "PFAS results are screening-level monitoring data. "
             "Detection does not imply a health risk at reported levels."
         ],
+    }
+
+
+def _build_hazards_block(openfema_res, earthquake_res) -> dict:
+    """Build Hazards & Disasters block combining OpenFEMA + Earthquake."""
+    disasters = []
+    disaster_error = None
+    if isinstance(openfema_res, Exception):
+        disaster_error = str(openfema_res)
+    elif hasattr(openfema_res, 'values'):
+        disasters = openfema_res.values or []
+
+    quakes = []
+    quake_error = None
+    if isinstance(earthquake_res, Exception):
+        quake_error = str(earthquake_res)
+    elif hasattr(earthquake_res, 'values'):
+        quakes = earthquake_res.values or []
+
+    if disaster_error and quake_error:
+        return {"status": "error", "error": f"FEMA: {disaster_error}; USGS: {quake_error}", "values": None}
+
+    # Stats
+    from collections import Counter
+    incident_types = [d.incident_type for d in disasters if d.incident_type]
+    type_counts = Counter(incident_types)
+    most_common = type_counts.most_common(1)
+    most_common_type = most_common[0][0] if most_common else None
+
+    largest_quake = max(quakes, key=lambda q: q.magnitude) if quakes else None
+
+    return {
+        "status": "ok",
+        "source": "FEMA / USGS",
+        "source_url": "https://www.fema.gov/disaster/declarations",
+        "cadence": "Continuous / NRT",
+        "tag": "observed",
+        "values": {
+            "total_disasters": len(disasters),
+            "most_common_type": most_common_type,
+            "largest_quake_magnitude": largest_quake.magnitude if largest_quake else None,
+            "largest_quake_place": largest_quake.place if largest_quake else None,
+            "recent_disasters": [
+                {
+                    "disaster_number": d.disaster_number,
+                    "declaration_type": d.declaration_type,
+                    "declaration_date": d.declaration_date,
+                    "incident_type": d.incident_type,
+                    "title": d.title,
+                    "designated_area": d.designated_area,
+                }
+                for d in disasters[:10]
+            ],
+            "recent_earthquakes": [
+                {
+                    "magnitude": q.magnitude,
+                    "place": q.place,
+                    "depth_km": q.depth_km,
+                    "time_utc": q.time_utc,
+                }
+                for q in quakes[:5]
+            ],
+        },
+        "notes": [
+            "Disaster declarations from OpenFEMA (last 5 years).",
+            "Earthquakes from USGS FDSNWS (last 30 days, filtered to CBSA bbox).",
+        ],
+    }
+
+
+def _build_coastal_block(coops_res) -> dict:
+    """Build Coastal Conditions block from CO-OPS connector result."""
+    if isinstance(coops_res, Exception):
+        return {"status": "error", "error": str(coops_res), "values": None}
+    stations = coops_res.values if hasattr(coops_res, 'values') else []
+    return {
+        "status": "ok",
+        "source": coops_res.source if hasattr(coops_res, 'source') else "NOAA CO-OPS",
+        "source_url": coops_res.source_url if hasattr(coops_res, 'source_url') else "https://tidesandcurrents.noaa.gov/",
+        "cadence": coops_res.cadence if hasattr(coops_res, 'cadence') else "6-minute",
+        "tag": "observed",
+        "values": {
+            "station_count": len(stations),
+            "stations": [
+                {
+                    "station_id": s.station_id,
+                    "name": s.name,
+                    "lat": s.lat,
+                    "lon": s.lon,
+                    "water_level_ft": s.water_level_ft,
+                    "water_temp_f": s.water_temp_f,
+                    "timestamp": s.timestamp,
+                }
+                for s in stations[:10]
+            ],
+        },
+        "notes": coops_res.notes if hasattr(coops_res, 'notes') else [],
     }
 
 
@@ -924,6 +1082,35 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
     nws_alerts_task = _run_nws_alerts(state=state, core_city=core_city)
     pfas_task = _run_pfas(bbox=bbox)
 
+    # Hazards & Disasters: OpenFEMA (state-scoped) + Earthquake (bbox-filtered).
+    openfema_task: Any = (
+        _run_openfema(state=state)
+        if state
+        else asyncio.sleep(0, result=None)
+    )
+    earthquake_task = _run_earthquake(
+        west=bbox["west"], south=bbox["south"],
+        east=bbox["east"], north=bbox["north"],
+    )
+
+    # Coastal Conditions: CO-OPS tide stations — only for coastal CBSAs.
+    is_coastal = cbsa.get("coastal", False)
+    coops_task: Any = (
+        _run_coops(
+            west=bbox["west"], south=bbox["south"],
+            east=bbox["east"], north=bbox["north"],
+        )
+        if is_coastal
+        else asyncio.sleep(0, result=None)
+    )
+
+    # RCRA hazardous waste handlers (state-scoped).
+    rcra_task: Any = (
+        _run_rcra(state=state)
+        if state
+        else asyncio.sleep(0, result=None)
+    )
+
     (
         airnow_res,
         echo_res,
@@ -937,6 +1124,10 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         sdwis_res,
         nws_alerts_res,
         pfas_res,
+        openfema_res,
+        earthquake_res,
+        coops_res,
+        rcra_res,
     ) = await asyncio.gather(
         airnow_task,
         echo_task,
@@ -950,6 +1141,10 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         sdwis_task,
         nws_alerts_task,
         pfas_task,
+        openfema_task,
+        earthquake_task,
+        coops_task,
+        rcra_task,
         return_exceptions=True,
     )
 
@@ -1031,7 +1226,7 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         }
     else:
         toxic_releases_block = _build_toxic_releases_block(
-            tri_res, core_city=core_city
+            tri_res, rcra_result=rcra_res, core_city=core_city
         )
 
     site_cleanup_block = _build_site_cleanup_block(
@@ -1064,6 +1259,34 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
     active_alerts_block = _build_active_alerts_block(nws_alerts_res)
     pfas_block = _build_pfas_block(pfas_res)
 
+    # Hazards & Disasters block (OpenFEMA + Earthquake).
+    if openfema_res is None and isinstance(earthquake_res, Exception):
+        hazards_block: dict[str, Any] = {
+            "status": "error",
+            "error": "No state configured for this CBSA and earthquake fetch failed",
+            "values": None,
+        }
+    elif openfema_res is None:
+        # No state → no FEMA data, but earthquake may have data
+        hazards_block = _build_hazards_block(
+            Exception("No state configured for FEMA lookup"), earthquake_res
+        )
+    else:
+        hazards_block = _build_hazards_block(openfema_res, earthquake_res)
+
+    # Coastal Conditions block — only for coastal CBSAs.
+    if is_coastal:
+        if coops_res is None:
+            coastal_block: dict[str, Any] | None = {
+                "status": "error",
+                "error": "CO-OPS fetch returned None",
+                "values": None,
+            }
+        else:
+            coastal_block = _build_coastal_block(coops_res)
+    else:
+        coastal_block = None
+
     meta = {
         "cbsa_code": cbsa["cbsa_code"],
         "slug": cbsa["slug"],
@@ -1093,7 +1316,9 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         ("PFAS monitoring", pfas_block),
         ("Streamflow (NRT)", usgs_block),
         ("Water quality (discrete)", wqp_block),
-    ]:
+        ("Hazards & Disasters (FEMA + USGS)", hazards_block),
+        ("RCRA hazardous waste", toxic_releases_block),
+    ] + ([("Coastal Conditions (CO-OPS)", coastal_block)] if coastal_block else []):
         if block.get("status") == "ok":
             methodology.append(
                 {
@@ -1155,6 +1380,8 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
             "pfas_monitoring": pfas_block,
             "drinking_water": drinking_water_block,
             "water": water_block,
+            "hazards_disasters": hazards_block,
+            **({"coastal_conditions": coastal_block} if coastal_block else {}),
             "methodology": {
                 "status": "ok",
                 "sources": methodology,

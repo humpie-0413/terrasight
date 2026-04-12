@@ -1,8 +1,11 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import TrendsStrip from '../components/climate-trends/TrendsStrip';
-import Globe, { type GlobeHandle } from '../components/earth-now/Globe';
+import type { GlobeHandle } from '../components/earth-now/Globe';
+
+const Globe = lazy(() => import('../components/earth-now/Globe'));
+const BornIn = lazy(() => import('../components/born-in/BornIn'));
 
 type ActiveEvent = 'fires' | 'storms' | 'monitors' | null;
 type ActiveContinuous =
@@ -10,7 +13,6 @@ type ActiveContinuous =
   | 'gibs-aod' | 'gibs-pm25' | 'gibs-oco2' | 'gibs-flood'
   | null;
 import StoryPanel from '../components/earth-now/StoryPanel';
-import BornIn from '../components/born-in/BornIn';
 import AtlasGrid from '../components/atlas/AtlasGrid';
 import { useApi } from '../hooks/useApi';
 
@@ -51,18 +53,36 @@ export default function Home() {
           padding: '16px 24px',
         }}
       >
-        <Globe
-          ref={globeRef}
-          activeEvent={activeEvent}
-          activeContinuous={activeContinuous}
-          onLayerChange={(type, key) => {
-            if (type === 'event') setActiveEvent(key as ActiveEvent);
-            else setActiveContinuous(key as ActiveContinuous);
-          }}
-        />
+        <Suspense fallback={
+          <div style={{
+            width: '100%',
+            aspectRatio: '16/9',
+            background: 'linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #0d47a1 100%)',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#94a3b8',
+            fontSize: '15px',
+          }}>
+            Loading Earth Now…
+          </div>
+        }>
+          <Globe
+            ref={globeRef}
+            activeEvent={activeEvent}
+            activeContinuous={activeContinuous}
+            onLayerChange={(type, key) => {
+              if (type === 'event') setActiveEvent(key as ActiveEvent);
+              else setActiveContinuous(key as ActiveContinuous);
+            }}
+          />
+        </Suspense>
         <StoryPanel onExploreOnGlobe={handleExploreOnGlobe} />
       </section>
-      <BornIn />
+      <Suspense fallback={null}>
+        <BornIn />
+      </Suspense>
       <AtlasGrid />
       <div id="local-reports">
         <LocalReportsSection />

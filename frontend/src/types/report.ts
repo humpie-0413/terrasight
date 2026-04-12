@@ -63,6 +63,7 @@ export interface ToxicReleasesValues {
   facility_count: number;
   top_facilities: ToxicReleasesFacility[];
   chemicals_sampled: number;
+  rcra_summary: RcraSummary | null;
 }
 
 export interface ToxicReleasesBlock extends BlockBase {
@@ -199,4 +200,71 @@ export interface PfasValues {
 
 export interface PfasBlock extends BlockBase {
   values: PfasValues | null;
+}
+
+// ── hazards_disasters (FEMA / USGS) ─────────────────────────────────────
+
+export interface DisasterItem {
+  disaster_number: number;
+  declaration_type: string;
+  declaration_date: string;
+  incident_type: string;
+  title: string;
+  designated_area: string;
+}
+
+export interface EarthquakeItem {
+  magnitude: number;
+  place: string;
+  depth_km: number;
+  time_utc: string;
+}
+
+export interface HazardsValues {
+  total_disasters: number;
+  most_common_type: string | null;
+  largest_quake_magnitude: number | null;
+  largest_quake_place: string | null;
+  recent_disasters: DisasterItem[];
+  recent_earthquakes: EarthquakeItem[];
+}
+
+export interface HazardsBlock extends BlockBase {
+  values: HazardsValues | null;
+}
+
+// ── coastal_conditions (NOAA CO-OPS) ────────────────────────────────────
+
+export interface CoastalStation {
+  station_id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  water_level_ft: number | null;
+  water_temp_f: number | null;
+  timestamp: string;
+}
+
+export interface CoastalValues {
+  station_count: number;
+  stations: CoastalStation[];
+}
+
+export interface CoastalBlock extends BlockBase {
+  values: CoastalValues | null;
+}
+
+// ── RCRA sub-section in ToxicReleases ───────────────────────────────────
+
+export interface RcraHandler {
+  name: string;
+  city: string | null;
+  state: string | null;
+  waste_tons: number | null;
+  year: number | null;
+}
+
+export interface RcraSummary {
+  handler_count: number;
+  top_handlers: RcraHandler[];
 }
