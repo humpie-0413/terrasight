@@ -1,15 +1,17 @@
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 
 interface RankingRow {
   slug: string;
   name: string;
   state: string | null;
-  sampled_facilities: number | null;
-  in_violation: number | null;
-  violation_rate_pct: number | null;
   status: string;
   error?: string;
+  // Loose metric fields — each ranking endpoint returns a different shape
+  // (sampled_facilities, in_violation, violation_rate_pct, facility_count,
+  // total_co2e_tonnes, site_count, npl_final_count, system_count,
+  // violation_count, …). Resolved per-slug via RANKING_COLUMNS below.
+  [metric: string]: unknown;
 }
 
 interface RankingResponse {
@@ -24,8 +26,127 @@ interface RankingResponse {
   rows: RankingRow[];
 }
 
+type ColumnSpec = {
+  key: string;
+  header: string;
+  render: (row: RankingRow) => React.ReactNode;
+};
+
+// Per-slug column metadata. Common columns (#, Metro, Report) are rendered
+// by the table itself; these are the metric columns that vary per ranking.
+const RANKING_COLUMNS: Record<string, ColumnSpec[]> = {
+  'epa-violations': [
+    {
+      key: 'sampled_facilities',
+      header: 'Sampled',
+      render: (r) => {
+        const v = r.sampled_facilities;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>error</span>;
+      },
+    },
+    {
+      key: 'in_violation',
+      header: 'In Violation',
+      render: (r) => {
+        const v = r.in_violation;
+        if (typeof v !== 'number') return <span style={naStyle}>—</span>;
+        return (
+          <strong style={v > 10 ? violHighStyle : violLowStyle}>{v}</strong>
+        );
+      },
+    },
+    {
+      key: 'violation_rate_pct',
+      header: 'Rate',
+      render: (r) => {
+        const v = r.violation_rate_pct;
+        return typeof v === 'number' ? `${v}%` : '—';
+      },
+    },
+  ],
+  'tri-releases': [
+    {
+      key: 'facility_count',
+      header: 'TRI Facilities',
+      render: (r) => {
+        const v = r.facility_count;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>—</span>;
+      },
+    },
+  ],
+  'ghg-emissions': [
+    {
+      key: 'facility_count',
+      header: 'Facilities',
+      render: (r) => {
+        const v = r.facility_count;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>—</span>;
+      },
+    },
+    {
+      key: 'total_co2e_tonnes',
+      header: 'Total tCO₂e',
+      render: (r) => {
+        const v = r.total_co2e_tonnes;
+        return typeof v === 'number'
+          ? v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+          : <span style={naStyle}>—</span>;
+      },
+    },
+  ],
+  superfund: [
+    {
+      key: 'site_count',
+      header: 'Sites',
+      render: (r) => {
+        const v = r.site_count;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>—</span>;
+      },
+    },
+    {
+      key: 'npl_final_count',
+      header: 'NPL Final',
+      render: (r) => {
+        const v = r.npl_final_count;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>—</span>;
+      },
+    },
+  ],
+  'drinking-water-violations': [
+    {
+      key: 'system_count',
+      header: 'Systems',
+      render: (r) => {
+        const v = r.system_count;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>—</span>;
+      },
+    },
+    {
+      key: 'violation_count',
+      header: 'Violations',
+      render: (r) => {
+        const v = r.violation_count;
+        return typeof v === 'number' ? v.toLocaleString() : <span style={naStyle}>—</span>;
+      },
+    },
+    {
+      key: 'violation_rate_pct',
+      header: 'Rate',
+      render: (r) => {
+        const v = r.violation_rate_pct;
+        return typeof v === 'number' ? `${v.toFixed(1)}%` : '—';
+      },
+    },
+  ],
+};
+
 export default function Ranking() {
-  const { data, loading, error } = useApi<RankingResponse>('/rankings/epa-violations');
+  const { rankingSlug } = useParams<{ rankingSlug: string }>();
+  const slug = rankingSlug ?? 'epa-violations';
+  const { data, loading, error } = useApi<RankingResponse>(`/rankings/${slug}`);
+
+  // Fall back to epa-violations columns if slug is unknown.
+  const columns = RANKING_COLUMNS[slug] ?? RANKING_COLUMNS['epa-violations'];
 
   return (
     <main style={pageStyle}>
@@ -35,15 +156,14 @@ export default function Ranking() {
         <span>Rankings</span>
       </div>
 
-      <h1 style={h1Style}>U.S. Metros with Most EPA Violations (2025)</h1>
-      <p style={subtitleStyle}>
-        Facilities currently in violation of Clean Air Act or Clean Water Act per EPA ECHO
-        regulatory compliance data. Sorted by violation count.
-      </p>
+      <h1 style={h1Style}>{data?.title ?? 'Loading…'}</h1>
+      {data && (
+        <p style={subtitleStyle}>{data.criterion}</p>
+      )}
 
       {loading && (
         <div style={loadingStyle}>
-          <p>Loading ECHO data for all metros — this may take 30–60 seconds…</p>
+          <p>Loading data for all metros — this may take 30–60 seconds…</p>
         </div>
       )}
 
@@ -64,9 +184,9 @@ export default function Ranking() {
               <tr>
                 <th style={thStyle}>#</th>
                 <th style={{ ...thStyle, textAlign: 'left' }}>Metro</th>
-                <th style={thStyle}>Sampled</th>
-                <th style={thStyle}>In Violation</th>
-                <th style={thStyle}>Rate</th>
+                {columns.map((col) => (
+                  <th key={col.key} style={thStyle}>{col.header}</th>
+                ))}
                 <th style={thStyle}>Report</th>
               </tr>
             </thead>
@@ -80,25 +200,11 @@ export default function Ranking() {
                     <span style={metroNameStyle}>{row.name}</span>
                     {row.state && <span style={stateStyle}>{row.state}</span>}
                   </td>
-                  <td style={tdCenter}>
-                    {row.sampled_facilities != null
-                      ? row.sampled_facilities.toLocaleString()
-                      : <span style={naStyle}>error</span>}
-                  </td>
-                  <td style={tdCenter}>
-                    {row.in_violation != null ? (
-                      <strong style={
-                        (row.in_violation ?? 0) > 10 ? violHighStyle : violLowStyle
-                      }>
-                        {row.in_violation}
-                      </strong>
-                    ) : <span style={naStyle}>—</span>}
-                  </td>
-                  <td style={tdCenter}>
-                    {row.violation_rate_pct != null
-                      ? `${row.violation_rate_pct}%`
-                      : '—'}
-                  </td>
+                  {columns.map((col) => (
+                    <td key={col.key} style={tdCenter}>
+                      {col.render(row)}
+                    </td>
+                  ))}
                   <td style={tdCenter}>
                     <Link to={`/reports/${row.slug}`} style={reportLinkStyle}>
                       View →
@@ -115,13 +221,13 @@ export default function Ranking() {
               <a href={data.source_url} target="_blank" rel="noopener noreferrer" style={extLinkStyle}>
                 {data.source}
               </a>
-              {' · '}regulatory compliance data{' · '}
+              {' · '}{data.tag}{' · '}
               Retrieved {data.retrieved_date}
             </p>
             <p style={disclaimerStyle}>
-              Regulatory compliance ≠ environmental exposure or health risk.
-              Violation counts reflect a sample of up to 500 active facilities per metro bounding box —
-              not a complete census. Educational use only.
+              Regulatory and reporting data reflect a sample of facilities per metro bounding box —
+              not a complete census. Compliance ≠ environmental exposure or health risk.
+              Educational use only.
             </p>
           </div>
         </>

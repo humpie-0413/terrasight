@@ -84,7 +84,8 @@
           "description": "Compliance and violation records for public water systems. Tracks health-based violations, monitoring failures, and enforcement actions. Served via Envirofacts REST at data.epa.gov/efservice/. Mandatory disclaimer: regulatory violations ≠ unsafe water at the tap.",
           "spatial_coverage": "U.S. public water systems",
           "license": "Public domain (US EPA)",
-          "status": "live"
+          "status": "live",
+          "api_endpoint": "/api/drinking-water/sdwis?state=TX&zip_prefix=770,771,772,773,774,775,776,777,778,779&limit=100"
         }
       ]
     },
@@ -180,7 +181,8 @@
           "description": "Active and archived Superfund sites on the National Priorities List (NPL), including site boundaries, NPL status, and contaminants of concern. Served via the EPA FAC_Superfund_Site_Boundaries ArcGIS FeatureServer — polygon centroids computed client-side for map placement.",
           "spatial_coverage": "U.S. + territories, site-level",
           "license": "Public domain (US EPA)",
-          "status": "live"
+          "status": "live",
+          "api_endpoint": "/api/sites/superfund?west=-96.2&south=29.0&east=-94.5&north=30.5&limit=100"
         },
         {
           "id": "brownfields",
@@ -192,7 +194,8 @@
           "description": "Grantee-reported Brownfields sites (formerly industrial/commercial properties with real or perceived contamination that complicate redevelopment). Served via the EPA EMEF/efpoints ArcGIS MapServer Layer 5. Cleanup status lives on a separate ACRES endpoint and is not yet joined.",
           "spatial_coverage": "U.S. Brownfields grantees, point-level",
           "license": "Public domain (US EPA)",
-          "status": "live"
+          "status": "live",
+          "api_endpoint": "/api/sites/brownfields?west=-96.2&south=29.0&east=-94.5&north=30.5&limit=100"
         },
         {
           "id": "soilgrids",
@@ -236,7 +239,8 @@
           "description": "Annual facility-level reports of releases, transfers, and disposal of ~800 listed toxic chemicals to air, water, and land. Publicly available back to 1987. Served via Envirofacts REST (tri_facility + tri_reporting_form) at data.epa.gov/efservice/. Self-reported — facilities below reporting thresholds are invisible.",
           "spatial_coverage": "U.S. facilities",
           "license": "Public domain (US EPA)",
-          "status": "live"
+          "status": "live",
+          "api_endpoint": "/api/releases/tri?state=TX&limit=100"
         },
         {
           "id": "rcrainfo",
@@ -292,7 +296,8 @@
           "description": "Self-reported facility-level greenhouse gas emissions under 40 CFR Part 98, covering facilities emitting ≥25,000 tCO₂e/yr. Surfaced via the Envirofacts GHG REST service (pub_dim_facility + pub_facts_sector_ghg_emission). Complements Climate TRACE estimated emissions for U.S. facilities.",
           "spatial_coverage": "U.S. reporting facilities (≥25k tCO₂e/yr)",
           "license": "Public domain (US EPA)",
-          "status": "live"
+          "status": "live",
+          "api_endpoint": "/api/releases/ghgrp?state=TX&year=2023&limit=100"
         },
         {
           "id": "egrid",

@@ -169,6 +169,88 @@ interface WaterBlock {
   disclaimer: string;
 }
 
+// ── Phase E.3: 4 new block shapes ─────────────────────────────────────────
+
+interface ToxicReleasesFacility {
+  name: string;
+  city: string | null;
+  state: string | null;
+  chemicals: string[];
+  year: number | null;
+}
+
+interface ToxicReleasesBlock extends BlockBase {
+  values: {
+    facility_count: number;
+    top_facilities: ToxicReleasesFacility[];
+    chemicals_sampled: number;
+  } | null;
+}
+
+interface SuperfundSite {
+  name: string;
+  lat: number | null;
+  lon: number | null;
+  city: string | null;
+  state: string | null;
+  npl_status: string | null;
+  address: string | null;
+}
+
+interface BrownfieldsSite {
+  name: string;
+  lat: number | null;
+  lon: number | null;
+  city: string | null;
+  state: string | null;
+  cleanup_status: string | null;
+}
+
+interface SiteCleanupBlock extends BlockBase {
+  values: {
+    superfund: { count: number; sites: SuperfundSite[] };
+    brownfields: { count: number; sites: BrownfieldsSite[] };
+  } | null;
+}
+
+interface FacilityGhgFacility {
+  name: string;
+  city: string | null;
+  state: string | null;
+  total_co2e_tonnes: number | null;
+  year: number | null;
+}
+
+interface FacilityGhgBlock extends BlockBase {
+  values: {
+    facility_count: number;
+    total_co2e_tonnes: number | null;
+    year: number | null;
+    top_facilities: FacilityGhgFacility[];
+  } | null;
+}
+
+interface DrinkingWaterViolation {
+  pwsid: string;
+  name: string;
+  city: string | null;
+  population_served: number | null;
+  primary_source: string | null;
+  latest_violation_date: string | null;
+  violation_count: number;
+}
+
+interface DrinkingWaterBlock extends BlockBase {
+  values: {
+    system_count: number;
+    violation_count: number;
+    systems_with_violations: number;
+    violation_rate_pct: number | null;
+    recent_violations: DrinkingWaterViolation[];
+    total_population_affected: number;
+  } | null;
+}
+
 interface MethodologySource {
   block: string;
   source: string;
@@ -193,6 +275,10 @@ interface ReportResponse {
     air_quality: AirQualityBlock;
     climate_locally: ClimateBlock;
     facilities: FacilitiesBlock;
+    toxic_releases: ToxicReleasesBlock;
+    site_cleanup: SiteCleanupBlock;
+    facility_ghg: FacilityGhgBlock;
+    drinking_water: DrinkingWaterBlock;
     water: WaterBlock;
     methodology: MethodologyBlock;
     related: { status: string; message: string };
@@ -268,6 +354,24 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
 
       {/* AdSense slot #2 */}
       <AdSlot id="ad-2" />
+
+      {/* Block 7 — Toxic Releases (EPA TRI) */}
+      <Block7ToxicReleases block={blocks.toxic_releases} />
+
+      {/* AdSense slot #3 */}
+      <AdSlot id="ad-3" />
+
+      {/* Block 8 — Site Cleanup (Superfund + Brownfields) */}
+      <Block8SiteCleanup block={blocks.site_cleanup} />
+
+      {/* Block 9 — Facility GHG (EPA GHGRP) */}
+      <Block9FacilityGhg block={blocks.facility_ghg} />
+
+      {/* AdSense slot #4 */}
+      <AdSlot id="ad-4" />
+
+      {/* Block 10 — Drinking Water (EPA SDWIS) */}
+      <Block10DrinkingWater block={blocks.drinking_water} />
 
       {/* Block 4 — Water Snapshot */}
       <Block4Water block={blocks.water} />
@@ -532,6 +636,333 @@ function FacilitiesBody({
   );
 }
 
+// ── Block 7: Toxic Releases (EPA TRI) ─────────────────────────────────────
+
+function Block7ToxicReleases({ block }: { block: ToxicReleasesBlock }) {
+  return (
+    <section style={sectionStyle}>
+      <h2 style={h2Style}>Toxic Releases — EPA TRI</h2>
+      {block.status === 'ok' && (
+        <MetaLine
+          cadence={block.cadence ?? 'annual'}
+          tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+          source={block.source ?? 'EPA TRI'}
+          sourceUrl={block.source_url}
+        />
+      )}
+      <BlockNonOk block={block} />
+      {block.status === 'ok' && block.values && (
+        <ToxicReleasesBody values={block.values} />
+      )}
+      <p style={disclaimerStyle}>
+        ⚠️ TRI facilities self-report annual releases under EPCRA §313. Only
+        facilities above reporting thresholds are included.
+      </p>
+    </section>
+  );
+}
+
+function ToxicReleasesBody({
+  values,
+}: {
+  values: NonNullable<ToxicReleasesBlock['values']>;
+}) {
+  return (
+    <>
+      <p style={valueStyle}>
+        {values.facility_count}{' '}
+        <span style={unitStyle}>TRI-reporting facilities</span>
+      </p>
+      {values.chemicals_sampled > 0 ? (
+        <p style={asOfStyle}>
+          {values.chemicals_sampled} unique chemicals sampled
+        </p>
+      ) : (
+        <p style={noteStyle}>
+          Chemical enrichment requires a specific reporting year.
+        </p>
+      )}
+      {values.top_facilities.length > 0 && (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Name</th>
+              <th style={thStyle}>City</th>
+              <th style={thStyle}>Chemicals</th>
+              <th style={thStyle}>Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            {values.top_facilities.map((f, i) => (
+              <tr key={`tr-${i}`}>
+                <td style={tdStyle}>{f.name}</td>
+                <td style={tdStyle}>{f.city ?? '—'}</td>
+                <td style={tdStyle}>
+                  {f.chemicals.length > 0
+                    ? f.chemicals.slice(0, 3).join(', ')
+                    : '—'}
+                </td>
+                <td style={tdStyle}>{f.year ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+// ── Block 8: Site Cleanup (Superfund + Brownfields) ───────────────────────
+
+const NPL_STATUS_LABELS: Record<string, string> = {
+  F: 'NPL Final',
+  P: 'Proposed',
+  D: 'Deleted',
+  R: 'Removed',
+};
+
+function Block8SiteCleanup({ block }: { block: SiteCleanupBlock }) {
+  return (
+    <section style={sectionStyle}>
+      <h2 style={h2Style}>Site Cleanup — Superfund & Brownfields</h2>
+      {block.status === 'ok' && (
+        <MetaLine
+          cadence={block.cadence ?? 'quarterly'}
+          tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+          source={block.source ?? 'EPA CERCLIS / ACRES'}
+          sourceUrl={block.source_url}
+        />
+      )}
+      <BlockNonOk block={block} />
+      {block.status === 'ok' && block.values && (
+        <SiteCleanupBody values={block.values} />
+      )}
+      <p style={disclaimerStyle}>
+        ⚠️ Sites are EPA regulatory records, not exposure assessments.
+      </p>
+    </section>
+  );
+}
+
+function SiteCleanupBody({
+  values,
+}: {
+  values: NonNullable<SiteCleanupBlock['values']>;
+}) {
+  const { superfund, brownfields } = values;
+  return (
+    <div style={twoColGrid}>
+      <div>
+        <h3 style={h3Style}>Superfund</h3>
+        {superfund.count > 0 ? (
+          <>
+            <p style={valueStyle}>
+              {superfund.count} <span style={unitStyle}>sites</span>
+            </p>
+            <ul style={cleanupListStyle}>
+              {superfund.sites.slice(0, 5).map((s, i) => (
+                <li key={`sf-${i}`}>
+                  <strong>{s.name}</strong>
+                  <div style={cleanupMetaStyle}>
+                    {(s.npl_status && NPL_STATUS_LABELS[s.npl_status]) ??
+                      'Unknown'}
+                    {s.city ? ` · ${s.city}` : ''}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p style={noteStyle}>None reported for this area.</p>
+        )}
+      </div>
+      <div>
+        <h3 style={h3Style}>Brownfields</h3>
+        {brownfields.count > 0 ? (
+          <>
+            <p style={valueStyle}>
+              {brownfields.count} <span style={unitStyle}>properties</span>
+            </p>
+            <ul style={cleanupListStyle}>
+              {brownfields.sites.slice(0, 5).map((s, i) => (
+                <li key={`bf-${i}`}>
+                  <strong>{s.name}</strong>
+                  {s.city && <div style={cleanupMetaStyle}>{s.city}</div>}
+                </li>
+              ))}
+            </ul>
+            <p style={noteStyle}>
+              Cleanup status not available via the spatial point layer.
+            </p>
+          </>
+        ) : (
+          <p style={noteStyle}>None reported for this area.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Block 9: Facility GHG (EPA GHGRP) ─────────────────────────────────────
+
+function Block9FacilityGhg({ block }: { block: FacilityGhgBlock }) {
+  return (
+    <section style={sectionStyle}>
+      <h2 style={h2Style}>
+        Facility Greenhouse Gas Emissions — EPA GHGRP
+      </h2>
+      {block.status === 'ok' && (
+        <MetaLine
+          cadence={block.cadence ?? 'annual'}
+          tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+          source={block.source ?? 'EPA GHGRP'}
+          sourceUrl={block.source_url}
+        />
+      )}
+      <BlockNonOk block={block} />
+      {block.status === 'ok' && block.values && (
+        <FacilityGhgBody values={block.values} />
+      )}
+      <p style={disclaimerStyle}>
+        ⚠️ GHGRP captures facilities emitting &gt;25,000 tCO₂e/year; smaller
+        emitters are not reported.
+      </p>
+    </section>
+  );
+}
+
+function FacilityGhgBody({
+  values,
+}: {
+  values: NonNullable<FacilityGhgBlock['values']>;
+}) {
+  const totalLabel =
+    values.total_co2e_tonnes !== null
+      ? `${values.total_co2e_tonnes.toLocaleString()} tCO₂e${
+          values.year ? ` (${values.year})` : ''
+        }`
+      : '—';
+  return (
+    <>
+      <p style={valueStyle}>
+        {values.facility_count}{' '}
+        <span style={unitStyle}>GHGRP facilities</span>
+      </p>
+      <p style={asOfStyle}>Total reported emissions: {totalLabel}</p>
+      {values.top_facilities.length > 0 && (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Name</th>
+              <th style={thStyle}>City</th>
+              <th style={thStyle}>tCO₂e</th>
+              <th style={thStyle}>Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            {values.top_facilities.map((f, i) => (
+              <tr key={`gh-${i}`}>
+                <td style={tdStyle}>{f.name}</td>
+                <td style={tdStyle}>{f.city ?? '—'}</td>
+                <td style={tdStyle}>
+                  {f.total_co2e_tonnes !== null
+                    ? f.total_co2e_tonnes.toLocaleString()
+                    : '—'}
+                </td>
+                <td style={tdStyle}>{f.year ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+// ── Block 10: Drinking Water (EPA SDWIS) ──────────────────────────────────
+
+function Block10DrinkingWater({ block }: { block: DrinkingWaterBlock }) {
+  return (
+    <section style={sectionStyle}>
+      <h2 style={h2Style}>Drinking Water — EPA SDWIS</h2>
+      {block.status === 'ok' && (
+        <MetaLine
+          cadence={block.cadence ?? 'quarterly'}
+          tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+          source={block.source ?? 'EPA SDWIS'}
+          sourceUrl={block.source_url}
+        />
+      )}
+      <BlockNonOk block={block} />
+      {block.status === 'ok' && block.values && (
+        <DrinkingWaterBody values={block.values} />
+      )}
+      <div style={highVisDisclaimerStyle}>
+        ⚠️ A regulatory violation does NOT necessarily mean your tap water is
+        unsafe. SDWIS data is quarterly and may lag real conditions. Contact
+        your local water utility for current water quality information.
+      </div>
+    </section>
+  );
+}
+
+function DrinkingWaterBody({
+  values,
+}: {
+  values: NonNullable<DrinkingWaterBlock['values']>;
+}) {
+  return (
+    <>
+      <div style={statsGrid}>
+        <Stat label="Public water systems" value={values.system_count} />
+        <Stat label="Total violations" value={values.violation_count} />
+        <Stat
+          label="Systems with active violations"
+          value={
+            values.violation_rate_pct !== null
+              ? `${values.violation_rate_pct}%`
+              : '—'
+          }
+        />
+        <Stat
+          label="People served (systems w/ violations)"
+          value={values.total_population_affected.toLocaleString()}
+        />
+      </div>
+      {values.recent_violations.length > 0 && (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>System Name</th>
+              <th style={thStyle}>City</th>
+              <th style={thStyle}>Pop. Served</th>
+              <th style={thStyle}>Source</th>
+              <th style={thStyle}>Last Violation</th>
+              <th style={thStyle}>Violations</th>
+            </tr>
+          </thead>
+          <tbody>
+            {values.recent_violations.map((v) => (
+              <tr key={v.pwsid}>
+                <td style={tdStyle}>{v.name}</td>
+                <td style={tdStyle}>{v.city ?? '—'}</td>
+                <td style={tdStyle}>
+                  {v.population_served !== null
+                    ? v.population_served.toLocaleString()
+                    : '—'}
+                </td>
+                <td style={tdStyle}>{v.primary_source ?? '—'}</td>
+                <td style={tdStyle}>{v.latest_violation_date ?? '—'}</td>
+                <td style={tdStyle}>{v.violation_count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
 // ── Block 4: Water Snapshot ───────────────────────────────────────────────
 
 function Block4Water({ block }: { block: WaterBlock }) {
@@ -769,6 +1200,21 @@ function ErrorNotice({ error }: { error: string }) {
   );
 }
 
+/**
+ * Renders the three non-ok block states (error / not_configured / pending)
+ * shared by every Phase E.3 block.
+ */
+function BlockNonOk({ block }: { block: BlockBase }) {
+  if (block.status === 'error') {
+    return <ErrorNotice error={block.error ?? 'Unknown error'} />;
+  }
+  if (block.status === 'not_configured' || block.status === 'pending') {
+    return <NotConfiguredNotice message={block.message ?? ''} />;
+  }
+  return null;
+}
+
+
 function AdSlot({ id }: { id: string }) {
   // Placeholder for AdSense (CLAUDE.md: between Block 1-2 and 3-4).
   return (
@@ -979,4 +1425,35 @@ const loadingStyle: React.CSSProperties = {
 const errorStyle: React.CSSProperties = {
   fontSize: '14px',
   color: '#dc2626',
+};
+
+const twoColGrid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+  gap: '16px',
+  marginTop: '8px',
+};
+
+const cleanupListStyle: React.CSSProperties = {
+  margin: '8px 0 0',
+  paddingLeft: '18px',
+  fontSize: '13px',
+  color: '#334155',
+};
+
+const cleanupMetaStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: '#94a3b8',
+};
+
+const highVisDisclaimerStyle: React.CSSProperties = {
+  marginTop: '16px',
+  padding: '12px 14px',
+  border: '1px solid #f59e0b',
+  borderRadius: '6px',
+  background: '#fffbeb',
+  color: '#92400e',
+  fontSize: '13px',
+  fontWeight: 500,
+  lineHeight: 1.5,
 };

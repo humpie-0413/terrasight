@@ -154,6 +154,18 @@ function LocalReportsSection() {
         <a href="/rankings/pm25" style={quickLinkStyle}>
           💨 PM2.5 Levels Ranking
         </a>
+        <a href="/rankings/tri-releases" style={quickLinkStyle}>
+          ♻️ TRI Toxics Releases Ranking
+        </a>
+        <a href="/rankings/ghg-emissions" style={quickLinkStyle}>
+          🏭 Facility GHG Emissions Ranking
+        </a>
+        <a href="/rankings/superfund" style={quickLinkStyle}>
+          🚨 Superfund Sites Ranking
+        </a>
+        <a href="/rankings/drinking-water-violations" style={quickLinkStyle}>
+          💧 Drinking Water Violations Ranking
+        </a>
         <a href="/guides/how-to-read-aqi" style={quickLinkStyle}>
           📖 How to Read an AQI Report
         </a>

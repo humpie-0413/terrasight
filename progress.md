@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-12 (Phase D.1 완료)
+**최종 업데이트:** 2026-04-12 (Phase E 완료)
 
 ---
 
@@ -18,20 +18,31 @@
 
 | 항목 | 수치 |
 |------|------|
-| Git commits | **47+** (Phase D.1 pending commit) |
-| Backend connectors | **29개** (14 기존 + 14 글로벌 + 5 Phase D.1 EPA 규제/사이트) |
-| API endpoints | **32개** (+5: releases/tri · releases/ghgrp · sites/superfund · sites/brownfields · drinking-water/sdwis) |
-| Atlas 라이브 데이터셋 | **16개** (+5: tri · ghgrp · superfund · brownfields · sdwis) |
-| Frontend components / pages | **~32개** |
+| Git commits | **48+** (`48f0482` Phase D.1, Phase E commit pending push) |
+| Backend connectors | **33개** (28 기존 + 5 Phase D.1, 변동 없음) |
+| API endpoints | **36개** (+4 Phase E 랭킹: tri-releases · ghg-emissions · superfund · drinking-water-violations) |
+| Atlas 라이브 데이터셋 | **16개** (+ `api_endpoint` 필드 추가) |
+| Atlas 카테고리 | **8개** — Waste & Materials, Soil/Land 공백 해소 ✅ |
+| Local Reports 블록 | **10개** (6 → **10**: +Toxic Releases, Site Cleanup, Facility GHG, Drinking Water) |
+| Frontend components / pages | **~34개** |
 | Local Reports metros | **50개** ✅ |
 | Globe 레이어 | **13개** (5카테고리 어코디언) |
 | Climate Trends 카드 | **5개** (CO₂ · Temp · Sea Ice · CH₄ · Sea Level) |
 | Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
-| Atlas 카테고리 | **8개** |
-| SEO 랭킹 페이지 | **2개** |
+| SEO 랭킹 페이지 | **6개** (+4 Phase E: TRI · GHG · Superfund · Drinking Water) |
 | SEO 가이드 페이지 | **4개** |
-| 번들 사이즈 | **599 KB gzipped** (600 KB 가드레일 이내) |
+| 번들 사이즈 (main chunk) | **598.13 KB gzipped** ✅ (`LocalReport` lazy split, 600 KB 가드레일 이내) |
+| 코드 스플리팅 | **LocalReport** lazy route (5.09 KB gzipped 별도 청크) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
+
+### Phase D.1 임팩트 요약 (2026-04-12)
+
+| 카테고리 | D.1 이전 | D.1 이후 |
+|---------|---------|---------|
+| Waste & Materials | 0 live (critical gap) | **1 live** (TRI) |
+| Soil, Land & Site | 1 live (forest cover only) | **3 live** (+ Superfund, Brownfields) |
+| Water (drinking) | WQP only (surface) | **2 live** (+ SDWIS compliance) |
+| Emissions / Facilities | ECHO (compliance) + Climate TRACE (country) | **3 live** (+ GHGRP 시설 GHG) |
 
 ---
 
@@ -300,6 +311,147 @@ SDWIS       HTTP 200  count=5  status=ok  (Houston 10개 ZIP 프리픽스 fan-ou
 
 ---
 
+### E — Phase D.1 시각화 + Local Report 확장 (2026-04-12) ✅
+
+`docs/NEXT_STEPS.md` §E 배치 완료. D.1에서 구현한 5개 커넥터를
+Local Report UI + SEO 랭킹 페이지에 실제로 연결. 3라운드 sub-agent
+병렬 분담 (backend reports · backend rankings · frontend blocks +
+frontend rankings/home/atlas).
+
+**E.1 Local Report 블록 4개 추가 (6 → 10 블록):**
+
+| # | 블록 | 커넥터 | 주요 값 (Houston 예) |
+|---|------|--------|---------------------|
+| 7 | Toxic Releases | TRI | facility_count=100, top 5 facilities |
+| 8 | Site Cleanup | Superfund + Brownfields | 23 Superfund + 100 Brownfields sites |
+| 9 | Facility GHG | GHGRP | 100 facilities, 4,157,781 tCO₂e (2023) |
+| 10 | Drinking Water | SDWIS | 200 systems, 3,486 violations, 91.5% rate |
+
+- JSX 순서: Block0 → Block1 Air → ad-1 → Block2 Climate → Block3
+  Facilities → ad-2 → **Block7 TRI → ad-3 → Block8 Cleanup → Block9
+  GHG → ad-4 → Block10 SDWIS** → Block4 Water → Block5 Methodology
+  → Block6 Related
+- 각 블록에 `MetaLine` (cadence · trust badge · source)을 숫자보다
+  먼저 렌더링 (`docs/guardrails.md` 규칙 준수)
+- SDWIS 고가시성 disclaimer: `"⚠️ A regulatory violation does NOT
+  necessarily mean your tap water is unsafe."` 경고색 박스
+- Ad slot 2개 추가 (ad-3 / ad-4)
+- `get_report()` asyncio.gather에 5개 새 커넥터 추가 — 기존 블록
+  영향 없이 graceful degradation 유지
+- `_key_signals()` 확장: "GHG facility total (tCO₂e)", "Superfund
+  sites" 카드 (6개 total)
+
+**E.2 SEO 랭킹 4개 추가 (2 → 6 페이지):**
+
+| 엔드포인트 | 전략 | Top (스모크 테스트) |
+|-----------|------|-------------------|
+| `GET /api/rankings/tri-releases` | 주 단위 집계 (unique states 팬아웃), metro에 할당 | Houston (TX, 500 facilities) |
+| `GET /api/rankings/ghg-emissions` | 주 단위 집계 | Chicago (IL, 317 facilities, 37.46M tCO₂e) |
+| `GET /api/rankings/superfund` | metro bbox fan-out (50 parallel) | Philadelphia (165 sites, 127 NPL Final) |
+| `GET /api/rankings/drinking-water-violations` | 주 단위 집계 | Seattle (500 systems, 501 violations) |
+
+- `backend/api/rankings.py`: 신규 4개 엔드포인트 + `_unique_states_from_cbsas()`
+  헬퍼 + per-state fetch helpers. TRI/GHGRP/SDWIS는 50 metro × 10
+  zip prefix = 500 Envirofacts 요청 폭격을 피하기 위해 주 단위로
+  1회 쿼리 후 해당 주의 모든 metro에 동일 값 부여 + note: `"State-level
+  totals attributed to every metro in that state"`
+- 기존 catch-all `@router.get("/{ranking_slug}")` stub을 파일 끝으로
+  이동 (4개 신규 명명 라우트를 shadowing 방지)
+- 스모크 테스트: 6개 랭킹 모두 HTTP 200, 50 rows × 4 엔드포인트 = 200
+  ok rows (SDWIS만 state cap으로 500 systems plateau)
+
+**E.3 프런트엔드 — Ranking 페이지 generic 리팩터:**
+
+- `frontend/src/pages/Ranking.tsx`: hardcoded `/rankings/epa-violations`
+  → `useParams<{rankingSlug}>()` + `useApi(\`/rankings/\${slug}\`)`
+- `RANKING_COLUMNS: Record<string, ColumnSpec[]>` 맵으로 5개 slug별
+  컬럼 스펙 정의 (column header + render fn + align)
+  - `epa-violations` → Sampled, In Violation, Rate
+  - `tri-releases` → TRI Facilities
+  - `ghg-emissions` → Facilities, Total tCO₂e
+  - `superfund` → Sites, NPL Final
+  - `drinking-water-violations` → Systems, Violations, Rate
+- Title/criterion/note/source/retrieved_date 모두 envelope에서 읽음
+  (하드코딩 제거)
+- `frontend/src/App.tsx`의 generic `/rankings/:rankingSlug` 라우트
+  이미 존재 → 라우트 추가 불필요
+- PM25Ranking은 전용 컴포넌트 유지
+
+**E.4 코드 스플리팅 (600 KB 가드레일 유지):**
+
+- **중대한 발견**: Phase E 시작 시점 baseline bundle이 이미 **600.07 KB**
+  였음 (progress.md가 추정한 599 KB보다 약간 초과). 4개 블록 추가로
+  601.37 KB → 600 KB 가드레일 돌파.
+- **해결**: `frontend/src/App.tsx`에서 `LocalReport` 라우트를 `React.lazy`
+  로 분리 → 메인 청크에서 ReportPage 전체가 async 청크로 이동
+- 결과:
+  - Main chunk: **598.13 KB gzipped** (2 KB 헤드룸)
+  - Lazy `LocalReport-*.js`: 5.09 KB gzipped (첫 `/reports/:slug` 방문
+    시에만 로드)
+  - TypeScript strict, 0 errors
+  - Home/Atlas/Guide/Ranking 라우트는 eager 유지 (Globe hero 포함)
+
+**E.5 Home 퀵링크 확장 (6 → 10):**
+
+- 기존: 2 ranking (epa-violations, pm25) + 4 guide
+- 신규 4 ranking 링크 추가:
+  - ♻️ TRI Toxics Releases Ranking (`/rankings/tri-releases`)
+  - 🏭 Facility GHG Emissions Ranking (`/rankings/ghg-emissions`)
+  - 🚨 Superfund Sites Ranking (`/rankings/superfund`)
+  - 💧 Drinking Water Violations Ranking (`/rankings/drinking-water-violations`)
+
+**E.6 Atlas catalog — `api_endpoint` 필드 추가:**
+
+5개 D.1 데이터셋에 직접 API 경로 링크 추가:
+- `tri` → `/api/releases/tri?state=TX&limit=100`
+- `ghgrp` → `/api/releases/ghgrp?state=TX&year=2023&limit=100`
+- `superfund` → `/api/sites/superfund?west=...&limit=100`
+- `brownfields` → `/api/sites/brownfields?west=...&limit=100`
+- `sdwis` → `/api/drinking-water/sdwis?state=TX&zip_prefix=770,...&limit=100`
+
+**E.7 Houston End-to-End 스모크 테스트:**
+
+```
+REPORT: HTTP 200 — all 10 blocks ok (related=pending as designed)
+  air_quality=ok   climate_locally=ok   facilities=ok
+  toxic_releases=ok   site_cleanup=ok   facility_ghg=ok
+  drinking_water=ok   water=ok   methodology=ok   related=pending
+  key_signals: 6 cards
+
+RANKINGS: HTTP 200 × 6
+  epa-violations         rows=50 ok=25
+  pm25                   rows=50 ok=49
+  tri-releases           rows=50 ok=50
+  ghg-emissions          rows=50 ok=50
+  superfund              rows=50 ok=50
+  drinking-water-violations  rows=50 ok=50
+```
+
+**Phase E 랜드마인:**
+
+- SDWIS state cap (500 systems/state) → `drinking-water-violations`
+  랭킹에서 대형 주가 plateau에 도달. 향후 per-prefix fan-out으로 해결
+  가능하나 rate limit 리스크 증가
+- Bundle baseline 측정 필수 — `progress.md` 추정치 (599 KB)와 실측치
+  (600.07 KB)가 불일치. Phase F 이후에는 CI에서 bundle 측정 자동화 필요
+- Vite의 단일 청크 기본값: 추가 route도 React.lazy로 쪼개야 확장 여유
+  확보 (Atlas/Ranking/Guide 모두 잠재 후보)
+- GHGRP 연간 CO₂e는 2023 고정 — 신 reporting year 출시 시 코드 변경
+  필요
+- Chicago가 GHG ranking 1위인 이유: IL의 GHGRP 시설 다수 + 주 단위
+  집계로 모든 IL metro가 동일 값. 사용자에게 "state-level" 표시 필수
+
+**Atlas 카테고리 임팩트 (최종):**
+
+| 카테고리 | D.1 이전 | E 이후 |
+|---------|---------|--------|
+| Waste & Materials | 0 live | 1 live + Local Report Block 7 |
+| Soil, Land & Site | 1 live | 3 live + Local Report Block 8 |
+| Water (drinking) | WQP only | 2 live + Local Report Block 10 |
+| Emissions / Facilities | ECHO + Climate TRACE | 3 live + Local Report Block 9 |
+
+---
+
 ### C.3 — Born-in Interactive 완성 (`ca9e738`, 2026-04-12) ✅
 
 **`GET /api/trends/born-in?year=YYYY`**
@@ -342,6 +494,10 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 | `GET /api/sites/superfund` | ✅ D.1 ArcGIS NPL sites |
 | `GET /api/sites/brownfields` | ✅ D.1 ArcGIS ACRES |
 | `GET /api/drinking-water/sdwis` | ✅ D.1 Envirofacts SDWIS |
+| `GET /api/rankings/tri-releases` | ✅ **E** state-level TRI |
+| `GET /api/rankings/ghg-emissions` | ✅ **E** state-level GHGRP |
+| `GET /api/rankings/superfund` | ✅ **E** per-metro bbox |
+| `GET /api/rankings/drinking-water-violations` | ✅ **E** state-level SDWIS |
 
 ---
 
@@ -380,17 +536,61 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 
 ---
 
-## 다음 단계 후보
+## 다음 단계 — Phase E 이후
 
-### 높음
-- **AdSense 신청** — 50개 리포트 + 6개 SEO 페이지로 조건 충족
-- **CMEMS P1** — `copernicusmarine` 추가, Globe SLA 레이어 활성화
+Phase E 완료. Local Report가 10블록으로 확장되고 6개 랭킹 페이지가
+라이브. 다음 단계는 크게 세 갈래. 자세한 로드맵은 `docs/NEXT_STEPS.md`.
 
-### 중간
-- **추가 랭킹:** `/rankings/coral-bleaching`, `/rankings/ghg-emissions`
-- **추가 가이드:** "Understanding Coral Bleaching", "Reading Storm Data"
-- **Bundle 코드 스플리팅** — 현재 599 KB gzip (600 KB 가드레일 직전)
+### 옵션 0 — AdSense 신청 + 커스텀 도메인 (즉시)
 
-### 낮음
-- **Story Panel 프리셋 확장** (1개 → 5~10개)
-- **디자인 폴리시** (hover/애니메이션, 모바일 최적화)
+- 50 metro × 10 블록 = 500개 데이터 surface, 6 ranking + 4 guide
+  페이지, Atlas 8 카테고리 × 16 데이터셋 → **AdSense 콘텐츠 요건
+  충족**. 지금 바로 신청 가능.
+- 커스텀 도메인 (CF Pages + Render 양쪽 설정)도 같이 진행 가능.
+
+### 옵션 A — Phase D.2: P1 커넥터 6개 (데이터 계속 심화)
+
+`docs/NEXT_STEPS.md` §D.3 P1 배치. 모두 검증된 무료 API.
+
+| 순서 | 커넥터 | 소스 | 기여 |
+|-----|--------|------|------|
+| 1 | `eia_power.py` | EIA v2 (`api.eia.gov/v2/electricity`) | **새 Climate Trends 카드** "US renewables share" |
+| 2 | `epa_campd.py` | EPA CAMPD (`api.epa.gov/easey/`) | 시간별 CEMS, 최고 품질 발전소 배출 |
+| 3 | `epa_attains.py` | EPA ATTAINS (`attains.epa.gov/attains-public/api/`) | 수질 오염원 (점/비점원 구분) |
+| 4 | `usgs_gw.py` | USGS OGC (`/collections/field-measurements` + `site_type_code=GW`) | 지하수 — `usgs.py` 확장 |
+| 5 | `gbif.py` | GBIF v1 (`api.gbif.org/v1`) | **Globe 생물다양성 레이어** (첫 생태 신호) |
+| 6 | `gibs_viirs_dnb` | GIBS VIIRS Day/Night Band (`gibs.earthdata.nasa.gov/wmts/.../VIIRS_SNPP_DayNightBand_ENCC`) | **Globe 야간광 레이어** |
+
+**장점:** 데이터 깊이 확대 지속, 환경공학 범위(생물다양성·에너지·지하수) 첫 진입
+**단점:** UI 통합 안 하면 사용자에게 보이지 않음 (백엔드만 존재)
+
+### 옵션 B — Phase F: SEO 가이드 + Story Panel 확장
+
+Phase E로 데이터 depth는 채워졌고, 이제 트래픽 유입 경로 강화:
+
+- 신규 가이드 페이지 4개:
+  - `/guides/understanding-tri-reports` — TRI 읽는 법
+  - `/guides/reading-ghgrp-data` — GHGRP CO₂e 해석
+  - `/guides/superfund-basics` — NPL · SEMS 기초
+  - `/guides/sdwis-violations-explained` — 위반 ≠ 수돗물 위험
+- Story Panel 프리셋 1개 → 5-10개 (editorial seeding)
+- 블로그/뉴스 섹션 추가로 long-tail SEO 보강
+
+### 권장
+
+**옵션 0 (AdSense/도메인) 먼저**, 그 다음 **옵션 B (Phase F)**,
+옵션 A (D.2)는 마지막. 이유:
+
+1. Phase E로 콘텐츠 weight가 체감상 ~2배 — AdSense 승인 확률 최상
+2. 가이드 페이지는 랭킹 페이지의 "읽어볼 것" 자연 연결 (CTR 증폭)
+3. D.2 커넥터는 UI 없으면 다시 "벤치 데이터"로 돌아갈 리스크 → E/F
+   이후에 진입하는 것이 같은 실수 반복 방지
+
+### 기존 블로커 (일부 해소)
+
+- ~~**Bundle 코드 스플리팅** — 599 KB gzip~~ ✅ **해소 (E.4)** — LocalReport
+  lazy route, main chunk 598.13 KB, 2 KB 헤드룸 확보
+- **CMEMS P1** — `copernicusmarine` 패키지 + Keycloak 자격증명 재검증
+- **커스텀 도메인** — CF Pages + Render (옵션 0에 포함)
+- **Story Panel 프리셋** (1 → 5-10개) (옵션 B에 포함)
+- **SDWIS 랭킹 state cap** — per-prefix fan-out 추가 가능 (rate limit 리스크)
