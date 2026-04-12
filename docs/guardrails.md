@@ -134,6 +134,7 @@ Run these in order.
 | PFAS rows are per-sample, not per-site | `connectors/pfas.py` | Same `F_PWS_ID` appears for each contaminant/date; de-duplication is caller's responsibility |
 | ArcGIS bbox query needs `inSR=4326` explicitly | `connectors/pfas.py` | Same landmine as Superfund/Brownfields — omitting defaults to Web Mercator |
 | NWS API requires `User-Agent` header | `connectors/nws_alerts.py` | Without UA, api.weather.gov returns HTTP 403; use descriptive UA string |
+| NWS alerts are national, not metro-scoped | `api/reports.py` | `_run_nws_alerts()` fetches all alerts and filters by `area_desc` containing state or core city name; no bbox/zone param used |
 | USDM requires `Accept: application/json` header | `connectors/usdm.py` | Without it, API returns text/csv with empty body → JSON parse error |
 | USDM uses separate endpoints for national vs state | `connectors/usdm.py` | `USStatistics` for `aoi=US`, `StateStatistics` for state FIPS codes |
 | USDM field names are camelCase, not PascalCase | `connectors/usdm.py` | `mapDate`, `none`, `d0` (not `MapDate`, `None`, `D0` as some docs suggest) |

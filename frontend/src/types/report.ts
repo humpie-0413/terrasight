@@ -155,3 +155,48 @@ export interface DrinkingWaterValues {
 export interface DrinkingWaterBlock extends BlockBase {
   values: DrinkingWaterValues | null;
 }
+
+// ── active_alerts (NOAA NWS) ─────────────────────────────────────────────
+
+export interface WeatherAlertItem {
+  event: string;
+  severity: string;
+  certainty: string;
+  urgency: string;
+  headline: string;
+  area_desc: string;
+  onset: string;
+  expires: string;
+  sender: string;
+}
+
+export interface ActiveAlertsValues {
+  alert_count: number;
+  alerts: WeatherAlertItem[];
+}
+
+export interface ActiveAlertsBlock extends BlockBase {
+  values: ActiveAlertsValues | null;
+}
+
+// ── pfas_monitoring (EPA PFAS Analytic Tools) ─────────────────────────────
+
+export interface PfasDetection {
+  system_name: string;
+  system_id: string;
+  contaminant: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+export interface PfasValues {
+  monitored_systems: number;
+  unique_contaminants: number;
+  most_frequent_contaminant: string | null;
+  total_samples: number;
+  top_detections: PfasDetection[];
+}
+
+export interface PfasBlock extends BlockBase {
+  values: PfasValues | null;
+}

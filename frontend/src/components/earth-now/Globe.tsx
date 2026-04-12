@@ -52,7 +52,7 @@ const GIBS_LAYER_NAMES: Record<string, string> = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ActiveEvent = 'fires' | 'storms' | 'monitors' | null;
+export type ActiveEvent = 'fires' | 'storms' | 'monitors' | 'earthquakes' | null;
 export type ActiveContinuous =
   | 'ocean-heat'
   | 'coral'
@@ -135,6 +135,23 @@ interface StormsResponse {
   count: number;
   configured: boolean;
   storms: Storm[];
+}
+
+interface Earthquake {
+  lat: number;
+  lon: number;
+  depth_km: number;
+  magnitude: number;
+  place: string;
+  time_utc: string;
+  event_url: string;
+  tsunami: boolean;
+}
+interface EarthquakeResponse {
+  count: number;
+  configured: boolean;
+  status: string;
+  earthquakes: Earthquake[];
 }
 
 interface CoralPoint {
@@ -342,6 +359,17 @@ const CATEGORIES: CategoryDef[] = [
         cadence: 'NRT ~6h',
         source: 'ATCF / IBTrACS',
         sourceUrl: 'https://www.nrlmry.navy.mil/atcf_web/atlas/ibtracks/',
+        available: true,
+      },
+      {
+        key: 'earthquakes',
+        label: 'Earthquakes (M4+)',
+        type: 'event',
+        activeColor: '#ef4444',
+        tag: TrustTag.Observed,
+        cadence: 'NRT ~5 min',
+        source: 'USGS',
+        sourceUrl: 'https://earthquake.usgs.gov/',
         available: true,
       },
       {
@@ -595,6 +623,25 @@ function stormColor(windKt: number): string {
   return '#7c3aed';
 }
 
+/**
+ * Earthquake magnitude color ramp.
+ * M4–4.9→yellow, M5–5.9→orange, M6–6.9→red, M7+→dark red
+ */
+function earthquakeColor(mag: number): string {
+  if (mag < 5) return '#eab308';
+  if (mag < 6) return '#f97316';
+  if (mag < 7) return '#ef4444';
+  return '#991b1b';
+}
+
+function earthquakePointRadius(mag: number): number {
+  return 0.3 + (mag - 4) * 0.3;
+}
+
+function earthquakePointAltitude(mag: number): number {
+  return Math.pow(10, (mag - 4) / 2) * 0.02;
+}
+
 // ─── TrustTag color reference ─────────────────────────────────────────────────
 
 const TRUST_TAG_COLORS: Record<TrustTag, string> = {
@@ -820,6 +867,8 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
     useApi<CoralResponse>('/earth-now/coral');
   const { data: slaData, loading: slaLoading } =
     useApi<SlaResponse>('/earth-now/sea-level-anomaly');
+  const { data: earthquakeData, loading: earthquakeLoading } =
+    useApi<EarthquakeResponse>('/hazards/earthquakes?min_magnitude=4&limit=500&days=7');
 
   // GIBS texture composite (only for gibs-* layers)
   const gibsLayerName = useMemo<string | null>(() => {
@@ -878,10 +927,18 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
     [activeEvent, stormsData],
   );
 
-  // pointsData merges fires + storms (both are event overlays, at most one active)
-  const pointsData = useMemo<(FireHotspot | Storm)[]>(
-    () => [...firePoints, ...stormPoints],
-    [firePoints, stormPoints],
+  const earthquakePoints = useMemo<Earthquake[]>(
+    () =>
+      activeEvent === 'earthquakes' && earthquakeData?.earthquakes
+        ? earthquakeData.earthquakes
+        : [],
+    [activeEvent, earthquakeData],
+  );
+
+  // pointsData merges fires + storms + earthquakes (all event overlays, at most one active)
+  const pointsData = useMemo<(FireHotspot | Storm | Earthquake)[]>(
+    () => [...firePoints, ...stormPoints, ...earthquakePoints],
+    [firePoints, stormPoints, earthquakePoints],
   );
 
   const sstPoints = useMemo<SstPoint[]>(
@@ -967,7 +1024,8 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
       coralLoading ||
       slaLoading ||
       (activeContinuous === 'ocean-heat' && sstLoading) ||
-      (activeEvent === 'monitors' && airLoading);
+      (activeEvent === 'monitors' && airLoading) ||
+      (activeEvent === 'earthquakes' && earthquakeLoading);
     if (loading) return 'Loading…';
 
     if (firesData && !firesData.configured && activeEvent === 'fires') {
@@ -995,6 +1053,7 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
     stormsLoading,
     coralLoading,
     slaLoading,
+    earthquakeLoading,
     activeContinuous,
     activeEvent,
     firesData,
@@ -1052,16 +1111,19 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
 
   function pointColor(d: object): string {
     if (activeEvent === 'storms') return stormColor((d as Storm).wind_kt);
+    if (activeEvent === 'earthquakes') return earthquakeColor((d as Earthquake).magnitude);
     return '#ff3d00';
   }
 
   function pointAltitude(d: object): number {
     if (activeEvent === 'storms') return 0.01;
+    if (activeEvent === 'earthquakes') return earthquakePointAltitude((d as Earthquake).magnitude);
     return firePointAltitude(d as FireHotspot);
   }
 
   function pointRadius(d: object): number {
     if (activeEvent === 'storms') return 0.4;
+    if (activeEvent === 'earthquakes') return earthquakePointRadius((d as Earthquake).magnitude);
     return firePointRadius(d as FireHotspot);
   }
 
@@ -1076,6 +1138,19 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
           <div>${s.iso_time} UTC</div>
           <div>Wind: ${s.wind_kt} kt · Pressure: ${s.pres_hpa} hPa · SSHS: ${s.sshs}</div>
           <div>${s.lat.toFixed(2)}°, ${s.lon.toFixed(2)}°</div>
+        </div>
+      `;
+    }
+    if (activeEvent === 'earthquakes') {
+      const e = d as Earthquake;
+      return `
+        <div style="background:#0b1120;color:#f1f5f9;padding:6px 8px;
+             border:1px solid #475569;border-radius:4px;font-size:11px;
+             font-family:system-ui,sans-serif;max-width:260px;">
+          <div><b>M${e.magnitude.toFixed(1)}</b> — ${e.place}</div>
+          <div>Depth: ${e.depth_km.toFixed(1)} km</div>
+          <div>${e.time_utc} UTC</div>${e.tsunami ? '\n          <div style="color:#ef4444;font-weight:600;">⚠ Tsunami flag</div>' : ''}
+          <div style="color:#94a3b8;">${e.lat.toFixed(2)}°, ${e.lon.toFixed(2)}°</div>
         </div>
       `;
     }
@@ -1126,12 +1201,16 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
         pointLat={(d: object) =>
           activeEvent === 'storms'
             ? (d as Storm).lat
-            : (d as FireHotspot).lat
+            : activeEvent === 'earthquakes'
+              ? (d as Earthquake).lat
+              : (d as FireHotspot).lat
         }
         pointLng={(d: object) =>
           activeEvent === 'storms'
             ? (d as Storm).lon
-            : (d as FireHotspot).lon
+            : activeEvent === 'earthquakes'
+              ? (d as Earthquake).lon
+              : (d as FireHotspot).lon
         }
         pointColor={pointColor}
         pointAltitude={pointAltitude}

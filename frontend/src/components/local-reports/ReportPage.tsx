@@ -251,6 +251,45 @@ interface DrinkingWaterBlock extends BlockBase {
   } | null;
 }
 
+// ── Phase E.4: Active Alerts + PFAS block shapes ──────────────────────────
+
+interface WeatherAlertItem {
+  event: string;
+  severity: string;
+  certainty: string;
+  urgency: string;
+  headline: string;
+  area_desc: string;
+  onset: string;
+  expires: string;
+  sender: string;
+}
+
+interface ActiveAlertsBlock extends BlockBase {
+  values: {
+    alert_count: number;
+    alerts: WeatherAlertItem[];
+  } | null;
+}
+
+interface PfasDetection {
+  system_name: string;
+  system_id: string;
+  contaminant: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+interface PfasBlock extends BlockBase {
+  values: {
+    monitored_systems: number;
+    unique_contaminants: number;
+    most_frequent_contaminant: string | null;
+    total_samples: number;
+    top_detections: PfasDetection[];
+  } | null;
+}
+
 interface MethodologySource {
   block: string;
   source: string;
@@ -276,6 +315,8 @@ interface ReportResponse {
     climate_locally: ClimateBlock;
     facilities: FacilitiesBlock;
     toxic_releases: ToxicReleasesBlock;
+    active_alerts: ActiveAlertsBlock;
+    pfas_monitoring: PfasBlock;
     site_cleanup: SiteCleanupBlock;
     facility_ghg: FacilityGhgBlock;
     drinking_water: DrinkingWaterBlock;
@@ -349,6 +390,9 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
       {/* Block 2 — Climate Change Locally */}
       <Block2Climate block={blocks.climate_locally} />
 
+      {/* Block 13 — Active Weather Alerts (NWS) */}
+      <Block13ActiveAlerts block={blocks.active_alerts} />
+
       {/* Block 3 — Regulated Facilities & Compliance */}
       <Block3Facilities block={blocks.facilities} />
 
@@ -357,6 +401,9 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
 
       {/* Block 7 — Toxic Releases (EPA TRI) */}
       <Block7ToxicReleases block={blocks.toxic_releases} />
+
+      {/* Block 11 — PFAS Monitoring */}
+      <Block11Pfas block={blocks.pfas_monitoring} />
 
       {/* AdSense slot #3 */}
       <AdSlot id="ad-3" />
@@ -375,6 +422,9 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
 
       {/* Block 4 — Water Snapshot */}
       <Block4Water block={blocks.water} />
+
+      {/* AdSense slot #5 */}
+      <AdSlot id="ad-5" />
 
       {/* Block 5 — Methodology */}
       <Block5Methodology block={blocks.methodology} />
@@ -960,6 +1010,128 @@ function DrinkingWaterBody({
         </table>
       )}
     </>
+  );
+}
+
+// ── Block 11: PFAS Monitoring ──────────────────────────────────────────────
+
+function Block11Pfas({ block }: { block: PfasBlock }) {
+  if (block.status !== 'ok' || !block.values) {
+    return (
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>PFAS Monitoring</h2>
+        <BlockNonOk block={block} />
+      </section>
+    );
+  }
+  const v = block.values;
+  return (
+    <section style={sectionStyle}>
+      <MetaLine
+        cadence={block.cadence ?? 'Quarterly'}
+        tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+        source={block.source ?? 'EPA PFAS Analytic Tools'}
+        sourceUrl={block.source_url}
+      />
+      <h2 style={h2Style}>PFAS Monitoring</h2>
+      <div style={statsGrid}>
+        <Stat label="Monitored Systems" value={String(v.monitored_systems)} />
+        <Stat label="Unique Contaminants" value={String(v.unique_contaminants)} />
+        <Stat label="Most Frequent" value={v.most_frequent_contaminant ?? '\u2014'} />
+        <Stat label="Total Samples" value={String(v.total_samples)} />
+      </div>
+      {v.top_detections.length > 0 && (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>System</th>
+              <th style={thStyle}>Contaminant</th>
+              <th style={thStyle}>City</th>
+              <th style={thStyle}>State</th>
+            </tr>
+          </thead>
+          <tbody>
+            {v.top_detections.map((d, i) => (
+              <tr key={`pfas-${i}`}>
+                <td style={tdStyle}>{d.system_name}</td>
+                <td style={tdStyle}>{d.contaminant ?? '\u2014'}</td>
+                <td style={tdStyle}>{d.city ?? '\u2014'}</td>
+                <td style={tdStyle}>{d.state ?? '\u2014'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div style={highVisDisclaimerStyle}>
+        PFAS results are screening-level monitoring data. Detection does not
+        imply a health risk at reported levels.
+      </div>
+    </section>
+  );
+}
+
+// ── Block 13: Active Weather Alerts (NWS) ─────────────────────────────────
+
+function Block13ActiveAlerts({ block }: { block: ActiveAlertsBlock }) {
+  if (block.status !== 'ok' || !block.values) {
+    return (
+      <section style={sectionStyle}>
+        <h2 style={h2Style}>Active Weather Alerts</h2>
+        <BlockNonOk block={block} />
+      </section>
+    );
+  }
+  const { alert_count, alerts } = block.values;
+
+  const severityColor = (s: string) => {
+    switch (s) {
+      case 'Extreme': return '#991b1b';
+      case 'Severe': return '#dc2626';
+      case 'Moderate': return '#f59e0b';
+      case 'Minor': return '#3b82f6';
+      default: return '#6b7280';
+    }
+  };
+
+  return (
+    <section style={sectionStyle}>
+      <MetaLine
+        cadence={block.cadence ?? 'Near-real-time'}
+        tag={(block.tag as TrustTag) ?? TrustTag.Observed}
+        source={block.source ?? 'NOAA NWS'}
+        sourceUrl={block.source_url}
+      />
+      <h2 style={h2Style}>Active Weather Alerts</h2>
+      {alert_count === 0 ? (
+        <p style={{ color: '#16a34a', fontWeight: 500 }}>
+          No active weather alerts for this area.
+        </p>
+      ) : (
+        <div>
+          {alerts.map((a, i) => (
+            <div key={`nws-${i}`} style={{
+              borderLeft: `4px solid ${severityColor(a.severity)}`,
+              padding: '8px 12px',
+              marginBottom: '8px',
+              background: '#fafafa',
+              borderRadius: '4px',
+            }}>
+              <div style={{ fontWeight: 600, color: severityColor(a.severity) }}>
+                {a.event}
+              </div>
+              <div style={{ fontSize: '13px', color: '#475569' }}>
+                {a.area_desc}
+              </div>
+              {a.expires && (
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  Expires: {a.expires}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

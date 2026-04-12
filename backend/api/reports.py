@@ -15,6 +15,12 @@ Block map (CLAUDE.md → "3층: Local Environmental Reports"):
   4. Water Snapshot               → USGS (NRT) + WQP (discrete)
   5. Methodology                  → block-level source/cadence table
   6. Related Content              → links (stub)
+  7. Toxic Releases               → EPA TRI
+  8. Site Cleanup                 → Superfund + Brownfields
+  9. Facility GHG                 → EPA GHGRP
+ 10. Drinking Water               → EPA SDWIS
+ 11. PFAS Monitoring              → EPA PFAS Analytic Tools
+ 13. Active Weather Alerts        → NOAA NWS
 
 Mandatory disclaimers from CLAUDE.md are attached to the relevant blocks.
 """
@@ -29,11 +35,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from backend.config import get_settings
+from backend.connectors.base import ConnectorResult
 from backend.connectors.airnow import AirNowConnector, worst_reading
 from backend.connectors.brownfields import BrownfieldsConnector
 from backend.connectors.climate_normals import ClimateNormalsConnector
 from backend.connectors.echo import EchoConnector
 from backend.connectors.ghgrp import GhgrpConnector
+from backend.connectors.nws_alerts import NwsAlertsConnector
+from backend.connectors.pfas import PfasConnector
 from backend.connectors.sdwis import SdwisConnector
 from backend.connectors.superfund import SuperfundConnector
 from backend.connectors.tri import TriConnector
@@ -526,6 +535,136 @@ async def _run_sdwis(
     return connector.normalize(raw)
 
 
+async def _run_nws_alerts(state: str | None = None, core_city: str | None = None) -> Any:
+    """Fetch NWS active alerts, filtered to state/city relevance.
+
+    NWS alerts are national — we fetch all and filter by area_desc
+    mentioning the state or core city name. Requires no auth.
+    """
+    connector = NwsAlertsConnector()
+    raw = await connector.fetch()
+    result = connector.normalize(raw)
+    # Filter alerts to those whose area_desc is relevant to this metro.
+    if state or core_city:
+        filtered: list[Any] = []
+        for alert in result.values:
+            area = (alert.area_desc or "").lower()
+            if state and state.lower() in area:
+                filtered.append(alert)
+            elif core_city and core_city.lower() in area:
+                filtered.append(alert)
+        result = ConnectorResult(
+            values=filtered,
+            source=result.source,
+            source_url=result.source_url,
+            cadence=result.cadence,
+            tag=result.tag,
+            spatial_scope=result.spatial_scope,
+            license=result.license,
+            notes=result.notes,
+        )
+    return result
+
+
+async def _run_pfas(bbox: dict[str, float], limit: int = 100) -> Any:
+    """Fetch PFAS monitoring sites in bbox."""
+    connector = PfasConnector()
+    raw = await connector.fetch(
+        west=bbox["west"],
+        south=bbox["south"],
+        east=bbox["east"],
+        north=bbox["north"],
+        limit=limit,
+    )
+    return connector.normalize(raw)
+
+
+def _build_active_alerts_block(result: Any) -> dict[str, Any]:
+    """Build Active Alerts block from NWS connector result."""
+    if isinstance(result, Exception):
+        return {
+            "status": "error",
+            "error": f"{type(result).__name__}: {result}",
+            "values": None,
+        }
+    alerts = result.values if hasattr(result, "values") else []
+    return {
+        "status": "ok",
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "spatial_scope": result.spatial_scope,
+        "license": result.license,
+        "values": {
+            "alert_count": len(alerts),
+            "alerts": [
+                {
+                    "event": a.event,
+                    "severity": a.severity,
+                    "certainty": a.certainty,
+                    "urgency": a.urgency,
+                    "headline": a.headline,
+                    "area_desc": a.area_desc,
+                    "onset": a.onset,
+                    "expires": a.expires,
+                    "sender": a.sender,
+                }
+                for a in alerts[:20]  # cap at 20 alerts
+            ],
+        },
+        "notes": list(result.notes),
+    }
+
+
+def _build_pfas_block(result: Any) -> dict[str, Any]:
+    """Build PFAS Monitoring block from PFAS connector result."""
+    if isinstance(result, Exception):
+        return {
+            "status": "error",
+            "error": f"{type(result).__name__}: {result}",
+            "values": None,
+        }
+    sites = result.values if hasattr(result, "values") else []
+    # Aggregate stats
+    unique_systems = len(set(s.site_id for s in sites if s.site_id))
+    contaminants = [s.contaminant for s in sites if s.contaminant]
+    unique_contaminants = list(set(contaminants))
+    from collections import Counter
+
+    most_frequent = Counter(contaminants).most_common(1)
+    most_frequent_name = most_frequent[0][0] if most_frequent else None
+    return {
+        "status": "ok",
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "spatial_scope": result.spatial_scope,
+        "license": result.license,
+        "values": {
+            "monitored_systems": unique_systems,
+            "unique_contaminants": len(unique_contaminants),
+            "most_frequent_contaminant": most_frequent_name,
+            "total_samples": len(sites),
+            "top_detections": [
+                {
+                    "system_name": s.name,
+                    "system_id": s.site_id,
+                    "contaminant": s.contaminant,
+                    "city": s.city,
+                    "state": s.state,
+                }
+                for s in sites[:10]
+            ],
+        },
+        "notes": list(result.notes) + [
+            "PFAS results are screening-level monitoring data. "
+            "Detection does not imply a health risk at reported levels."
+        ],
+    }
+
+
 def _key_signals(
     air: dict[str, Any],
     echo: dict[str, Any],
@@ -781,6 +920,10 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         else asyncio.sleep(0, result=None)
     )
 
+    # NWS alerts always run (no auth needed); PFAS uses bbox.
+    nws_alerts_task = _run_nws_alerts(state=state, core_city=core_city)
+    pfas_task = _run_pfas(bbox=bbox)
+
     (
         airnow_res,
         echo_res,
@@ -792,6 +935,8 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         superfund_res,
         brownfields_res,
         sdwis_res,
+        nws_alerts_res,
+        pfas_res,
     ) = await asyncio.gather(
         airnow_task,
         echo_task,
@@ -803,6 +948,8 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         superfund_task,
         brownfields_task,
         sdwis_task,
+        nws_alerts_task,
+        pfas_task,
         return_exceptions=True,
     )
 
@@ -913,6 +1060,10 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
     else:
         drinking_water_block = _build_drinking_water_block(sdwis_res)
 
+    # NWS Active Alerts and PFAS Monitoring blocks.
+    active_alerts_block = _build_active_alerts_block(nws_alerts_res)
+    pfas_block = _build_pfas_block(pfas_res)
+
     meta = {
         "cbsa_code": cbsa["cbsa_code"],
         "slug": cbsa["slug"],
@@ -938,6 +1089,8 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
         ("Site cleanup (Superfund + Brownfields)", site_cleanup_block),
         ("Facility GHG (GHGRP)", facility_ghg_block),
         ("Drinking water (SDWIS)", drinking_water_block),
+        ("Active alerts (NWS)", active_alerts_block),
+        ("PFAS monitoring", pfas_block),
         ("Streamflow (NRT)", usgs_block),
         ("Water quality (discrete)", wqp_block),
     ]:
@@ -998,6 +1151,8 @@ async def get_report(cbsa_slug: str) -> dict[str, Any]:
             "toxic_releases": toxic_releases_block,
             "site_cleanup": site_cleanup_block,
             "facility_ghg": facility_ghg_block,
+            "active_alerts": active_alerts_block,
+            "pfas_monitoring": pfas_block,
             "drinking_water": drinking_water_block,
             "water": water_block,
             "methodology": {

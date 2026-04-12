@@ -16,7 +16,7 @@ interface TrendPoint {
 }
 
 interface TrendIndicator {
-  id: 'co2' | 'temp' | 'sea-ice' | 'ch4' | 'sea-level';
+  id: 'co2' | 'temp' | 'sea-ice' | 'ch4' | 'sea-level' | 'drought';
   label: string;
   unit: string;
   source: string;
@@ -34,7 +34,7 @@ interface TrendsResponse {
   indicators: TrendIndicator[];
 }
 
-const ORDER: Array<TrendIndicator['id']> = ['co2', 'temp', 'sea-ice', 'ch4', 'sea-level'];
+const ORDER: Array<TrendIndicator['id']> = ['co2', 'temp', 'sea-ice', 'ch4', 'sea-level', 'drought'];
 
 export default function TrendsStrip() {
   const { data, loading, error } = useApi<TrendsResponse>('/trends');
@@ -115,6 +115,7 @@ function formatValue(value: number, id: TrendIndicator['id']): string {
     return `${sign}${value.toFixed(1)}`;
   }
   if (id === 'ch4') return value.toFixed(1);
+  if (id === 'drought') return value.toFixed(1);
   return value.toFixed(2);
 }
 
@@ -225,6 +226,14 @@ const STATIC_META: Record<
     source: 'NOAA NESDIS GMSL',
     sourceUrl: 'https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/',
     sparkColor: '#2563eb',
+  },
+  drought: {
+    title: 'US Drought',
+    cadence: 'Weekly (Thursday)',
+    tag: TrustTag.Observed,
+    source: 'US Drought Monitor',
+    sourceUrl: 'https://droughtmonitor.unl.edu/',
+    sparkColor: '#92400e',
   },
 };
 

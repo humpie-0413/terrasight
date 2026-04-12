@@ -6,7 +6,7 @@ export interface TrendPoint {
 }
 
 export interface ClimateTrendCard {
-  id: 'co2' | 'temp' | 'sea-ice';
+  id: 'co2' | 'temp' | 'sea-ice' | 'drought';
   title: string;
   unit: string;
   latest: TrendPoint;

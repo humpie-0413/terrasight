@@ -1,8 +1,8 @@
-"""Climate Trends API — CO₂ / Global Temp / Sea Ice / CH₄ / Sea Level Rise.
+"""Climate Trends API — CO₂ / Global Temp / Sea Ice / CH₄ / Sea Level Rise / US Drought.
 
-Five slow-moving signals surfaced by the home page Climate Trends strip.
+Six slow-moving signals surfaced by the home page Climate Trends strip.
 The strip issues a single request to `GET /api/trends` which fans out to
-all five connectors in parallel; individual endpoints remain available
+all six connectors in parallel; individual endpoints remain available
 for debugging and for deep-link contexts.
 """
 from __future__ import annotations
@@ -17,6 +17,7 @@ from backend.connectors.noaa_gml import NoaaGmlConnector
 from backend.connectors.noaa_gml_ch4 import NoaaGmlCh4Connector
 from backend.connectors.noaa_sea_level import NoaaSeaLevelConnector
 from backend.connectors.nsidc import NsidcConnector, five_day_mean, monthly_means
+from backend.connectors.usdm import UsdmConnector
 
 router = APIRouter()
 
@@ -161,11 +162,46 @@ async def _sea_level_payload() -> dict[str, Any]:
     }
 
 
+async def _drought_payload() -> dict[str, Any]:
+    connector = UsdmConnector()
+    result = await connector.run(weeks=52)
+    points = result.values
+    if not points:
+        raise HTTPException(status_code=502, detail="USDM returned no data")
+
+    # Sort by map_date ascending to ensure chronological order.
+    points.sort(key=lambda s: s.map_date)
+
+    # Moderate drought or worse = D1 + D2 + D3 + D4 area percent.
+    series = []
+    for p in points:
+        val = round(p.d1_pct + p.d2_pct + p.d3_pct + p.d4_pct, 2)
+        # map_date arrives as ISO datetime e.g. "2023-06-27T00:00:00";
+        # extract just the date portion.
+        date_str = p.map_date[:10] if len(p.map_date) >= 10 else p.map_date
+        series.append({"date": date_str, "value": val})
+
+    latest_entry = series[-1]
+    return {
+        "id": "drought",
+        "label": "US Drought",
+        "unit": "% area ≥D1",
+        "source": result.source,
+        "source_url": result.source_url,
+        "cadence": result.cadence,
+        "tag": result.tag,
+        "record_start": "2000",
+        "latest": {"date": latest_entry["date"], "value": latest_entry["value"]},
+        "series": series,
+        "notes": ["D1+D2+D3+D4 area percent = moderate drought or worse."],
+    }
+
+
 @router.get("")
 async def get_trends() -> dict[str, Any]:
     """Fan-out endpoint for the Climate Trends home-page strip.
 
-    Runs all five connectors in parallel. A failure in any single
+    Runs all six connectors in parallel. A failure in any single
     indicator is reported as `error` on its entry without blocking the
     others — the UI can render partial strips.
     """
@@ -175,10 +211,11 @@ async def get_trends() -> dict[str, Any]:
         _sea_ice_payload(),
         _ch4_payload(),
         _sea_level_payload(),
+        _drought_payload(),
         return_exceptions=True,
     )
     indicators: list[dict[str, Any]] = []
-    ids = ("co2", "temp", "sea-ice", "ch4", "sea-level")
+    ids = ("co2", "temp", "sea-ice", "ch4", "sea-level", "drought")
     for indicator_id, outcome in zip(ids, results):
         if isinstance(outcome, Exception):
             indicators.append({"id": indicator_id, "error": str(outcome)})
@@ -247,6 +284,17 @@ async def get_sea_level() -> dict[str, Any]:
         raise
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Failed to fetch sea level series: {exc}") from exc
+
+
+@router.get("/drought")
+async def get_drought() -> dict[str, Any]:
+    """US Drought Monitor — weekly CONUS drought severity, since 2000."""
+    try:
+        return await _drought_payload()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch drought series: {exc}") from exc
 
 
 # ─── Born-in helpers ──────────────────────────────────────────────────────────
