@@ -118,6 +118,16 @@ Run these in order.
 | Superfund FeatureServer returns polygons, not points | `connectors/superfund.py` | Compute centroid via simple vertex averaging; skip shapely |
 | ArcGIS bbox query needs `inSR=4326` explicitly | `connectors/superfund.py`, `brownfields.py` | Omitting defaults to Web Mercator → empty for WGS84 envelopes |
 | Brownfields `cleanup_status` not on spatial layer | `connectors/brownfields.py` | `EMEF/efpoints/MapServer/5` only has identification fields; cleanup status needs ACRES second-hop join |
+| GFW world bbox → 504 timeout | `connectors/global_forest_watch.py` | Use regional bbox (CONUS) instead of world-spanning geometry |
+| GFW v1.13 → 401 "restricted dataset or version" | `connectors/global_forest_watch.py` | Pin to v1.11; test before bumping version |
+| GFW `Origin` header mandatory for key validation | `connectors/global_forest_watch.py` | Must send `Origin: https://terrasight.pages.dev` matching registered domain |
+| GFW query requires `geometry` field (since ~2026-04) | `connectors/global_forest_watch.py` | Without geometry → 422 "Raster tile set queries require a geometry" |
+| CRW ERDDAP code/docstring URL mismatch | `connectors/coral_reef_watch.py` | Docstring says `coastwatch.pfeg.noaa.gov` but code hits `pae-paha.pacioos.hawaii.edu` → HTTP 500; investigate and fix |
+| NESDIS `star.nesdis.noaa.gov` intermittent TCP refusal | `connectors/noaa_sea_level.py` | Connector handles gracefully but `/api/trends/sea-level` returns 502 during outages |
+| RCRA BR_REPORTING state-only query → HTTP 500 on large states (TX, CA) | `connectors/rcra.py` | Always include `/report_cycle/{year}` filter (default 2023) — server-side timeout otherwise |
+| RCRA BR_REPORTING has no lat/lon columns | `connectors/rcra.py` | Coordinates always None; geocoding via second table deferred |
+| RCRA BR_REPORTING rows = per-waste-stream, not per-facility | `connectors/rcra.py` | Single `handler_id` can have many rows; aggregation is caller's responsibility |
+| RCRA `report_cycle` not `year` | `connectors/rcra.py` | Biennial year column is `report_cycle`, not `year`; filter URL uses `/report_cycle/{N}` |
 
 Any new landmine discovered during implementation must be added
 **to this table and to the relevant connector docstring** before the

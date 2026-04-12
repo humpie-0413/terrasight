@@ -243,16 +243,17 @@
           "api_endpoint": "/api/releases/tri?state=TX&limit=100"
         },
         {
-          "id": "rcrainfo",
-          "name": "EPA RCRAInfo — Hazardous Waste Tracking",
+          "id": "rcra",
+          "name": "EPA RCRA Biennial Report — Hazardous Waste Generators",
           "source": "US EPA",
-          "url": "https://rcrainfo.epa.gov/",
-          "update_frequency": "Varies (biennial report)",
+          "url": "https://www.epa.gov/hwgenerators",
+          "update_frequency": "Biennial (every 2 years)",
           "trust_tag": "observed",
-          "description": "Generator, transporter, and treatment/storage/disposal facility data under RCRA. Tracks waste quantities, compliance status, and permit information.",
-          "spatial_coverage": "U.S. RCRA-regulated facilities",
+          "description": "Large-quantity hazardous waste generators reporting under RCRA. Self-reported biennial data on waste volumes, types, and management methods.",
+          "spatial_coverage": "U.S. facilities",
           "license": "Public domain (US EPA)",
-          "status": "planned"
+          "status": "live",
+          "api_endpoint": "/api/releases/rcra?state=TX&limit=100"
         }
       ]
     },

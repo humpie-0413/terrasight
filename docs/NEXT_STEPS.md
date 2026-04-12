@@ -346,23 +346,47 @@ don't re-waste cycles researching them.
 
 Ordered by funnel-impact × effort × risk.
 
-#### P0 — "Close the critical gaps" (recommended next sprint)
+#### P0 — "Close the critical gaps" ✅ DONE (Phase D.1 + Phase E)
 
-These five connectors together fill the Waste (Cat 6), Soil/Land (Cat 5),
-Drinking Water (Cat 2) and Facility Emissions (Cat 7) holes:
+All five shipped. Plus RCRA (Phase F.0). TRI · GHGRP · Superfund ·
+Brownfields · SDWIS live with 10-block Local Reports and 6 ranking
+pages. See `progress.md` for the full post-E status.
 
-| # | Connector | Category closed | Effort | Adds to |
-|---|-----------|-----------------|--------|---------|
-| 1 | `epa_tri.py` | Waste & Materials | trivial-moderate | LR Waste block · Atlas · Globe points |
-| 2 | `epa_sems.py` (Superfund) | Soil / Land | trivial (ArcGIS) | LR Soil block · Atlas · optional Globe |
-| 3 | `epa_acres.py` (Brownfields) | Soil / Land | trivial (ArcGIS) | LR Soil block · Atlas |
-| 4 | `epa_sdwis.py` (Drinking Water) | Water | moderate (PWSID crosswalk) | LR Water block · Atlas |
-| 5 | `epa_ghgrp.py` (FLIGHT) | Emissions / Energy | moderate | LR Emissions block · Atlas · optional Globe |
+| # | Connector | Status |
+|---|-----------|--------|
+| 1 | `tri.py` | ✅ live |
+| 2 | `superfund.py` | ✅ live |
+| 3 | `brownfields.py` | ✅ live |
+| 4 | `sdwis.py` | ✅ live |
+| 5 | `ghgrp.py` | ✅ live |
+| 6 | `rcra.py` (added F.0) | ✅ live |
 
-All five are EPA Envirofacts/ArcGIS, no auth, documented and verified
-live as of 2026-04-12. This is the highest-leverage batch of work
-available. It also adds 5 new blocks' worth of content to every Local
-Report → roughly triples the per-page data weight → meaningful SEO lift.
+#### NEW P0 — Verified candidates from 2026-04-12 audit
+
+All probe-verified with live HTTP 200 responses. These fill the
+highest-impact gaps remaining after Phase D.1 + E.
+
+| # | Connector | Source | Fills gap | Effort | Slot |
+|---|-----------|--------|-----------|--------|------|
+| A | `usgs_earthquake.py` | USGS FDSNWS ComCat | Cat 8 Hazards — **zero seismic coverage** | trivial | Globe event layer + LR Hazards block + Atlas |
+| B | `noaa_coops.py` | NOAA CO-OPS Tides & Currents | Cat 4 Coast — **zero in-situ coastal obs** | trivial | LR Coast block + Globe + Atlas |
+| C | `nws_alerts.py` | NWS api.weather.gov | Cat 8 Hazards — **new Trends card** + Globe event polygons | trivial→mod | Trends card + LR Hazards + Globe |
+| D | `epa_pfas.py` | EPA PFAS Analytic Tools (ArcGIS FS) | Cat 1/2/5/6/7 **cross-cutting — zero PFAS** | moderate | LR Water+Waste + Atlas + Globe |
+| E | `usdm.py` | US Drought Monitor (UNL) | Cat 3/8 — **new Trends card** "% CONUS in drought" + replaces blocked JRC | trivial | Trends card + LR Hydrology + Globe + Atlas |
+| F | `fema_disasters.py` | OpenFEMA Disaster Declarations | Cat 8 — historical disaster timeline | trivial | LR Hazards + Atlas + Rankings |
+
+**API details:**
+- **USGS Earthquake:** `earthquake.usgs.gov/fdsnws/event/1/query?format=geojson` — no auth, real-time, GeoJSON
+- **NOAA CO-OPS:** `api.tidesandcurrents.noaa.gov/api/prod/datagetter` — no auth, 6-min cadence, ~200 US stations
+- **NWS Alerts:** `api.weather.gov/alerts/active` — no auth, requires `User-Agent` header, real-time GeoJSON-LD
+- **EPA PFAS:** ArcGIS FeatureServer `services.arcgis.com/cJ9YHowT8TU7DUyn/.../PFAS_Analytic_Tools_Layers/FeatureServer/` — no auth, quarterly, ~8 layers (UCMR5 drinking water, TRI PFAS, Superfund PFAS, DoD sites)
+- **US Drought Monitor:** `usdmdataservices.unl.edu/api/{Scope}Statistics/GetDroughtSeverityStatisticsByAreaPercent` — no auth, weekly (Thursday), CSV/JSON
+- **OpenFEMA:** `fema.gov/api/open/v2/DisasterDeclarationsSummaries` — no auth, OData, continuous
+
+**⚠️ NREL host migration landmine (2026-04-30 deadline):**
+`developer.nrel.gov` → `developer.nlr.gov`. Affects planned `eia_power.py`
+(NSRDB solar), any AFDC (EV charging) connector, and any existing docs
+referencing the old host. **Pin to new host in all new code.**
 
 #### P1 — "Breadth and trends" (following sprint)
 
@@ -374,15 +398,22 @@ Report → roughly triples the per-page data weight → meaningful SEO lift.
 | 9 | `usgs_gw.py` (extension) | LR Hydrology block groundwater; Atlas | Small effort, big coverage win |
 | 10 | `gbif.py` | Globe biodiversity layer + Atlas | First-ever biodiversity signal |
 | 11 | `gibs_viirs_dnb.py` (layer add) | Globe "Night Lights" layer | Trivial; visual novelty |
+| 12 | `nrcs_sda.py` | USDA NRCS Soil Data Access (SSURGO) — soil properties per CBSA | Cat 5 actual soil data |
+| 13 | `nlcd.py` | MRLC NLCD Geoserver WMS — US land cover classes | Globe layer + Cat 5 |
+| 14 | `nrel_solar.py` | NREL NSRDB — solar resource potential | Cat 7 Energy; pairs with EIA | ⚠️ use `developer.nlr.gov` |
+| 15 | `nrel_afdc.py` | NREL AFDC — EV charging stations | Cat 7 Energy; SEO "EV chargers in Houston" | ⚠️ use `developer.nlr.gov` |
+| 16 | `cdc_epht.py` | CDC EPHT Tracking Network — heat ED visits, PFAS, lead | Cat 8 exposure bridge |
 
 #### P2 — "Research-grade and specialty"
 
 | # | Connector | Why P2 |
 |---|-----------|--------|
-| 12 | `nrc_reactors.py` | Niche audience; text parser |
-| 13 | `epa_ust.py` (UST Finder) | Snapshot data, not live |
-| 14 | `airtoxscreen_bulk.py` | No API; heavy bulk pipeline; 4-year lag |
-| 15 | `ejscreen_pedp.py` | EPA-discontinued; politically sensitive |
+| 17 | `nrc_reactors.py` | Niche audience; text parser |
+| 18 | `epa_ust.py` (UST Finder) | Snapshot data, not live |
+| 19 | `airtoxscreen_bulk.py` | No API; heavy bulk pipeline; 4-year lag |
+| 20 | `ejscreen_pedp.py` | EPA-discontinued; politically sensitive |
+| 21 | `inaturalist.py` | Overlaps GBIF; only for real-time biodiversity pings |
+| 22 | `noaa_swpc.py` | Space weather — off-core |
 
 ---
 
@@ -403,14 +434,20 @@ Before merging any Phase D connector, verify it meets TerraSight's
 
 ---
 
-## Phase E — Monetization + Growth
+## Phase E — ✅ DONE (2026-04-12)
 
-These are not gated on Phase D but benefit from it.
+- ✅ 4 new Local Report blocks (6 → 10): TRI, Site Cleanup, GHGRP, SDWIS
+- ✅ 4 new SEO ranking pages (2 → 6)
+- ✅ Ranking.tsx refactored to generic via `:rankingSlug`
+- ✅ Home quick links expanded (6 → 10)
+- ✅ Atlas `api_endpoint` field added to 5 datasets
+- ✅ Bundle code splitting: LocalReport lazy route (main chunk 598 KB gzipped)
 
-- **AdSense application** — content now sufficient (50 Local Reports + 6 SEO pages + 4 guides + 2 rankings + expanded Atlas). Phase D P0 lift would push this from "approvable" to "strong".
-- **Custom domain** — Cloudflare Pages + Render both sides. Priced at domain registrar cost only.
-- **Additional SEO content** — `/rankings/top-tri-releasers`, `/rankings/superfund-sites-by-state`, `/guides/understanding-tri-reports`, `/guides/reading-ghgrp-data` — natural follow-ons to D.1.1–5.
-- **Bundle code splitting** — 599 KB gzipped is directly at the 600 KB guardrail. Dynamic imports for `react-globe.gl` would free ~120 KB. Needed before any new large dependency lands.
+## Phase F — Monetization + Growth (next)
+
+- **AdSense application** — 50 metros × 10 blocks = 500 data surfaces, 6 rankings + 4 guides + Atlas 8 categories × 17 datasets → content requirement exceeded. Apply now.
+- **Custom domain** — Cloudflare Pages + Render both sides.
+- **SEO guides** — `/guides/understanding-tri-reports`, `/guides/reading-ghgrp-data`, `/guides/superfund-basics`, `/guides/sdwis-violations-explained`
 - **Story Panel preset expansion** — current count is 1; target 5–10.
 
 ## Blocker Cleanup
@@ -420,11 +457,11 @@ closed out rather than left in limbo:
 
 | Blocker | Closeout plan |
 |---------|---------------|
-| **CMEMS SLA** (`cmems.py`) | Add `copernicusmarine` to `requirements.txt` (pinned), rewrite `fetch()` using `copernicusmarine.open_dataset(...).subset()`. Re-verify Keycloak credentials on Marine Data Store UI first — the stored `.env` creds currently return `invalid_grant`. Activate Globe SLA layer toggle. |
+| **CMEMS SLA** (`cmems.py`) | Credentials fixed (2026-04-12). Still needs `copernicusmarine` package in `requirements.txt` (pinned) and `fetch()` rewrite using `copernicusmarine.open_dataset(...).subset()`. Activate Globe SLA layer toggle. |
 | **CAMS smoke** | Copernicus ADS account: wait for manual approval; no code action required until approval lands. |
 | **TROPOMI CH₄** | Not on GIBS. Alternative: Copernicus GES DISC Giovanni or Sentinel-5P L3 subset via `copernicusmarine`/Earth Engine. Defer until CMEMS is resolved (same auth stack). |
-| **Deforestation Globe layer** | GFW API is POST-only and requires polygon queries. Implement a geohash-tile precomputation path — probably after Phase D P0. |
-| **Drought Globe layer** | JRC WMS returns pre-rendered images only. Would need a rasterio/numpy pipeline. Defer to P2. |
+| **GFW Deforestation Globe** | GFW key re-issued (2026-04-12). Connector fixed: Origin header + geometry mandatory + pinned v1.11. Returns CONUS loss data (24 years). Globe layer still needs tile precomputation. |
+| **Drought Globe layer** | JRC WMS is global only. **US Drought Monitor (USDM)** is now a verified NEW P0 candidate — weekly, free, CSV API, replaces JRC for US coverage. See D.3 NEW P0 table. |
 | **EPA AQS** (10 req/min) | Low priority — AirNow already covers real-time; AQS is historical. Add as Atlas-only reference. |
 | **Render cold start** | UptimeRobot free ping every 5 min is the $0 fix; alternatively $7/month Render paid tier. |
 

@@ -36,12 +36,21 @@ from __future__ import annotations
 
 import csv
 import io
+import os
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from backend.connectors.base import BaseConnector, ConnectorResult
+
+# File cache: store last successful CSV so intermittent NESDIS outages
+# don't break the /api/trends/sea-level endpoint for hours.
+_CACHE_DIR = Path(os.environ.get("TERRASIGHT_CACHE_DIR", "/tmp/terrasight_cache"))
+_CACHE_FILE = _CACHE_DIR / "noaa_sea_level.csv"
+_CACHE_TTL_SECONDS = 24 * 3600  # re-fetch after 24 hours
 
 GMSL_URL = (
     "https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/slr/"
@@ -83,32 +92,63 @@ class NoaaSeaLevelConnector(BaseConnector):
     cadence = "~10-day (altimeter repeat cycle)"
     tag = "observed"
 
+    def _read_cache(self) -> str | None:
+        """Return cached CSV text if fresh enough, else None."""
+        try:
+            if _CACHE_FILE.exists():
+                age = time.time() - _CACHE_FILE.stat().st_mtime
+                if age < _CACHE_TTL_SECONDS:
+                    return _CACHE_FILE.read_text(encoding="utf-8")
+        except OSError:
+            pass
+        return None
+
+    def _write_cache(self, text: str) -> None:
+        """Write CSV text to cache file (best-effort)."""
+        try:
+            _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            _CACHE_FILE.write_text(text, encoding="utf-8")
+        except OSError:
+            pass
+
     async def fetch(self, **params: Any) -> str | dict:
         """Download the global mean sea level CSV from NOAA NESDIS.
+
+        Retries up to 3 times on connection failure. Falls back to a 24-hour
+        file cache if all retries fail (NESDIS intermittently refuses TCP).
 
         Returns the raw text on success, or a dict with status='error' on failure.
         """
         timeout = httpx.Timeout(45.0, connect=15.0)
-        try:
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.get(GMSL_URL)
-                response.raise_for_status()
-                return response.text
-        except (httpx.ConnectError, httpx.TimeoutException) as exc:
-            return {
-                "status": "error",
-                "message": (
-                    f"NESDIS server connection failed: {exc}. "
-                    "The star.nesdis.noaa.gov host occasionally refuses connections. "
-                    "Retry later or check https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/ "
-                    "for service status."
-                ),
-            }
-        except httpx.HTTPStatusError as exc:
-            return {
-                "status": "error",
-                "message": f"HTTP {exc.response.status_code} from NESDIS sea level endpoint.",
-            }
+        last_error: str = ""
+
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                    response = await client.get(GMSL_URL)
+                    response.raise_for_status()
+                    self._write_cache(response.text)
+                    return response.text
+            except (httpx.ConnectError, httpx.TimeoutException) as exc:
+                last_error = f"NESDIS connection attempt {attempt + 1}/3 failed: {exc}"
+            except httpx.HTTPStatusError as exc:
+                last_error = f"HTTP {exc.response.status_code} from NESDIS (attempt {attempt + 1}/3)"
+
+        # All retries failed — try file cache
+        cached = self._read_cache()
+        if cached:
+            return cached  # stale-but-parseable is better than nothing
+
+        return {
+            "status": "error",
+            "message": (
+                f"{last_error}. "
+                "The star.nesdis.noaa.gov host occasionally refuses connections. "
+                "No cached data available. "
+                "Retry later or check https://www.star.nesdis.noaa.gov/socd/lsa/SeaLevelRise/ "
+                "for service status."
+            ),
+        }
 
     def normalize(self, raw: Any) -> ConnectorResult:
         """Parse the NESDIS CSV into SeaLevelPoint instances.

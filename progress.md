@@ -19,9 +19,9 @@
 | 항목 | 수치 |
 |------|------|
 | Git commits | **48+** (`48f0482` Phase D.1, Phase E commit pending push) |
-| Backend connectors | **33개** (28 기존 + 5 Phase D.1, 변동 없음) |
-| API endpoints | **36개** (+4 Phase E 랭킹: tri-releases · ghg-emissions · superfund · drinking-water-violations) |
-| Atlas 라이브 데이터셋 | **16개** (+ `api_endpoint` 필드 추가) |
+| Backend connectors | **34개** (28 기존 + 5 Phase D.1 + 1 RCRA) |
+| API endpoints | **37개** (+4 Phase E 랭킹 + 1 RCRA: /api/releases/rcra) |
+| Atlas 라이브 데이터셋 | **17개** (+ RCRA Biennial Report live) |
 | Atlas 카테고리 | **8개** — Waste & Materials, Soil/Land 공백 해소 ✅ |
 | Local Reports 블록 | **10개** (6 → **10**: +Toxic Releases, Site Cleanup, Facility GHG, Drinking Water) |
 | Frontend components / pages | **~34개** |
@@ -311,6 +311,44 @@ SDWIS       HTTP 200  count=5  status=ok  (Houston 10개 ZIP 프리픽스 fan-ou
 
 ---
 
+### F.0 — 전수조사 + 커넥터 수리 + RCRA 추가 (2026-04-12) ✅
+
+27개 커넥터 전수 라이브 프로브 + 놓친 환경데이터 갭 리서치 실시.
+3개 고장 커넥터 수리 + RCRA 신규 추가 + 15개 신규 후보 발굴.
+
+**수리:**
+
+| 커넥터 | 문제 | 해결 |
+|--------|------|------|
+| `coral_reef_watch.py` | coastwatch.pfeg → PacIOOS 302 리다이렉트, 멀티변수 쿼리 문법 불일치 → 500 | PacIOOS URL 직접 사용 + per-variable dimension constraints + stride 20 |
+| `noaa_sea_level.py` | NESDIS 간헐 TCP 거부 → 502 | 3회 retry + 24h 파일 캐시 (stale-but-parseable) |
+| `global_forest_watch.py` | API 키 만료 + Origin 헤더 필수 + geometry 필수 + v1.13 restricted | 키 재발급 + Origin 헤더 + CONUS bbox + v1.11 고정 + env 자동 로딩 |
+| `cmems.py` | 비밀번호 `!@` 하나 더 붙어 있음 → invalid_grant | `.env` 수정 → 인증 복구 (데이터는 여전히 pending) |
+
+**신규 RCRA 커넥터 (`backend/connectors/rcra.py`):**
+- EPA RCRA Biennial Report (`data.epa.gov/efservice/BR_REPORTING`)
+- 대형 위험폐기물 발생 시설 (2년마다 보고)
+- `GET /api/releases/rcra?state=TX&limit=5` → HTTP 200, count=5
+- Atlas catalog에 `rcra` 라이브 추가 → 총 17개 라이브 데이터셋
+- 랜드마인 4개: state-only 쿼리 500 / lat/lon 없음 / per-waste-stream 행 / report_cycle 컬럼명
+
+**전수조사 결과:**
+- 🟢 LIVE: 24/28 (CRW·GFW 수리 후 23→24, +RCRA)
+- 🟠 DEGRADED: 1 (noaa_sea_level — 간헐적, retry+cache 추가)
+- 🔴 BROKEN: 0 (cmems 인증 복구, 데이터는 P1 pending)
+- ⏸ P1 STUB: 2 (airdata, cams)
+- 신규 P0 후보 6개: USGS Earthquake · NOAA CO-OPS · NWS Alerts · EPA PFAS · US Drought Monitor · OpenFEMA
+
+**갭 리서치 — 검증된 신규 후보 15개:**
+`docs/NEXT_STEPS.md` §D.3 "NEW P0" + P1/P2 테이블에 전체 기록.
+주요 발견:
+- **PFAS**: EPA PFAS Analytic Tools ArcGIS FeatureServer — 현재 0개 커버, 5개 카테고리 교차 (최대 SEO 잠재력)
+- **USDM**: US Drought Monitor API — JRC 드로트 차단 대체 + 신규 Climate Trends 카드
+- **NWS Alerts**: 실시간 기상 경보 → FIRMS 이후 두 번째 Globe 이벤트 레이어
+- **NREL 호스트 이전**: `developer.nrel.gov` → `developer.nlr.gov` (2026-04-30 데드라인)
+
+---
+
 ### E — Phase D.1 시각화 + Local Report 확장 (2026-04-12) ✅
 
 `docs/NEXT_STEPS.md` §E 배치 완료. D.1에서 구현한 5개 커넥터를
@@ -498,6 +536,7 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 | `GET /api/rankings/ghg-emissions` | ✅ **E** state-level GHGRP |
 | `GET /api/rankings/superfund` | ✅ **E** per-metro bbox |
 | `GET /api/rankings/drinking-water-violations` | ✅ **E** state-level SDWIS |
+| `GET /api/releases/rcra` | ✅ Envirofacts BR_REPORTING |
 
 ---
 
@@ -517,6 +556,9 @@ Sea Ice:   6.14 Mkm² →   4.75 Mkm² (-1.39 Mkm², -22.6%)
 | GFW | GET → 405 | POST-only query |
 | JRC Drought | `edo.jrc.ec.europa.eu` 이전 | `drought.emergency.copernicus.eu` |
 | IBTrACS | `LAST3YR` → 404 | `last3years` (소문자) |
+| RCRA BR_REPORTING | 대형 주(TX 등) state-only 쿼리 → HTTP 500 | 항상 `/report_cycle/{year}` 포함 (기본 2023) |
+| RCRA BR_REPORTING | lat/lon 없음 | 좌표 항상 None, geocoding 별도 필요 |
+| RCRA BR_REPORTING | 행 = waste stream (facility가 아님) | handler_id로 집계 필요 시 caller 책임 |
 
 ---
 

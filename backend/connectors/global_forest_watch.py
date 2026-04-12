@@ -28,10 +28,13 @@ Landmines:
      field, and `umd_tree_cover_loss__year` is the year dimension.
   2. The query endpoint requires POST with JSON body `{"sql": "..."}`.
      GET with `?sql=` params returns HTTP 405 for some versions.
-  3. No `iso` rollup is exposed in the public query endpoint without a
-     geometry payload — to get country-level stats you must POST a country
-     polygon (WKT or GeoJSON) as the `geometry` field alongside the SQL.
-     This connector therefore aggregates globally (no geometry filter).
+  3. **Geometry is now MANDATORY** (as of ~2026-04).  Queries without a
+     ``geometry`` payload return HTTP 422 "Raster tile set queries require
+     a geometry".  The connector posts a world-spanning bbox by default.
+  3a. **Origin header required**: API keys are validated against the
+      registered ``domains`` list.  Without an ``Origin`` header matching
+      a registered domain, the API returns 403 "No valid API Key found".
+      The connector sends ``Origin: https://terrasight.pages.dev``.
   4. `umd_tree_cover_loss__ha` is gated behind the `>=30%` canopy-cover
      threshold filter by default in the GFW dashboard. When querying via
      API without a threshold filter, numbers are summed across all densities.
@@ -44,6 +47,7 @@ Landmines:
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -59,13 +63,29 @@ _DATASET_META_URL = f"{_BASE}/dataset/umd_tree_cover_loss"
 # Query URL is constructed at runtime once the latest version is known.
 _QUERY_PATH = "/dataset/umd_tree_cover_loss/{version}/query/json"
 
-# Global aggregate: sum loss (ha) per year, no geometry filter.
+# Global aggregate: sum loss (ha) per year.
+# Geometry is mandatory since ~2026-04 — use a world bbox.
 _SQL = (
-    "SELECT umd_tree_cover_loss__year, SUM(area__ha) AS tree_cover_loss_ha "
+    "SELECT umd_tree_cover_loss__year, "
+    "SUM(umd_tree_cover_loss__ha) AS tree_cover_loss_ha "
     "FROM results "
     "GROUP BY umd_tree_cover_loss__year "
     "ORDER BY umd_tree_cover_loss__year"
 )
+
+# CONUS bbox — US-first (world bbox times out; v1.13 restricted).
+# Landmine #7: world-spanning geometry → 504 timeout; use regional bbox.
+_DEFAULT_GEOM: dict[str, Any] = {
+    "type": "Polygon",
+    "coordinates": [[[-125, 24], [-66, 24], [-66, 50], [-125, 50], [-125, 24]]],
+}
+
+# Pin to v1.11 — v1.13 returns 401 "restricted dataset or version".
+# Landmine #8: latest version may be restricted; pin and test before bumping.
+_PINNED_VERSION = "v1.11"
+
+# Registered domain for Origin header (keys validated against this).
+_ORIGIN = "https://terrasight.pages.dev"
 
 # Sentinel returned when no API key is available.
 _NOT_CONFIGURED: dict[str, Any] = {
@@ -117,14 +137,17 @@ class GlobalForestWatchConnector(BaseConnector):
     tag = "derived"
 
     def __init__(self, api_key: str | None = None) -> None:
-        self.api_key = api_key
+        self.api_key = api_key or os.environ.get("GFW_API_KEY")
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _headers(self) -> dict[str, str]:
-        h: dict[str, str] = {"Content-Type": "application/json"}
+        h: dict[str, str] = {
+            "Content-Type": "application/json",
+            "Origin": _ORIGIN,
+        }
         if self.api_key:
             h["x-api-key"] = self.api_key
         return h
@@ -166,9 +189,9 @@ class GlobalForestWatchConnector(BaseConnector):
         timeout = httpx.Timeout(60.0, connect=15.0)
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                version = await self._get_latest_version(client)
+                version = _PINNED_VERSION
                 url = _BASE + _QUERY_PATH.format(version=version)
-                payload = {"sql": _SQL}
+                payload: dict[str, Any] = {"sql": _SQL, "geometry": _DEFAULT_GEOM}
                 r = await client.post(url, headers=self._headers(), json=payload)
                 if r.status_code in (401, 403):
                     return {
@@ -219,11 +242,14 @@ class GlobalForestWatchConnector(BaseConnector):
                 notes=[f"status:{status} — {message}"] + notes_base,
             )
 
-        rows: list[dict[str, Any]] = (
-            raw.get("data", {}).get("data", [])
-            if isinstance(raw.get("data"), dict)
-            else []
-        )
+        raw_data = raw.get("data", {})
+        # GFW returns {"data": [...]} directly or {"data": {"data": [...]}}
+        if isinstance(raw_data, list):
+            rows = raw_data
+        elif isinstance(raw_data, dict):
+            rows = raw_data.get("data", [])
+        else:
+            rows = []
 
         points: list[ForestLossPoint] = []
         for row in rows:

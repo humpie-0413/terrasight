@@ -1,14 +1,17 @@
 """NOAA Coral Reef Watch (CRW) Bleaching Heat Stress connector.
 
 Source:    https://coralreefwatch.noaa.gov/
-Data API:  ERDDAP — NOAA CoastWatch PFEG
-Dataset:   NOAA_DHW  (https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW)
+Data API:  ERDDAP — PacIOOS mirror (redirect target of CoastWatch PFEG)
+Dataset:   dhw_5km  (https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km)
+           Original: NOAA_DHW on coastwatch.pfeg.noaa.gov (302-redirects to PacIOOS)
 Cadence:   daily (NRT, ~1–2 day lag)
 Tag:       near-real-time
 
 =============================================================================
-Verified 2026-04-11:
-  ✅ https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.html
+Verified 2026-04-12:
+  ✅ https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.html
+  ⚠️  https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW — 302 redirect
+      to PacIOOS; redirect mangles comma-separated variable queries
 
 No authentication required — ERDDAP is a public API.
 
@@ -47,7 +50,11 @@ Landmines / quirks:
     effective) via ERDDAP stride [1:10:1] on both lat and lon to return
     ~44k points in ~5 s; still geographically representative.
   - If the latest-day query fails (ERDDAP sometimes 404s on the last day),
-    connector retries with yesterday's date automatically.
+    connector retries going back up to 7 days.
+  - As of 2026-04, coastwatch.pfeg.noaa.gov 302-redirects to
+    pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.csv (PacIOOS mirror).
+    The PacIOOS mirror returns HTTP 500 on large payloads — stride must be
+    ≥20 to keep response size manageable (~6k cells).
 =============================================================================
 """
 from __future__ import annotations
@@ -62,7 +69,9 @@ import httpx
 
 from backend.connectors.base import BaseConnector, ConnectorResult
 
-ERDDAP_BASE = "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.csv"
+# PacIOOS mirror (coastwatch.pfeg 302-redirects here since ~2026-04).
+# Using PacIOOS directly avoids the redirect mangling comma-separated vars.
+ERDDAP_BASE = "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.csv"
 
 # Coral reef latitude band (avoids Antarctic/Arctic which have no reefs)
 LAT_MIN = -35.0
@@ -70,8 +79,10 @@ LAT_MAX = 35.0
 LON_MIN = -180.0
 LON_MAX = 180.0
 
-# Stride: every 10th grid cell = ~0.5° effective resolution
-STRIDE = 10
+# Stride: every 20th grid cell = ~1.0° effective resolution.
+# PacIOOS mirror (302 target) returns 500 on stride=10 payloads (~44k cells).
+# Stride=20 produces ~6k cells — safe for the mirror.
+STRIDE = 20
 
 
 @dataclass
@@ -86,13 +97,18 @@ class CoralStationReading:
 
 
 def _build_url(dt: date) -> str:
-    """Build an ERDDAP griddap CSV URL for the given date, coarsened by STRIDE."""
+    """Build an ERDDAP griddap CSV URL for the given date, coarsened by STRIDE.
+
+    PacIOOS ERDDAP requires per-variable dimension constraints
+    (shared-dimension shorthand ``?v1,v2[(dim)]`` does NOT work — returns
+    500 "destinationVariableName not found"). Must use
+    ``?v1[(dim)],v2[(dim)],...``.
+    """
     t = f"{dt.isoformat()}T12:00:00Z"
-    lat_q = f"[({LAT_MIN}):{STRIDE}:({LAT_MAX})]"
-    lon_q = f"[({LON_MIN}):{STRIDE}:({LON_MAX})]"
-    time_q = f"[({t}):1:({t})]"
-    variables = "CRW_BAA,CRW_DHW,CRW_SST,CRW_SSTANOMALY"
-    return f"{ERDDAP_BASE}?{variables}{time_q}{lat_q}{lon_q}"
+    dims = f"[({t})][({LAT_MIN}):{STRIDE}:({LAT_MAX})][({LON_MIN}):{STRIDE}:({LON_MAX})]"
+    variables = ["CRW_BAA", "CRW_DHW", "CRW_SST", "CRW_SSTANOMALY"]
+    var_q = ",".join(f"{v}{dims}" for v in variables)
+    return f"{ERDDAP_BASE}?{var_q}"
 
 
 class CoralReefWatchConnector(BaseConnector):
@@ -134,8 +150,9 @@ class CoralReefWatchConnector(BaseConnector):
 
         timeout = httpx.Timeout(60.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            # Try the requested date, then fall back to one day earlier if 404
-            for attempt_date in [target_date, target_date - timedelta(days=1)]:
+            # Try the requested date, then fall back up to 7 days earlier
+            dates_to_try = [target_date - timedelta(days=i) for i in range(7)]
+            for attempt_date in dates_to_try:
                 url = _build_url(attempt_date)
                 try:
                     response = await client.get(url)
