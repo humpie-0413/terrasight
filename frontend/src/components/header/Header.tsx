@@ -1,48 +1,36 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 /**
  * Site-wide header with responsive hamburger menu.
  *
  * Nav targets:
- *   Earth Now     → / (home, scrolls to #earth-now)
- *   Climate Trends → / (home, scrolls to #climate-trends)
+ *   Earth Now      → /earth-now
+ *   Climate Trends → /trends
  *   Atlas          → /atlas
- *   Local Reports  → / (home, scrolls to #local-reports)
- *   Guides         → /guides/how-to-read-aqi
- *   Rankings       → /rankings/pm25
+ *   Local Reports  → /reports
+ *   Guides         → /guides
+ *   Rankings       → /rankings
  */
 export default function Header() {
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
-
-  const scrollTo = (id: string) => {
-    setOpen(false);
-    if (window.location.pathname !== '/') {
-      navigate('/');
-      // give the page a tick to mount before scrolling
-      setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 80);
-    } else {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
 
   return (
     <header style={headerStyle}>
       <nav style={navStyle}>
         {/* Logo */}
         <Link to="/" style={logoStyle} onClick={() => setOpen(false)}>
-          EarthPulse
+          TerraSight
         </Link>
 
         {/* Desktop links */}
         <div style={desktopLinks}>
-          <button style={navBtnStyle} onClick={() => scrollTo('earth-now')}>Earth Now</button>
-          <button style={navBtnStyle} onClick={() => scrollTo('climate-trends')}>Climate Trends</button>
+          <Link to="/earth-now" style={navLinkStyle}>Earth Now</Link>
+          <Link to="/trends" style={navLinkStyle}>Climate Trends</Link>
           <Link to="/atlas" style={navLinkStyle}>Atlas</Link>
-          <button style={navBtnStyle} onClick={() => scrollTo('local-reports')}>Local Reports</button>
-          <Link to="/guides/how-to-read-aqi" style={navLinkStyle}>Guides</Link>
-          <Link to="/rankings/epa-violations" style={navLinkStyle}>Rankings</Link>
+          <Link to="/reports" style={navLinkStyle}>Local Reports</Link>
+          <Link to="/guides" style={navLinkStyle}>Guides</Link>
+          <Link to="/rankings" style={navLinkStyle}>Rankings</Link>
         </div>
 
         {/* Hamburger button (mobile only) */}
@@ -58,12 +46,12 @@ export default function Header() {
       {/* Mobile dropdown */}
       {open && (
         <div style={mobileMenuStyle}>
-          <button style={mobileLinkStyle} onClick={() => scrollTo('earth-now')}>Earth Now</button>
-          <button style={mobileLinkStyle} onClick={() => scrollTo('climate-trends')}>Climate Trends</button>
+          <Link to="/earth-now" style={mobileLinkStyle} onClick={() => setOpen(false)}>Earth Now</Link>
+          <Link to="/trends" style={mobileLinkStyle} onClick={() => setOpen(false)}>Climate Trends</Link>
           <Link to="/atlas" style={mobileLinkStyle} onClick={() => setOpen(false)}>Atlas</Link>
-          <button style={mobileLinkStyle} onClick={() => scrollTo('local-reports')}>Local Reports</button>
-          <Link to="/guides/how-to-read-aqi" style={mobileLinkStyle} onClick={() => setOpen(false)}>Guides</Link>
-          <Link to="/rankings/epa-violations" style={mobileLinkStyle} onClick={() => setOpen(false)}>Rankings</Link>
+          <Link to="/reports" style={mobileLinkStyle} onClick={() => setOpen(false)}>Local Reports</Link>
+          <Link to="/guides" style={mobileLinkStyle} onClick={() => setOpen(false)}>Guides</Link>
+          <Link to="/rankings" style={mobileLinkStyle} onClick={() => setOpen(false)}>Rankings</Link>
         </div>
       )}
     </header>
@@ -107,16 +95,6 @@ const navLinkStyle: React.CSSProperties = {
   color: '#374151',
   textDecoration: 'none',
   borderRadius: '6px',
-  fontFamily: 'system-ui, sans-serif',
-};
-const navBtnStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  fontSize: '14px',
-  color: '#374151',
-  background: 'none',
-  border: 'none',
-  borderRadius: '6px',
-  cursor: 'pointer',
   fontFamily: 'system-ui, sans-serif',
 };
 const hamburgerStyle: React.CSSProperties = {

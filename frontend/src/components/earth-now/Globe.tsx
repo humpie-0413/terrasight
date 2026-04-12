@@ -397,9 +397,9 @@ const LAYER_LOOKUP = new Map<string, LayerDef>(
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    img.crossOrigin = 'anonymous'; // MUST be set before src
     img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onerror = () => reject(new Error(`Image load failed: ${src}`));
     img.src = src;
   });
 }
@@ -430,30 +430,39 @@ function dateCandidates(): string[] {
   return candidates;
 }
 
-function useGibsTexture(gibsLayerName: string | null): string {
+function useGibsTexture(gibsLayerName: string | null): {
+  textureUrl: string;
+  loading: boolean;
+} {
   const [textureUrl, setTextureUrl] = useState<string>(BLUEMARBLE_URL);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!gibsLayerName) {
       setTextureUrl(BLUEMARBLE_URL);
+      setLoading(false);
       return;
     }
 
     let cancelled = false;
+    setLoading(true);
 
     async function buildComposite() {
       const canvas = document.createElement('canvas');
       canvas.width = 2048;
       canvas.height = 1024;
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) {
+        console.warn('[GIBS] Could not get 2D canvas context');
+        return;
+      }
 
       // Load BlueMarble base
       let baseImg: HTMLImageElement;
       try {
         baseImg = await loadImage(BLUEMARBLE_URL);
-      } catch {
-        // Can't even load base — fall back
+      } catch (err) {
+        console.warn('[GIBS] BlueMarble base load failed:', err);
         return;
       }
       if (cancelled) return;
@@ -476,29 +485,47 @@ function useGibsTexture(gibsLayerName: string | null): string {
           overlayLoaded = true;
           break;
         } catch {
-          // try next date
+          // try next date candidate
         }
       }
 
       if (cancelled) return;
 
       if (overlayLoaded) {
-        setTextureUrl(canvas.toDataURL('image/jpeg', 0.9));
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          setTextureUrl(dataUrl);
+        } catch (err) {
+          // Canvas tainted by CORS — fall back to BlueMarble
+          console.warn(
+            `[GIBS] canvas.toDataURL() failed (likely CORS). Layer: ${gibsLayerName}. Falling back to BlueMarble.`,
+            err,
+          );
+          setTextureUrl(BLUEMARBLE_URL);
+        }
+      } else {
+        console.warn(
+          `[GIBS] No overlay loaded for layer "${gibsLayerName}" — all date candidates failed. Showing BlueMarble.`,
+        );
+        setTextureUrl(BLUEMARBLE_URL);
       }
-      // If no overlay loaded, we already drew BlueMarble — but the canvas
-      // approach can cause CORS issues in toDataURL; fall back to BLUEMARBLE_URL
     }
 
-    buildComposite().catch(() => {
-      if (!cancelled) setTextureUrl(BLUEMARBLE_URL);
-    });
+    buildComposite()
+      .catch((err) => {
+        console.warn('[GIBS] buildComposite unexpected error:', err);
+        if (!cancelled) setTextureUrl(BLUEMARBLE_URL);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
   }, [gibsLayerName]);
 
-  return textureUrl;
+  return { textureUrl, loading };
 }
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -507,9 +534,21 @@ function rgb([r, g, b]: [number, number, number]): string {
   return `rgb(${r},${g},${b})`;
 }
 
+/**
+ * FRP-based fire color gradient.
+ * Low-intensity fires are light yellow; intense fires are dark red.
+ */
+function fireColor(frp: number): string {
+  if (frp >= 500) return '#7f1d1d'; // dark red — intense
+  if (frp >= 100) return '#dc2626'; // red
+  if (frp >= 50) return '#f97316'; // orange
+  if (frp >= 10) return '#eab308'; // yellow
+  return '#fde047'; // light yellow — low intensity
+}
+
 function firePointRadius(f: FireHotspot): number {
   const frp = Math.max(f.frp, 1);
-  return 0.15 + Math.log10(frp) * 0.18;
+  return 0.25 + Math.log10(frp) * 0.2;
 }
 function firePointAltitude(f: FireHotspot): number {
   const frp = Math.max(f.frp, 1);
@@ -547,14 +586,16 @@ function sstColor(c: number): string {
 
 /**
  * EPA AQI PM2.5 color bands (µg/m³).
- * 0-12 green, 12-35 yellow, 35-55 orange, 55-150 red, 150+ purple.
+ * 0-12 Good (green), 12.1-35.4 Moderate (yellow), 35.5-55.4 USG (orange),
+ * 55.5-150.4 Unhealthy (red), 150.5-250.4 Very Unhealthy (purple), 250.5+ Hazardous (maroon).
  */
 function pm25Color(pm: number): string {
-  if (pm <= 12) return '#22c55e';
-  if (pm <= 35) return '#eab308';
-  if (pm <= 55) return '#f97316';
-  if (pm <= 150) return '#dc2626';
-  return '#7e22ce';
+  if (pm <= 12) return '#00e400'; // Good (green)
+  if (pm <= 35.4) return '#ffff00'; // Moderate (yellow)
+  if (pm <= 55.4) return '#ff7e00'; // USG (orange)
+  if (pm <= 150.4) return '#ff0000'; // Unhealthy (red)
+  if (pm <= 250.4) return '#8f3f97'; // Very Unhealthy (purple)
+  return '#7e0023'; // Hazardous (maroon)
 }
 
 /**
@@ -611,6 +652,17 @@ function slaColor(sla_m: number): string {
 }
 
 /**
+ * Storm wind-speed based point radius.
+ */
+function stormPointRadius(wind_kt: number): number {
+  if (wind_kt <= 0) return 0.3;
+  if (wind_kt <= 33) return 0.3; // TD
+  if (wind_kt <= 63) return 0.5; // TS
+  if (wind_kt <= 95) return 0.7; // Cat 1-2
+  return 1.0; // Cat 3+
+}
+
+/**
  * Storm wind speed color.
  * <34→white, 34-63→yellow, 64-82→orange, 83-95→red, 96-112→magenta, >112→purple
  */
@@ -635,7 +687,7 @@ function earthquakeColor(mag: number): string {
 }
 
 function earthquakePointRadius(mag: number): number {
-  return 0.3 + (mag - 4) * 0.3;
+  return 0.3 + (mag - 4) * 0.4;
 }
 
 function earthquakePointAltitude(mag: number): number {
@@ -661,6 +713,7 @@ interface LayerPanelProps {
   slaConfigured: boolean;
   slaStatus?: string;
   airConfigured: boolean;
+  gibsLoading: boolean;
 }
 
 function LayerPanel({
@@ -670,6 +723,7 @@ function LayerPanel({
   slaConfigured,
   slaStatus,
   airConfigured,
+  gibsLoading,
 }: LayerPanelProps) {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -831,6 +885,20 @@ function LayerPanel({
                           }}
                         />
                         {layer.label}
+                        {active &&
+                          gibsLoading &&
+                          layer.key.startsWith('gibs-') && (
+                            <span
+                              style={{
+                                marginLeft: 'auto',
+                                fontSize: '10px',
+                                color: '#94a3b8',
+                                animation: 'pulse 1.5s ease-in-out infinite',
+                              }}
+                            >
+                              loading...
+                            </span>
+                          )}
                       </button>
                     );
                   })}
@@ -876,7 +944,8 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
     return GIBS_LAYER_NAMES[activeContinuous] ?? null;
   }, [activeContinuous]);
 
-  const globeImageUrl = useGibsTexture(gibsLayerName);
+  const { textureUrl: globeImageUrl, loading: gibsLoading } =
+    useGibsTexture(gibsLayerName);
 
   // Responsive sizing
   useEffect(() => {
@@ -1112,7 +1181,7 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
   function pointColor(d: object): string {
     if (activeEvent === 'storms') return stormColor((d as Storm).wind_kt);
     if (activeEvent === 'earthquakes') return earthquakeColor((d as Earthquake).magnitude);
-    return '#ff3d00';
+    return fireColor((d as FireHotspot).frp);
   }
 
   function pointAltitude(d: object): number {
@@ -1122,7 +1191,7 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
   }
 
   function pointRadius(d: object): number {
-    if (activeEvent === 'storms') return 0.4;
+    if (activeEvent === 'storms') return stormPointRadius((d as Storm).wind_kt);
     if (activeEvent === 'earthquakes') return earthquakePointRadius((d as Earthquake).magnitude);
     return firePointRadius(d as FireHotspot);
   }
@@ -1222,8 +1291,8 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
         hexBinPointLat={(d: object) => (d as SstPoint).lat}
         hexBinPointLng={(d: object) => (d as SstPoint).lon}
         hexBinPointWeight={hexWeight}
-        hexBinResolution={3}
-        hexAltitude={0.008}
+        hexBinResolution={4}
+        hexAltitude={0.01}
         hexTopColor={hexTopColorFn}
         hexSideColor={hexTopColorFn}
         hexBinMerge={false}
@@ -1286,6 +1355,7 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
         slaConfigured={slaConfigured}
         slaStatus={slaData?.status}
         airConfigured={airConfigured}
+        gibsLoading={gibsLoading}
       />
 
       {/* Status line */}

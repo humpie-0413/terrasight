@@ -1,327 +1,61 @@
-import { lazy, Suspense, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
-import TrendsStrip from '../components/climate-trends/TrendsStrip';
-import type { GlobeHandle } from '../components/earth-now/Globe';
-
-const Globe = lazy(() => import('../components/earth-now/Globe'));
-const BornIn = lazy(() => import('../components/born-in/BornIn'));
-
-type ActiveEvent = 'fires' | 'storms' | 'monitors' | null;
-type ActiveContinuous =
-  | 'ocean-heat' | 'coral' | 'cmems-sla'
-  | 'gibs-aod' | 'gibs-pm25' | 'gibs-oco2' | 'gibs-flood'
-  | null;
-import StoryPanel from '../components/earth-now/StoryPanel';
-import AtlasGrid from '../components/atlas/AtlasGrid';
-import { useApi } from '../hooks/useApi';
-
-/**
- * Home page assembly — Climate Trends strip, Earth Now hero (Globe + Story),
- * then the rest of the page.
- *
- * Globe layer state lives here (lifted out of Globe.tsx) so the Story Panel's
- * "Explore on Globe" button can command both the active layer AND the camera
- * position via a forwardRef handle on Globe.
- */
 export default function Home() {
-  const [activeEvent, setActiveEvent] = useState<ActiveEvent>('fires');
-  const [activeContinuous, setActiveContinuous] = useState<ActiveContinuous>(null);
-  const globeRef = useRef<GlobeHandle>(null);
-
-  const handleExploreOnGlobe = (
-    layerOn: string,
-    camera: { lat: number; lng: number; altitude: number },
-  ) => {
-    if (layerOn === 'firms') setActiveEvent('fires');
-    if (layerOn === 'oisst') setActiveContinuous('ocean-heat');
-    if (layerOn === 'openaq') setActiveEvent('monitors');
-    globeRef.current?.flyTo(camera.lat, camera.lng, camera.altitude);
-  };
-
   return (
     <main>
-      <div id="climate-trends">
-        <TrendsStrip />
-      </div>
-      <section
-        id="earth-now"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)',
-          gap: '16px',
-          padding: '16px 24px',
-        }}
-      >
-        <Suspense fallback={
-          <div style={{
-            width: '100%',
-            aspectRatio: '16/9',
-            background: 'linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #0d47a1 100%)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#94a3b8',
-            fontSize: '15px',
-          }}>
-            Loading Earth Now…
-          </div>
-        }>
-          <Globe
-            ref={globeRef}
-            activeEvent={activeEvent}
-            activeContinuous={activeContinuous}
-            onLayerChange={(type, key) => {
-              if (type === 'event') setActiveEvent(key as ActiveEvent);
-              else setActiveContinuous(key as ActiveContinuous);
-            }}
-          />
-        </Suspense>
-        <StoryPanel onExploreOnGlobe={handleExploreOnGlobe} />
+      {/* Hero section */}
+      <section style={{
+        background: 'linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #0d47a1 100%)',
+        color: '#fff', padding: '60px 24px', textAlign: 'center',
+      }}>
+        <h1 style={{ margin: '0 0 12px', fontSize: '32px', fontWeight: 700 }}>TerraSight</h1>
+        <p style={{ margin: '0 0 24px', fontSize: '16px', color: '#94a3b8', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto' }}>
+          Live climate signals, environmental data atlas, and U.S. metro-level environmental reports.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link to="/earth-now" style={heroBtnStyle}>Explore Earth Now</Link>
+          <Link to="/trends" style={{ ...heroBtnStyle, background: 'rgba(255,255,255,0.15)' }}>Climate Trends</Link>
+          <Link to="/reports" style={{ ...heroBtnStyle, background: 'rgba(255,255,255,0.15)' }}>Local Reports</Link>
+        </div>
       </section>
-      <Suspense fallback={null}>
-        <BornIn />
-      </Suspense>
-      <AtlasGrid />
-      <div id="local-reports">
-        <LocalReportsSection />
-      </div>
+
+      {/* Section cards grid */}
+      <section style={{ padding: '32px 24px', maxWidth: '1000px', margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+          <SectionCard to="/earth-now" icon="🌍" title="Earth Now"
+            desc="Real-time satellite fire detection, ocean heat, air quality monitors, tropical storms, and earthquakes on an interactive 3D globe." />
+          <SectionCard to="/trends" icon="📈" title="Climate Trends"
+            desc="Six key climate indicators with historical sparklines: CO₂, temperature, sea ice, methane, sea level, and drought." />
+          <SectionCard to="/atlas" icon="📚" title="Environmental Atlas"
+            desc="23 live datasets across 8 categories — air, water, hydrology, coast, soil, waste, emissions, and hazards." />
+          <SectionCard to="/reports" icon="📍" title="Local Reports"
+            desc="14-block environmental profiles for 50 U.S. metros: air quality, facilities, PFAS, drinking water, hazards, and more." />
+          <SectionCard to="/rankings" icon="📊" title="Rankings"
+            desc="Compare 50 metros by EPA violations, PM2.5, toxic releases, GHG emissions, Superfund sites, and drinking water." />
+          <SectionCard to="/guides" icon="📖" title="Guides"
+            desc="Learn how to read AQI reports, EPA compliance data, water quality samples, and climate normals." />
+        </div>
+      </section>
     </main>
   );
 }
 
-// ── Local Reports section ─────────────────────────────────────────────────
-
-interface MetroSummary {
-  slug: string;
-  name: string;
-  state: string | null;
-  population: number | null;
-  population_year: string | null;
-  climate_zone: string | null;
-}
-
-function LocalReportsSection() {
-  const navigate = useNavigate();
-  const { data: metros, loading } = useApi<MetroSummary[]>('/reports/');
-  const [zip, setZip] = useState('');
-  const [searchMsg, setSearchMsg] = useState('');
-
-  const handleSearch = async () => {
-    const q = zip.trim();
-    if (!q) return;
-    setSearchMsg('');
-    try {
-      const base = import.meta.env.VITE_API_BASE ?? '/api';
-      const res = await fetch(`${base}/reports/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (data.slug) {
-        navigate(`/reports/${data.slug}`);
-      } else {
-        setSearchMsg(data.message ?? 'No metro found.');
-      }
-    } catch {
-      setSearchMsg('Search failed — please try again.');
-    }
-  };
-
+function SectionCard({ to, icon, title, desc }: { to: string; icon: string; title: string; desc: string }) {
   return (
-    <section style={sectionStyle}>
-      <h2 style={h2Style}>Local Environmental Reports</h2>
-      <p style={subtitleStyle}>
-        Metro-level air quality, climate, water, and facility data — U.S. metros.
-      </p>
-
-      {/* Metro cards — top 4 + "View all" */}
-      <div style={gridStyle}>
-        {loading && <p style={{ color: '#64748b', fontSize: '14px' }}>Loading metros…</p>}
-        {metros?.slice(0, 4).map((metro) => (
-          <a
-            key={metro.slug}
-            href={`/reports/${metro.slug}`}
-            style={cardStyle}
-          >
-            <div style={cardNameStyle}>{metro.name}</div>
-            <div style={cardMetaStyle}>
-              {metro.state}
-              {metro.population
-                ? ` · Pop. ${(metro.population / 1_000_000).toFixed(1)}M`
-                : ''}
-            </div>
-            {metro.climate_zone && (
-              <div style={cardClimateStyle}>{metro.climate_zone}</div>
-            )}
-            <div style={cardLinkStyle}>View Report →</div>
-          </a>
-        ))}
-      </div>
-
-      {/* View all link */}
-      {metros && metros.length > 4 && (
-        <div style={{ marginBottom: '20px' }}>
-          <a href="/#local-reports" style={viewAllStyle}>
-            View all {metros.length} metros →
-          </a>
-        </div>
-      )}
-
-      {/* Rankings + Guides quick links */}
-      <div style={linksRowStyle}>
-        <a href="/rankings/epa-violations" style={quickLinkStyle}>
-          📊 EPA Violations Ranking
-        </a>
-        <a href="/rankings/pm25" style={quickLinkStyle}>
-          💨 PM2.5 Levels Ranking
-        </a>
-        <a href="/rankings/tri-releases" style={quickLinkStyle}>
-          ♻️ TRI Toxics Releases Ranking
-        </a>
-        <a href="/rankings/ghg-emissions" style={quickLinkStyle}>
-          🏭 Facility GHG Emissions Ranking
-        </a>
-        <a href="/rankings/superfund" style={quickLinkStyle}>
-          🚨 Superfund Sites Ranking
-        </a>
-        <a href="/rankings/drinking-water-violations" style={quickLinkStyle}>
-          💧 Drinking Water Violations Ranking
-        </a>
-        <a href="/guides/how-to-read-aqi" style={quickLinkStyle}>
-          📖 How to Read an AQI Report
-        </a>
-        <a href="/guides/understanding-epa-compliance" style={quickLinkStyle}>
-          🏭 Understanding EPA Compliance
-        </a>
-        <a href="/guides/water-quality-samples" style={quickLinkStyle}>
-          💧 Water Quality Samples
-        </a>
-        <a href="/guides/climate-normals" style={quickLinkStyle}>
-          🌡️ Climate Normals Explained
-        </a>
-      </div>
-
-      {/* ZIP / city search */}
-      <div style={searchRowStyle}>
-        <input
-          type="text"
-          value={zip}
-          onChange={(e) => { setZip(e.target.value); setSearchMsg(''); }}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          placeholder="ZIP code or city name…"
-          style={inputStyle}
-        />
-        <button type="button" onClick={handleSearch} style={btnStyle}>
-          Search
-        </button>
-        {searchMsg && <span style={msgStyle}>{searchMsg}</span>}
-      </div>
-    </section>
+    <Link to={to} style={{
+      display: 'block', padding: '20px', border: '1px solid #e2e8f0', borderRadius: '12px',
+      background: '#fff', textDecoration: 'none', color: 'inherit',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.06)', transition: 'box-shadow 0.15s',
+    }}>
+      <div style={{ fontSize: '28px', marginBottom: '8px' }}>{icon}</div>
+      <h2 style={{ margin: '0 0 6px', fontSize: '18px', color: '#0f172a' }}>{title}</h2>
+      <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>{desc}</p>
+    </Link>
   );
 }
 
-const sectionStyle: React.CSSProperties = {
-  padding: '32px 24px',
-  borderTop: '1px solid #e5e7eb',
-};
-const h2Style: React.CSSProperties = {
-  margin: '0 0 6px',
-  fontSize: '22px',
-  color: '#0f172a',
-};
-const subtitleStyle: React.CSSProperties = {
-  margin: '0 0 20px',
-  fontSize: '14px',
-  color: '#475569',
-};
-const gridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-  gap: '16px',
-  marginBottom: '24px',
-};
-const cardStyle: React.CSSProperties = {
-  display: 'block',
-  padding: '16px 18px',
-  border: '1px solid #e2e8f0',
-  borderRadius: '8px',
-  background: '#fff',
-  textDecoration: 'none',
-  color: 'inherit',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-  transition: 'border-color 0.15s',
-};
-const cardNameStyle: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: '15px',
-  color: '#0f172a',
-  marginBottom: '4px',
-};
-const cardMetaStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: '#475569',
-  marginBottom: '2px',
-};
-const cardClimateStyle: React.CSSProperties = {
-  fontSize: '12px',
-  color: '#64748b',
-  marginBottom: '10px',
-};
-const cardLinkStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: '#2563eb',
-  fontWeight: 500,
-};
-const viewAllStyle: React.CSSProperties = {
-  fontSize: '14px',
-  color: '#2563eb',
-  textDecoration: 'none',
-  fontWeight: 500,
-};
-const linksRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '12px',
-  flexWrap: 'wrap',
-  marginBottom: '20px',
-};
-const quickLinkStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '6px',
-  padding: '8px 14px',
-  background: '#f1f5f9',
-  border: '1px solid #e2e8f0',
-  borderRadius: '6px',
-  fontSize: '13px',
-  color: '#0f172a',
-  textDecoration: 'none',
-  fontWeight: 500,
-};
-const searchRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: '8px',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-};
-const inputStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  fontSize: '14px',
-  border: '1px solid #cbd5e1',
-  borderRadius: '6px',
-  width: '220px',
-  fontFamily: 'system-ui, sans-serif',
-};
-const btnStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  fontSize: '14px',
-  fontWeight: 600,
-  background: '#1d4ed8',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontFamily: 'system-ui, sans-serif',
-};
-const msgStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: '#b91c1c',
+const heroBtnStyle: React.CSSProperties = {
+  display: 'inline-block', padding: '12px 24px', background: '#2563eb',
+  color: '#fff', borderRadius: '8px', textDecoration: 'none',
+  fontSize: '15px', fontWeight: 600,
 };
