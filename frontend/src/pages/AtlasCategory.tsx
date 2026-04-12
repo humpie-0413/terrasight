@@ -27,7 +27,7 @@ export default function AtlasCategory() {
       <nav style={breadcrumbStyle}>
         <Link to="/atlas" style={backLink}>Atlas</Link>
         <span style={{ color: '#94a3b8', margin: '0 6px' }}>›</span>
-        <span style={{ color: '#0f172a' }}>{category.title}</span>
+        <span style={{ color: '#f1f5f9' }}>{category.title}</span>
       </nav>
 
       <header style={headerStyle}>
@@ -99,7 +99,7 @@ const breadcrumbStyle: React.CSSProperties = {
   alignItems: 'center',
 };
 const backLink: React.CSSProperties = {
-  color: '#2563eb',
+  color: '#60a5fa',
   textDecoration: 'none',
   fontSize: '14px',
 };
@@ -114,12 +114,12 @@ const iconStyle: React.CSSProperties = {
 const h1Style: React.CSSProperties = {
   margin: '0 0 8px',
   fontSize: '26px',
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 const subtitleStyle: React.CSSProperties = {
   margin: 0,
   fontSize: '14px',
-  color: '#475569',
+  color: '#94a3b8',
   maxWidth: '640px',
   lineHeight: 1.6,
 };
@@ -130,10 +130,11 @@ const datasetList: React.CSSProperties = {
 };
 const dsCardStyle: React.CSSProperties = {
   padding: '20px 22px',
-  border: '1px solid #e2e8f0',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '10px',
-  background: '#fff',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  background: 'rgba(15, 23, 42, 0.6)',
+  backdropFilter: 'blur(8px)',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
 };
 const dsHeaderRow: React.CSSProperties = {
   display: 'flex',
@@ -146,15 +147,15 @@ const dsTitleStyle: React.CSSProperties = {
   margin: 0,
   fontSize: '16px',
   fontWeight: 600,
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 const livePillStyle: React.CSSProperties = {
   fontSize: '11px',
   fontWeight: 600,
   padding: '2px 8px',
   borderRadius: '999px',
-  background: '#dcfce7',
-  color: '#16a34a',
+  background: 'rgba(22, 163, 74, 0.15)',
+  color: '#4ade80',
   whiteSpace: 'nowrap',
   flexShrink: 0,
 };
@@ -163,15 +164,15 @@ const plannedPillStyle: React.CSSProperties = {
   fontWeight: 600,
   padding: '2px 8px',
   borderRadius: '999px',
-  background: '#f1f5f9',
-  color: '#64748b',
+  background: 'rgba(100, 116, 139, 0.15)',
+  color: '#94a3b8',
   whiteSpace: 'nowrap',
   flexShrink: 0,
 };
 const dsDescStyle: React.CSSProperties = {
   margin: '0 0 12px',
   fontSize: '13px',
-  color: '#475569',
+  color: '#94a3b8',
   lineHeight: 1.6,
 };
 const dsMetaGrid: React.CSSProperties = {
@@ -182,12 +183,12 @@ const dsMetaGrid: React.CSSProperties = {
 };
 const metaLabelStyle: React.CSSProperties = {
   fontSize: '12px',
-  color: '#94a3b8',
+  color: '#64748b',
   fontWeight: 500,
 };
 const metaValueStyle: React.CSSProperties = {
   fontSize: '12px',
-  color: '#475569',
+  color: '#94a3b8',
 };
 const dsFooter: React.CSSProperties = {
   display: 'flex',
@@ -196,7 +197,7 @@ const dsFooter: React.CSSProperties = {
 };
 const externalLink: React.CSSProperties = {
   fontSize: '13px',
-  color: '#2563eb',
+  color: '#60a5fa',
   textDecoration: 'none',
   fontWeight: 500,
 };

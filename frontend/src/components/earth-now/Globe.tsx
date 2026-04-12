@@ -394,13 +394,22 @@ const LAYER_LOOKUP = new Map<string, LayerDef>(
 
 // ─── GIBS texture hook ────────────────────────────────────────────────────────
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+async function loadImageViaFetch(src: string): Promise<HTMLImageElement> {
+  const res = await fetch(src, { mode: 'cors' });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${src}`);
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous'; // MUST be set before src
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Image load failed: ${src}`));
-    img.src = src;
+    img.onload = () => {
+      URL.revokeObjectURL(blobUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      reject(new Error(`Image decode failed: ${src}`));
+    };
+    img.src = blobUrl;
   });
 }
 
@@ -460,7 +469,7 @@ function useGibsTexture(gibsLayerName: string | null): {
       // Load BlueMarble base
       let baseImg: HTMLImageElement;
       try {
-        baseImg = await loadImage(BLUEMARBLE_URL);
+        baseImg = await loadImageViaFetch(BLUEMARBLE_URL);
       } catch (err) {
         console.warn('[GIBS] BlueMarble base load failed:', err);
         return;
@@ -477,7 +486,7 @@ function useGibsTexture(gibsLayerName: string | null): {
         if (cancelled) return;
         try {
           const url = gibsOverlayUrl(gibsLayerName!, date);
-          const overlayImg = await loadImage(url);
+          const overlayImg = await loadImageViaFetch(url);
           if (cancelled) return;
           ctx.globalAlpha = 0.72;
           ctx.drawImage(overlayImg, 0, 0, 2048, 1024);
@@ -548,7 +557,7 @@ function fireColor(frp: number): string {
 
 function firePointRadius(f: FireHotspot): number {
   const frp = Math.max(f.frp, 1);
-  return 0.25 + Math.log10(frp) * 0.2;
+  return 0.3 + Math.log10(frp) * 0.25;
 }
 function firePointAltitude(f: FireHotspot): number {
   const frp = Math.max(f.frp, 1);
@@ -561,11 +570,11 @@ function firePointAltitude(f: FireHotspot): number {
  */
 function sstColor(c: number): string {
   const stops: Array<[number, [number, number, number]]> = [
-    [-2, [8, 48, 107]],
-    [5, [65, 182, 196]],
-    [15, [199, 233, 180]],
-    [22, [253, 174, 97]],
-    [30, [179, 0, 0]],
+    [-2, [10, 30, 100]],
+    [5, [30, 120, 200]],
+    [15, [100, 220, 160]],
+    [22, [255, 180, 50]],
+    [30, [200, 0, 0]],
   ];
   if (c <= stops[0][0]) return rgb(stops[0][1]);
   if (c >= stops[stops.length - 1][0]) return rgb(stops[stops.length - 1][1]);
@@ -912,6 +921,134 @@ function LayerPanel({
   );
 }
 
+// ─── Legend component ─────────────────────────────────────────────────────────
+
+function Legend({ activeEvent, activeContinuous }: { activeEvent: ActiveEvent; activeContinuous: ActiveContinuous }) {
+  if (activeEvent === 'fires') {
+    return (
+      <div style={legendStyle}>
+        <div style={legendTitle}>Fire Radiative Power (MW)</div>
+        <div style={legendBar}>
+          <span style={{...legendSwatch, background: '#fde047'}} />
+          <span style={{...legendSwatch, background: '#eab308'}} />
+          <span style={{...legendSwatch, background: '#f97316'}} />
+          <span style={{...legendSwatch, background: '#dc2626'}} />
+          <span style={{...legendSwatch, background: '#7f1d1d'}} />
+        </div>
+        <div style={legendLabels}>
+          <span>0</span><span>10</span><span>50</span><span>100</span><span>500+</span>
+        </div>
+      </div>
+    );
+  }
+  if (activeEvent === 'monitors') {
+    return (
+      <div style={legendStyle}>
+        <div style={legendTitle}>PM2.5 AQI</div>
+        <div style={legendBar}>
+          <span style={{...legendSwatch, background: '#00e400'}} />
+          <span style={{...legendSwatch, background: '#ffff00'}} />
+          <span style={{...legendSwatch, background: '#ff7e00'}} />
+          <span style={{...legendSwatch, background: '#ff0000'}} />
+          <span style={{...legendSwatch, background: '#8f3f97'}} />
+          <span style={{...legendSwatch, background: '#7e0023'}} />
+        </div>
+        <div style={legendLabels}>
+          <span>Good</span><span>Mod</span><span>USG</span><span>Unhealthy</span><span>VU</span><span>Haz</span>
+        </div>
+      </div>
+    );
+  }
+  if (activeEvent === 'earthquakes') {
+    return (
+      <div style={legendStyle}>
+        <div style={legendTitle}>Earthquake Magnitude</div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#eab308', display: 'inline-block' }} />
+            <span style={{ fontSize: '10px', color: '#94a3b8' }}>M4</span>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f97316', display: 'inline-block' }} />
+            <span style={{ fontSize: '10px', color: '#94a3b8' }}>M5</span>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ width: 13, height: 13, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+            <span style={{ fontSize: '10px', color: '#94a3b8' }}>M6</span>
+          </span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#991b1b', display: 'inline-block' }} />
+            <span style={{ fontSize: '10px', color: '#94a3b8' }}>M7+</span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+  if (activeEvent === 'storms') {
+    return (
+      <div style={legendStyle}>
+        <div style={legendTitle}>Storm Wind Speed (kt)</div>
+        <div style={legendBar}>
+          <span style={{...legendSwatch, background: '#ffffff', border: '1px solid #475569'}} />
+          <span style={{...legendSwatch, background: '#eab308'}} />
+          <span style={{...legendSwatch, background: '#f97316'}} />
+          <span style={{...legendSwatch, background: '#dc2626'}} />
+          <span style={{...legendSwatch, background: '#ec4899'}} />
+          <span style={{...legendSwatch, background: '#7c3aed'}} />
+        </div>
+        <div style={legendLabels}>
+          <span>TD</span><span>TS</span><span>C1</span><span>C2</span><span>C3</span><span>C4+</span>
+        </div>
+      </div>
+    );
+  }
+  if (activeContinuous === 'ocean-heat') {
+    return (
+      <div style={legendStyle}>
+        <div style={legendTitle}>Sea Surface Temperature (deg C)</div>
+        <div style={{...legendBar, background: 'linear-gradient(to right, rgb(10,30,100), rgb(30,120,200), rgb(100,220,160), rgb(255,180,50), rgb(200,0,0))', height: '10px', borderRadius: '3px'}} />
+        <div style={legendLabels}>
+          <span>-2</span><span>5</span><span>15</span><span>22</span><span>30+</span>
+        </div>
+      </div>
+    );
+  }
+  if (activeContinuous === 'coral') {
+    return (
+      <div style={legendStyle}>
+        <div style={legendTitle}>Degree Heating Weeks (deg C-weeks)</div>
+        <div style={{...legendBar, background: 'linear-gradient(to right, rgb(255,255,255), rgb(255,255,0), rgb(255,165,0), rgb(220,38,38), rgb(126,34,206))', height: '10px', borderRadius: '3px'}} />
+        <div style={legendLabels}>
+          <span>0</span><span>4</span><span>8</span><span>12</span><span>16+</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+const legendStyle: React.CSSProperties = {
+  position: 'absolute', bottom: 12, left: 12,
+  background: 'rgba(10, 14, 39, 0.85)', backdropFilter: 'blur(6px)',
+  border: '1px solid rgba(51, 65, 85, 0.5)', borderRadius: '8px',
+  padding: '8px 12px', minWidth: '160px', maxWidth: '260px',
+};
+const legendTitle: React.CSSProperties = {
+  fontSize: '11px', fontWeight: 600, color: '#cbd5e1',
+  marginBottom: '6px', fontFamily: 'system-ui, sans-serif',
+};
+const legendBar: React.CSSProperties = {
+  display: 'flex', gap: '0px',
+};
+const legendSwatch: React.CSSProperties = {
+  flex: 1, height: '10px',
+};
+const legendLabels: React.CSSProperties = {
+  display: 'flex', justifyContent: 'space-between',
+  fontSize: '9px', color: '#64748b', marginTop: '2px',
+  fontFamily: 'system-ui, sans-serif',
+};
+
 // ─── Globe component ──────────────────────────────────────────────────────────
 
 const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
@@ -1250,8 +1387,8 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
       style={{
         position: 'relative',
         width: '100%',
-        height: '520px',
-        background: '#0b1120',
+        height: '600px',
+        background: 'radial-gradient(ellipse at center, #0a0e27 0%, #050810 100%)',
         borderRadius: '8px',
         overflow: 'hidden',
       }}
@@ -1261,10 +1398,10 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
         width={dims.width}
         height={dims.height}
         globeImageUrl={globeImageUrl}
-        backgroundColor="#0b1120"
+        backgroundColor="rgba(0,0,0,0)"
         showAtmosphere={true}
-        atmosphereColor="#88aaff"
-        atmosphereAltitude={0.18}
+        atmosphereColor="#4488ff"
+        atmosphereAltitude={0.25}
         // --- Points (fires or storms, event overlay) ---
         pointsData={pointsData}
         pointLat={(d: object) =>
@@ -1330,7 +1467,7 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
             : (d as AirMonitor).lon
         }
         labelText={() => ''}
-        labelDotRadius={activeContinuous === 'cmems-sla' ? 0.3 : 0.25}
+        labelDotRadius={activeContinuous === 'cmems-sla' ? 0.3 : 0.4}
         labelDotOrientation={() => 'top'}
         labelColor={labelColor}
         labelResolution={2}
@@ -1358,8 +1495,14 @@ const Globe = forwardRef<GlobeHandle, GlobeProps>(function Globe(
         gibsLoading={gibsLoading}
       />
 
+      {/* Legend */}
+      <Legend activeEvent={activeEvent} activeContinuous={activeContinuous} />
+
       {/* Status line */}
-      {statusMessage && <div style={statusLineStyle}>{statusMessage}</div>}
+      {statusMessage && <div style={{
+        ...statusLineStyle,
+        bottom: (activeEvent || activeContinuous) ? 52 : 12,
+      }}>{statusMessage}</div>}
     </div>
   );
 });

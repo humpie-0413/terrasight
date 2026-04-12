@@ -1,127 +1,96 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
-/**
- * Site-wide header with responsive hamburger menu.
- *
- * Nav targets:
- *   Earth Now      → /earth-now
- *   Climate Trends → /trends
- *   Atlas          → /atlas
- *   Local Reports  → /reports
- *   Guides         → /guides
- *   Rankings       → /rankings
- */
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   return (
     <header style={headerStyle}>
       <nav style={navStyle}>
-        {/* Logo */}
         <Link to="/" style={logoStyle} onClick={() => setOpen(false)}>
           TerraSight
         </Link>
 
-        {/* Desktop links */}
-        <div style={desktopLinks}>
-          <Link to="/earth-now" style={navLinkStyle}>Earth Now</Link>
-          <Link to="/trends" style={navLinkStyle}>Climate Trends</Link>
-          <Link to="/atlas" style={navLinkStyle}>Atlas</Link>
-          <Link to="/reports" style={navLinkStyle}>Local Reports</Link>
-          <Link to="/guides" style={navLinkStyle}>Guides</Link>
-          <Link to="/rankings" style={navLinkStyle}>Rankings</Link>
+        <div className="desktop-nav" style={desktopLinks}>
+          {NAV_ITEMS.map(({ to, label }) => (
+            <Link key={to} to={to} style={{
+              ...navLinkStyle,
+              ...(isActive(to) ? activeLinkStyle : {}),
+            }}>{label}</Link>
+          ))}
         </div>
 
-        {/* Hamburger button (mobile only) */}
         <button
+          className="hamburger-btn"
           aria-label={open ? 'Close menu' : 'Open menu'}
           style={hamburgerStyle}
           onClick={() => setOpen((v) => !v)}
         >
-          {open ? '✕' : '☰'}
+          {open ? '\u2715' : '\u2630'}
         </button>
       </nav>
 
-      {/* Mobile dropdown */}
       {open && (
         <div style={mobileMenuStyle}>
-          <Link to="/earth-now" style={mobileLinkStyle} onClick={() => setOpen(false)}>Earth Now</Link>
-          <Link to="/trends" style={mobileLinkStyle} onClick={() => setOpen(false)}>Climate Trends</Link>
-          <Link to="/atlas" style={mobileLinkStyle} onClick={() => setOpen(false)}>Atlas</Link>
-          <Link to="/reports" style={mobileLinkStyle} onClick={() => setOpen(false)}>Local Reports</Link>
-          <Link to="/guides" style={mobileLinkStyle} onClick={() => setOpen(false)}>Guides</Link>
-          <Link to="/rankings" style={mobileLinkStyle} onClick={() => setOpen(false)}>Rankings</Link>
+          {NAV_ITEMS.map(({ to, label }) => (
+            <Link key={to} to={to} style={{
+              ...mobileLinkStyle,
+              ...(isActive(to) ? { color: '#60a5fa' } : {}),
+            }} onClick={() => setOpen(false)}>{label}</Link>
+          ))}
         </div>
       )}
     </header>
   );
 }
 
+const NAV_ITEMS = [
+  { to: '/earth-now', label: 'Earth Now' },
+  { to: '/trends', label: 'Climate Trends' },
+  { to: '/atlas', label: 'Atlas' },
+  { to: '/reports', label: 'Local Reports' },
+  { to: '/guides', label: 'Guides' },
+  { to: '/rankings', label: 'Rankings' },
+];
+
 const headerStyle: React.CSSProperties = {
-  position: 'sticky',
-  top: 0,
-  zIndex: 100,
-  background: '#fff',
-  borderBottom: '1px solid #e5e7eb',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  position: 'sticky', top: 0, zIndex: 100,
+  background: 'rgba(10, 14, 26, 0.85)',
+  backdropFilter: 'blur(12px)',
+  borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
 };
 const navStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  padding: '10px 24px',
-  maxWidth: '1200px',
-  margin: '0 auto',
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '10px 24px', maxWidth: '1200px', margin: '0 auto',
 };
 const logoStyle: React.CSSProperties = {
-  fontWeight: 800,
-  fontSize: '18px',
-  color: '#0f172a',
-  textDecoration: 'none',
-  letterSpacing: '-0.02em',
-  flexShrink: 0,
+  fontWeight: 800, fontSize: '18px', color: '#f1f5f9',
+  textDecoration: 'none', letterSpacing: '-0.02em', flexShrink: 0,
 };
 const desktopLinks: React.CSSProperties = {
-  display: 'flex',
-  gap: '4px',
-  alignItems: 'center',
-  // hide on mobile via inline media — we handle visibility via JS state
-  // (full CSS breakpoints require a stylesheet; keep it simple here)
+  display: 'flex', gap: '2px', alignItems: 'center',
 };
 const navLinkStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  fontSize: '14px',
-  color: '#374151',
-  textDecoration: 'none',
-  borderRadius: '6px',
-  fontFamily: 'system-ui, sans-serif',
+  padding: '6px 12px', fontSize: '14px', color: '#94a3b8',
+  textDecoration: 'none', borderRadius: '6px',
+  fontFamily: 'system-ui, sans-serif', transition: 'color 0.15s, background 0.15s',
+};
+const activeLinkStyle: React.CSSProperties = {
+  color: '#e2e8f0', background: 'rgba(59, 130, 246, 0.15)',
 };
 const hamburgerStyle: React.CSSProperties = {
-  display: 'none',   // shown via CSS @media in the head — here as fallback
-  background: 'none',
-  border: 'none',
-  fontSize: '20px',
-  cursor: 'pointer',
-  padding: '4px 8px',
-  color: '#374151',
+  display: 'none', background: 'none', border: 'none',
+  fontSize: '20px', cursor: 'pointer', padding: '4px 8px', color: '#e2e8f0',
 };
 const mobileMenuStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  padding: '8px 16px 16px',
-  borderTop: '1px solid #f1f5f9',
-  background: '#fff',
+  display: 'flex', flexDirection: 'column', padding: '8px 16px 16px',
+  borderTop: '1px solid rgba(51, 65, 85, 0.5)', background: 'rgba(10, 14, 26, 0.95)',
 };
 const mobileLinkStyle: React.CSSProperties = {
-  padding: '10px 8px',
-  fontSize: '15px',
-  color: '#0f172a',
-  textDecoration: 'none',
-  background: 'none',
-  border: 'none',
-  textAlign: 'left',
-  cursor: 'pointer',
-  fontFamily: 'system-ui, sans-serif',
-  borderBottom: '1px solid #f1f5f9',
+  padding: '10px 8px', fontSize: '15px', color: '#cbd5e1',
+  textDecoration: 'none', textAlign: 'left', cursor: 'pointer',
+  fontFamily: 'system-ui, sans-serif', borderBottom: '1px solid rgba(30, 41, 59, 0.5)',
 };

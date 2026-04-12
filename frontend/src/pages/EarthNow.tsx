@@ -26,11 +26,11 @@ export default function EarthNow() {
   };
 
   return (
-    <main style={{ padding: '16px 24px' }}>
-      <h1 style={{ margin: '0 0 16px', fontSize: '24px', color: '#0f172a' }}>Earth Now</h1>
+    <main style={{ padding: '0 24px 24px' }}>
+      <h1 style={{ margin: '16px 0', fontSize: '24px', color: '#f1f5f9', fontWeight: 700 }}>Earth Now</h1>
       <section style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)',
+        gridTemplateColumns: 'minmax(0, 2.5fr) minmax(260px, 1fr)',
         gap: '16px',
       }}>
         <Suspense fallback={

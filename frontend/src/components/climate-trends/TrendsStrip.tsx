@@ -149,6 +149,10 @@ function Sparkline({
   });
   const path = `M ${coords.join(' L ')}`;
 
+  // Gradient fill under the sparkline
+  const fillPath = `${path} L ${(padding + (points.length - 1) * stepX).toFixed(1)},${(height - padding).toFixed(1)} L ${padding.toFixed(1)},${(height - padding).toFixed(1)} Z`;
+  const gradId = `grad-${strokeColor.replace('#', '')}`;
+
   return (
     <svg
       width={width}
@@ -158,6 +162,13 @@ function Sparkline({
       aria-label="12-month sparkline"
       style={{ display: 'block', marginTop: '8px' }}
     >
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={strokeColor} stopOpacity={0.3} />
+          <stop offset="100%" stopColor={strokeColor} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={fillPath} fill={`url(#${gradId})`} />
       <path
         d={path}
         fill="none"
@@ -248,9 +259,10 @@ const sectionStyle: React.CSSProperties = {
 
 const cardStyle: React.CSSProperties = {
   padding: '16px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '8px',
-  background: '#fff',
+  background: 'rgba(15, 23, 42, 0.6)',
+  backdropFilter: 'blur(8px)',
   minWidth: '200px',
   flexShrink: 0,
   scrollSnapAlign: 'start',
@@ -259,22 +271,22 @@ const cardStyle: React.CSSProperties = {
 const titleStyle: React.CSSProperties = {
   margin: '8px 0 4px',
   fontSize: '14px',
-  color: '#334155',
+  color: '#94a3b8',
   fontWeight: 600,
 };
 
 const valueStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: '28px',
+  fontSize: '32px',
   fontWeight: 700,
-  color: '#0f172a',
+  color: '#f1f5f9',
   lineHeight: 1.1,
 };
 
 const unitStyle: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: 500,
-  color: '#64748b',
+  color: '#94a3b8',
 };
 
 const asOfStyle: React.CSSProperties = {

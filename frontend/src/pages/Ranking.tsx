@@ -250,43 +250,43 @@ const breadcrumbStyle: React.CSSProperties = {
   marginBottom: '20px',
 };
 const breadcrumbLinkStyle: React.CSSProperties = {
-  color: '#2563eb',
+  color: '#60a5fa',
   textDecoration: 'none',
 };
-const sep: React.CSSProperties = { color: '#94a3b8' };
+const sep: React.CSSProperties = { color: '#64748b' };
 const h1Style: React.CSSProperties = {
   margin: '0 0 8px',
   fontSize: '26px',
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 const subtitleStyle: React.CSSProperties = {
   margin: '0 0 20px',
   fontSize: '14px',
-  color: '#475569',
+  color: '#94a3b8',
   lineHeight: 1.6,
 };
 const loadingStyle: React.CSSProperties = {
   padding: '24px',
-  background: '#f8fafc',
+  background: 'rgba(15, 23, 42, 0.6)',
   borderRadius: '8px',
-  color: '#64748b',
+  color: '#94a3b8',
   fontSize: '14px',
 };
 const errorBoxStyle: React.CSSProperties = {
   padding: '16px',
-  background: '#fef2f2',
-  border: '1px solid #fecaca',
+  background: 'rgba(127, 29, 29, 0.3)',
+  border: '1px solid rgba(248, 113, 113, 0.4)',
   borderRadius: '8px',
-  color: '#b91c1c',
+  color: '#f87171',
   fontSize: '14px',
 };
 const noteBoxStyle: React.CSSProperties = {
   padding: '12px 16px',
-  background: '#fffbeb',
-  border: '1px solid #fde68a',
+  background: 'rgba(120, 53, 15, 0.25)',
+  border: '1px solid rgba(251, 191, 36, 0.4)',
   borderRadius: '6px',
   fontSize: '13px',
-  color: '#92400e',
+  color: '#fbbf24',
   marginBottom: '20px',
 };
 const tableStyle: React.CSSProperties = {
@@ -296,39 +296,39 @@ const tableStyle: React.CSSProperties = {
 };
 const thStyle: React.CSSProperties = {
   padding: '10px 12px',
-  background: '#f1f5f9',
-  borderBottom: '2px solid #e2e8f0',
+  background: 'rgba(15, 23, 42, 0.8)',
+  borderBottom: '2px solid rgba(51, 65, 85, 0.5)',
   fontWeight: 600,
-  color: '#374151',
+  color: '#cbd5e1',
   textAlign: 'center',
   whiteSpace: 'nowrap',
 };
-const rowEven: React.CSSProperties = { background: '#fff' };
-const rowOdd: React.CSSProperties = { background: '#f8fafc' };
+const rowEven: React.CSSProperties = { background: 'rgba(15, 23, 42, 0.3)' };
+const rowOdd: React.CSSProperties = { background: 'rgba(15, 23, 42, 0.5)' };
 const tdCenter: React.CSSProperties = {
   padding: '10px 12px',
   textAlign: 'center',
-  borderBottom: '1px solid #e2e8f0',
-  color: '#374151',
+  borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
+  color: '#e2e8f0',
 };
 const tdName: React.CSSProperties = {
   padding: '10px 12px',
-  borderBottom: '1px solid #e2e8f0',
+  borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
 };
 const metroNameStyle: React.CSSProperties = {
   fontWeight: 500,
-  color: '#0f172a',
+  color: '#f1f5f9',
   display: 'block',
 };
 const stateStyle: React.CSSProperties = {
   fontSize: '12px',
   color: '#64748b',
 };
-const violHighStyle: React.CSSProperties = { color: '#b91c1c' };
-const violLowStyle: React.CSSProperties = { color: '#0f172a' };
-const naStyle: React.CSSProperties = { color: '#94a3b8', fontSize: '12px' };
+const violHighStyle: React.CSSProperties = { color: '#f87171' };
+const violLowStyle: React.CSSProperties = { color: '#e2e8f0' };
+const naStyle: React.CSSProperties = { color: '#64748b', fontSize: '12px' };
 const reportLinkStyle: React.CSSProperties = {
-  color: '#2563eb',
+  color: '#60a5fa',
   textDecoration: 'none',
   fontSize: '13px',
   fontWeight: 500,
@@ -336,17 +336,17 @@ const reportLinkStyle: React.CSSProperties = {
 const footerStyle: React.CSSProperties = {
   marginTop: '24px',
   paddingTop: '16px',
-  borderTop: '1px solid #e5e7eb',
+  borderTop: '1px solid rgba(51, 65, 85, 0.5)',
 };
 const sourceLineStyle: React.CSSProperties = {
   margin: '0 0 8px',
   fontSize: '12px',
   color: '#64748b',
 };
-const extLinkStyle: React.CSSProperties = { color: '#2563eb' };
+const extLinkStyle: React.CSSProperties = { color: '#60a5fa' };
 const disclaimerStyle: React.CSSProperties = {
   margin: 0,
   fontSize: '12px',
-  color: '#94a3b8',
+  color: '#64748b',
   fontStyle: 'italic',
 };

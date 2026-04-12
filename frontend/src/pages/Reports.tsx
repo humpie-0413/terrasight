@@ -138,17 +138,17 @@ function LocalReportsSection() {
 
 const sectionStyle: React.CSSProperties = {
   padding: '32px 24px',
-  borderTop: '1px solid #e5e7eb',
+  borderTop: '1px solid rgba(51, 65, 85, 0.5)',
 };
 const h2Style: React.CSSProperties = {
   margin: '0 0 6px',
   fontSize: '22px',
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 const subtitleStyle: React.CSSProperties = {
   margin: '0 0 20px',
   fontSize: '14px',
-  color: '#475569',
+  color: '#94a3b8',
 };
 const gridStyle: React.CSSProperties = {
   display: 'grid',
@@ -159,23 +159,24 @@ const gridStyle: React.CSSProperties = {
 const cardStyle: React.CSSProperties = {
   display: 'block',
   padding: '16px 18px',
-  border: '1px solid #e2e8f0',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '8px',
-  background: '#fff',
+  background: 'rgba(15, 23, 42, 0.6)',
+  backdropFilter: 'blur(8px)',
   textDecoration: 'none',
   color: 'inherit',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
   transition: 'border-color 0.15s',
 };
 const cardNameStyle: React.CSSProperties = {
   fontWeight: 600,
   fontSize: '15px',
-  color: '#0f172a',
+  color: '#f1f5f9',
   marginBottom: '4px',
 };
 const cardMetaStyle: React.CSSProperties = {
   fontSize: '13px',
-  color: '#475569',
+  color: '#94a3b8',
   marginBottom: '2px',
 };
 const cardClimateStyle: React.CSSProperties = {
@@ -185,12 +186,12 @@ const cardClimateStyle: React.CSSProperties = {
 };
 const cardLinkStyle: React.CSSProperties = {
   fontSize: '13px',
-  color: '#2563eb',
+  color: '#60a5fa',
   fontWeight: 500,
 };
 const viewAllStyle: React.CSSProperties = {
   fontSize: '14px',
-  color: '#2563eb',
+  color: '#60a5fa',
   textDecoration: 'none',
   fontWeight: 500,
 };
@@ -205,11 +206,11 @@ const quickLinkStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: '6px',
   padding: '8px 14px',
-  background: '#f1f5f9',
-  border: '1px solid #e2e8f0',
+  background: 'rgba(15, 23, 42, 0.6)',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
   fontSize: '13px',
-  color: '#0f172a',
+  color: '#e2e8f0',
   textDecoration: 'none',
   fontWeight: 500,
 };
@@ -222,10 +223,12 @@ const searchRowStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   padding: '8px 12px',
   fontSize: '14px',
-  border: '1px solid #cbd5e1',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
   width: '220px',
   fontFamily: 'system-ui, sans-serif',
+  background: 'rgba(15, 23, 42, 0.8)',
+  color: '#f1f5f9',
 };
 const btnStyle: React.CSSProperties = {
   padding: '8px 16px',
@@ -240,5 +243,5 @@ const btnStyle: React.CSSProperties = {
 };
 const msgStyle: React.CSSProperties = {
   fontSize: '13px',
-  color: '#b91c1c',
+  color: '#f87171',
 };

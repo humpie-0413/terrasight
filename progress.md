@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-13 (SPA Routing Refactor 완료)
+**최종 업데이트:** 2026-04-13 (Dark Theme + Atlas Fix + Globe Overhaul 완료)
 
 ---
 
@@ -31,8 +31,9 @@
 | Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
 | SEO 랭킹 페이지 | **6개** (+4 Phase E: TRI · GHG · Superfund · Drinking Water) |
 | SEO 가이드 페이지 | **4개** |
-| 번들 사이즈 (main chunk) | **62.96 KB gzipped** ✅ (Globe lazy split, 599→63 KB) |
-| 코드 스플리팅 | Globe vendor **519.83 KB** (lazy) + LocalReport 6.49 KB + 7 route chunks |
+| 번들 사이즈 (main chunk) | **54.58 KB gzipped** ✅ (Globe lazy split, 599→55 KB) |
+| 코드 스플리팅 | Globe vendor **519.83 KB** (lazy) + Globe 7.35 KB + LocalReport 6.59 KB + 11 route chunks |
+| 테마 | **다크 테마** (글래스모피즘 + 별 파티클 글로브 배경) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
 
 ### Phase D.1 임팩트 요약 (2026-04-12)
@@ -855,10 +856,61 @@ Monolithic home page 분리 → 전용 페이지 라우트로 리팩터링.
 
 ---
 
+### I — Dark Theme + Atlas Fix + Globe Overhaul (2026-04-13) ✅
+
+전체 사이트 다크 테마 적용 + Atlas 빈 페이지 버그 수정 + Globe 시각화 대폭 개선.
+
+**1. Atlas 빈 페이지 수정:**
+- **원인:** `atlas_catalog.json`에서 `"forecast"` 태그 사용 → `TrustTag` enum은 `"forecast/model"` 정의 → `TRUST_TAG_META["forecast"]` undefined → TrustBadge 크래시
+- **수정:** CAMS/NOAA RFC 데이터셋 태그를 `"forecast/model"`로 변경 + TrustBadge에 unknown tag fallback 추가
+
+**2. Globe GIBS 데이터 렌더링 수정:**
+- **원인:** `crossOrigin='anonymous'` Image 로딩 → canvas taint → `toDataURL()` SecurityError → BlueMarble 폴백
+- **수정:** `fetch(url, {mode:'cors'})` → `blob()` → `URL.createObjectURL()` → taint-free canvas 합성
+- Air Monitors `labelDotRadius` 0.25 → 0.4 (가시성 개선)
+
+**3. Globe 시각화 개선:**
+- 배경: `#0b1120` → `radial-gradient(ellipse, #0a0e27, #050810)` (우주 느낌)
+- 대기: `atmosphereColor #88aaff → #4488ff`, `altitude 0.18 → 0.25` (강화된 글로우)
+- 높이: 520px → 600px
+- SST 색상 대비 강화 (navy → blue → teal → orange → deep red)
+- Fire 포인트 크기 증가 (base 0.25→0.3, multiplier 0.2→0.25)
+- **범례(Legend) 추가:** 좌하단에 활성 레이어별 색상 범례 표시
+  - Fires: FRP (MW) 0~500+
+  - Air Monitors: PM2.5 AQI 6단계
+  - Earthquakes: M4~M7+ 크기/색상
+  - Storms: TD~Cat4+ 풍속
+  - SST: -2~30°C 그라데이션 바
+  - Coral: DHW 0~16+ 그라데이션 바
+
+**4. 전체 다크 테마 적용 (20+ 파일):**
+
+| 영역 | 변경 |\n|------|------|\n| `index.html` | 타이틀 EarthPulse→TerraSight, body `#0a0e1a`, 글로벌 CSS (shimmer/fadeInUp/pulse-glow 애니메이션, skeleton 클래스, 반응형 미디어 쿼리) |
+| `Header.tsx` | 다크 글래스모피즘 (`rgba(10,14,26,0.85)` + `blur(12px)`), 활성 링크 하이라이팅 (`useLocation`), 반응형 CSS 클래스 |
+| `Home.tsx` | 다크 히어로 그라데이션 + radial 글로우, 글래스모피즘 섹션 카드 |
+| `TrendsStrip.tsx` | 다크 카드 배경, sparkline 그라데이션 fill 추가, 값 32px 확대 |
+| `Atlas.tsx` / `AtlasCategory.tsx` | 다크 글래스모피즘 카드, 라이브 필 그린-온-다크 |
+| `Reports.tsx` | 다크 카드/입력 필드/링크 |
+| `RankingsList.tsx` / `GuidesList.tsx` | 다크 링크 카드 |
+| `Ranking.tsx` / `PM25Ranking.tsx` | 다크 테이블 (교차 행 어둡게) |
+| `Guide.tsx` | 다크 본문/테이블/카드 |
+| `ReportPage.tsx` | 다크 14블록 전체 (stat 카드/테이블/disclaimer/ad 슬롯) |
+| `StoryPanel.tsx` | 다크 글래스모피즘 |
+| `BornIn.tsx` | 다크 입력/결과 카드 |
+| `EarthNow.tsx` | 다크 페이지 + Globe 공간 확장 (2fr→2.5fr) |
+
+**검증:**
+- `tsc --noEmit` 0 errors ✅
+- `npm run build` 성공 ✅
+- Main chunk: **54.58 KB** gzipped
+- 전체 20개 chunk clean
+
+---
+
 ### 기존 블로커 (일부 해소)
 
 - ~~**Bundle 코드 스플리팅** — 599 KB gzip~~ ✅ **해소 (G.2)** — Globe lazy,
-  main chunk **62.96 KB**, 537 KB 헤드룸 확보
+  main chunk **54.58 KB**, 545 KB 헤드룸 확보
 - **CMEMS P1** — `copernicusmarine` 패키지 + Keycloak 자격증명 재검증
 - **커스텀 도메인** — CF Pages + Render (옵션 0에 포함)
 - **Story Panel 프리셋** (1 → 5-10개) (옵션 B에 포함)

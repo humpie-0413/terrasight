@@ -7,8 +7,8 @@ const AQI_CATEGORIES = [
     range: '0–50',
     label: 'Good',
     color: '#00e400',
-    textColor: '#064e3b',
-    bg: '#f0fdf4',
+    textColor: '#4ade80',
+    bg: 'rgba(0, 228, 0, 0.1)',
     description:
       'Air quality is satisfactory, and air pollution poses little or no risk.',
     actions: [
@@ -20,8 +20,8 @@ const AQI_CATEGORIES = [
     range: '51–100',
     label: 'Moderate',
     color: '#ffff00',
-    textColor: '#713f12',
-    bg: '#fefce8',
+    textColor: '#fbbf24',
+    bg: 'rgba(255, 255, 0, 0.08)',
     description:
       'Air quality is acceptable. There may be a risk for some people, particularly those who are unusually sensitive to air pollution.',
     actions: [
@@ -33,8 +33,8 @@ const AQI_CATEGORIES = [
     range: '101–150',
     label: 'Unhealthy for Sensitive Groups',
     color: '#ff7e00',
-    textColor: '#7c2d12',
-    bg: '#fff7ed',
+    textColor: '#fb923c',
+    bg: 'rgba(255, 126, 0, 0.1)',
     description:
       'Members of sensitive groups may experience health effects. The general public is less likely to be affected.',
     actions: [
@@ -46,8 +46,8 @@ const AQI_CATEGORIES = [
     range: '151–200',
     label: 'Unhealthy',
     color: '#ff0000',
-    textColor: '#7f1d1d',
-    bg: '#fef2f2',
+    textColor: '#f87171',
+    bg: 'rgba(255, 0, 0, 0.1)',
     description:
       'Some members of the general public may experience health effects; members of sensitive groups may experience more serious health effects.',
     actions: [
@@ -60,8 +60,8 @@ const AQI_CATEGORIES = [
     range: '201–300',
     label: 'Very Unhealthy',
     color: '#8f3f97',
-    textColor: '#3b0764',
-    bg: '#faf5ff',
+    textColor: '#c084fc',
+    bg: 'rgba(143, 63, 151, 0.15)',
     description:
       'Health alert: The risk of health effects is increased for everyone.',
     actions: [
@@ -400,7 +400,7 @@ export default function Guide() {
       <main style={pageStyle}>
         <Link to="/" style={backLinkStyle}>← Back to home</Link>
         <h1 style={h1Style}>Guide: {guideSlug}</h1>
-        <p style={{ color: '#64748b' }}>This guide is coming soon.</p>
+        <p style={{ color: '#94a3b8' }}>This guide is coming soon.</p>
       </main>
     );
   }
@@ -563,14 +563,14 @@ const breadcrumbStyle: React.CSSProperties = {
   marginBottom: '20px',
   flexWrap: 'wrap',
 };
-const bcrumbLinkStyle: React.CSSProperties = { color: '#2563eb', textDecoration: 'none' };
-const sepStyle: React.CSSProperties = { color: '#94a3b8' };
-const backLinkStyle: React.CSSProperties = { color: '#2563eb', fontSize: '14px', textDecoration: 'none' };
-const h1Style: React.CSSProperties = { margin: '0 0 10px', fontSize: '28px', color: '#0f172a' };
-const subtitleStyle: React.CSSProperties = { margin: '0 0 28px', fontSize: '15px', color: '#475569', lineHeight: 1.7 };
+const bcrumbLinkStyle: React.CSSProperties = { color: '#60a5fa', textDecoration: 'none' };
+const sepStyle: React.CSSProperties = { color: '#64748b' };
+const backLinkStyle: React.CSSProperties = { color: '#60a5fa', fontSize: '14px', textDecoration: 'none' };
+const h1Style: React.CSSProperties = { margin: '0 0 10px', fontSize: '28px', color: '#f1f5f9' };
+const subtitleStyle: React.CSSProperties = { margin: '0 0 28px', fontSize: '15px', color: '#94a3b8', lineHeight: 1.7 };
 const sectionStyle: React.CSSProperties = { marginBottom: '36px' };
-const h2Style: React.CSSProperties = { margin: '0 0 12px', fontSize: '20px', color: '#0f172a' };
-const bodyStyle: React.CSSProperties = { margin: '0 0 12px', fontSize: '14px', color: '#374151', lineHeight: 1.7 };
+const h2Style: React.CSSProperties = { margin: '0 0 12px', fontSize: '20px', color: '#f1f5f9' };
+const bodyStyle: React.CSSProperties = { margin: '0 0 12px', fontSize: '14px', color: '#e2e8f0', lineHeight: 1.7 };
 const categoryGrid: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
@@ -579,7 +579,7 @@ const categoryGrid: React.CSSProperties = {
 const categoryCard: React.CSSProperties = {
   padding: '16px',
   borderRadius: '8px',
-  border: '1px solid rgba(0,0,0,0.06)',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
 };
 const categoryHeader: React.CSSProperties = { display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' };
 const colorSwatch: React.CSSProperties = {
@@ -587,28 +587,28 @@ const colorSwatch: React.CSSProperties = {
   height: '28px',
   borderRadius: '6px',
   flexShrink: 0,
-  border: '1px solid rgba(0,0,0,0.1)',
+  border: '1px solid rgba(255,255,255,0.15)',
 };
 const categoryLabel: React.CSSProperties = { fontWeight: 700, fontSize: '15px' };
-const categoryRange: React.CSSProperties = { fontSize: '12px', color: '#64748b', marginTop: '2px' };
-const categoryDesc: React.CSSProperties = { margin: '0 0 8px', fontSize: '13px', color: '#374151', lineHeight: 1.6 };
+const categoryRange: React.CSSProperties = { fontSize: '12px', color: '#94a3b8', marginTop: '2px' };
+const categoryDesc: React.CSSProperties = { margin: '0 0 8px', fontSize: '13px', color: '#e2e8f0', lineHeight: 1.6 };
 const actionList: React.CSSProperties = { margin: 0, paddingLeft: '18px' };
-const actionItem: React.CSSProperties = { fontSize: '12px', color: '#475569', marginBottom: '4px', lineHeight: 1.5 };
+const actionItem: React.CSSProperties = { fontSize: '12px', color: '#cbd5e1', marginBottom: '4px', lineHeight: 1.5 };
 const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '14px' };
 const thStyle: React.CSSProperties = {
   padding: '10px 12px',
-  background: '#f1f5f9',
-  borderBottom: '2px solid #e2e8f0',
+  background: 'rgba(15, 23, 42, 0.8)',
+  borderBottom: '2px solid rgba(51, 65, 85, 0.5)',
   fontWeight: 600,
-  color: '#374151',
+  color: '#cbd5e1',
   textAlign: 'center',
 };
-const rowEven: React.CSSProperties = { background: '#fff' };
-const rowOdd: React.CSSProperties = { background: '#f8fafc' };
-const tdC: React.CSSProperties = { padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid #e2e8f0' };
-const tdL: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid #e2e8f0', color: '#374151', lineHeight: 1.5 };
-const listStyle: React.CSSProperties = { margin: '0 0 12px', paddingLeft: '20px', fontSize: '14px', color: '#374151', lineHeight: 1.7 };
-const linkStyle: React.CSSProperties = { color: '#2563eb' };
-const footerStyle: React.CSSProperties = { marginTop: '32px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' };
-const footerTextStyle: React.CSSProperties = { margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' };
-const relatedStyle: React.CSSProperties = { fontSize: '13px', color: '#64748b' };
+const rowEven: React.CSSProperties = { background: 'rgba(15, 23, 42, 0.3)' };
+const rowOdd: React.CSSProperties = { background: 'rgba(15, 23, 42, 0.5)' };
+const tdC: React.CSSProperties = { padding: '10px 12px', textAlign: 'center', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', color: '#e2e8f0' };
+const tdL: React.CSSProperties = { padding: '10px 12px', borderBottom: '1px solid rgba(51, 65, 85, 0.5)', color: '#e2e8f0', lineHeight: 1.5 };
+const listStyle: React.CSSProperties = { margin: '0 0 12px', paddingLeft: '20px', fontSize: '14px', color: '#e2e8f0', lineHeight: 1.7 };
+const linkStyle: React.CSSProperties = { color: '#60a5fa' };
+const footerStyle: React.CSSProperties = { marginTop: '32px', paddingTop: '16px', borderTop: '1px solid rgba(51, 65, 85, 0.5)' };
+const footerTextStyle: React.CSSProperties = { margin: '0 0 8px', fontSize: '12px', color: '#64748b' };
+const relatedStyle: React.CSSProperties = { fontSize: '13px', color: '#94a3b8' };

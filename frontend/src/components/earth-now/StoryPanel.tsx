@@ -46,7 +46,7 @@ export default function StoryPanel({ onExploreOnGlobe }: StoryPanelProps) {
   if (error || !data) {
     return (
       <aside style={cardStyle}>
-        <div style={{ color: '#b91c1c', fontSize: '13px' }}>
+        <div style={{ color: '#f87171', fontSize: '13px' }}>
           Story unavailable.
         </div>
       </aside>
@@ -66,7 +66,7 @@ export default function StoryPanel({ onExploreOnGlobe }: StoryPanelProps) {
       >
         This Month's Climate Story
       </div>
-      <h3 style={{ margin: '0 0 10px', fontSize: '20px', color: '#0f172a' }}>
+      <h3 style={{ margin: '0 0 10px', fontSize: '20px', color: '#f1f5f9' }}>
         {data.title}
       </h3>
       <p
@@ -74,7 +74,7 @@ export default function StoryPanel({ onExploreOnGlobe }: StoryPanelProps) {
           margin: '0 0 16px',
           fontSize: '14px',
           lineHeight: 1.55,
-          color: '#334155',
+          color: '#e2e8f0',
         }}
       >
         {data.body}
@@ -112,7 +112,7 @@ function DataStatusLegend() {
       style={{
         marginTop: '20px',
         paddingTop: '14px',
-        borderTop: '1px solid #e5e7eb',
+        borderTop: '1px solid rgba(51, 65, 85, 0.5)',
       }}
     >
       <div
@@ -132,7 +132,7 @@ function DataStatusLegend() {
           flexWrap: 'wrap',
           gap: '6px 12px',
           fontSize: '11px',
-          color: '#475569',
+          color: '#94a3b8',
         }}
       >
         {items.map((it) => (
@@ -147,10 +147,11 @@ function DataStatusLegend() {
 
 const cardStyle: React.CSSProperties = {
   padding: '20px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '8px',
-  background: '#fff',
-  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+  background: 'rgba(15, 23, 42, 0.6)',
+  backdropFilter: 'blur(8px)',
+  boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
   display: 'flex',
   flexDirection: 'column',
 };
@@ -171,9 +172,9 @@ const secondaryBtnStyle: React.CSSProperties = {
   padding: '8px 14px',
   fontSize: '13px',
   fontWeight: 600,
-  background: '#f1f5f9',
-  color: '#0f172a',
-  border: '1px solid #cbd5e1',
+  background: 'rgba(15, 23, 42, 0.6)',
+  color: '#e2e8f0',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
   textDecoration: 'none',
   fontFamily: 'system-ui, sans-serif',

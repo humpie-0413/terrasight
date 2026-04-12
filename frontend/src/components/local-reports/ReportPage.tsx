@@ -413,7 +413,7 @@ export default function ReportPage({ cbsaSlug }: ReportPageProps) {
             ? `No report exists for "${cbsaSlug}". Check the URL or search for another metro.`
             : (error?.message ?? 'Unknown error')}
         </p>
-        <a href="/" style={{ color: '#2563eb', fontSize: '14px' }}>
+        <a href="/" style={{ color: '#60a5fa', fontSize: '14px' }}>
           ← Back to home
         </a>
       </article>
@@ -830,7 +830,7 @@ function ToxicReleasesBody({
       )}
       {/* RCRA Hazardous Waste Generators sub-section */}
       {values.rcra_summary && values.rcra_summary.handler_count > 0 && (
-        <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #e5e7eb' }}>
+        <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(51, 65, 85, 0.5)' }}>
           <h3 style={h3Style}>Hazardous Waste Generators (RCRA)</h3>
           <p style={noteStyle}>{values.rcra_summary.handler_count} large-quantity generators (biennial report)</p>
           <table style={tableStyle}>
@@ -1200,7 +1200,7 @@ function Block13ActiveAlerts({ block }: { block: ActiveAlertsBlock }) {
       />
       <h2 style={h2Style}>Active Weather Alerts</h2>
       {alert_count === 0 ? (
-        <p style={{ color: '#16a34a', fontWeight: 500 }}>
+        <p style={{ color: '#4ade80', fontWeight: 500 }}>
           No active weather alerts for this area.
         </p>
       ) : (
@@ -1210,13 +1210,13 @@ function Block13ActiveAlerts({ block }: { block: ActiveAlertsBlock }) {
               borderLeft: `4px solid ${severityColor(a.severity)}`,
               padding: '8px 12px',
               marginBottom: '8px',
-              background: '#fafafa',
+              background: 'rgba(15, 23, 42, 0.5)',
               borderRadius: '4px',
             }}>
               <div style={{ fontWeight: 600, color: severityColor(a.severity) }}>
                 {a.event}
               </div>
-              <div style={{ fontSize: '13px', color: '#475569' }}>
+              <div style={{ fontSize: '13px', color: '#94a3b8' }}>
                 {a.area_desc}
               </div>
               {a.expires && (
@@ -1585,7 +1585,7 @@ function ErrorNotice({ error }: { error: string }) {
   return (
     <div style={noticeStyle}>
       <strong>Could not load this block.</strong>
-      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#64748b' }}>
+      <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>
         {error}
       </p>
     </div>
@@ -1622,21 +1622,22 @@ const pageStyle: React.CSSProperties = {
   padding: '24px',
   maxWidth: '960px',
   margin: '0 auto',
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 
 const sectionStyle: React.CSSProperties = {
   marginBottom: '32px',
   padding: '16px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '8px',
-  background: '#fff',
+  background: 'rgba(15, 23, 42, 0.6)',
+  backdropFilter: 'blur(8px)',
 };
 
 const subBlockStyle: React.CSSProperties = {
   marginTop: '16px',
   paddingTop: '16px',
-  borderTop: '1px dashed #e5e7eb',
+  borderTop: '1px dashed rgba(51, 65, 85, 0.5)',
 };
 
 const h1Style: React.CSSProperties = {
@@ -1655,7 +1656,7 @@ const h3Style: React.CSSProperties = {
   margin: '16px 0 8px',
   fontSize: '14px',
   fontWeight: 600,
-  color: '#334155',
+  color: '#cbd5e1',
 };
 
 const subheadStyle: React.CSSProperties = {
@@ -1673,9 +1674,9 @@ const keySignalsGrid: React.CSSProperties = {
 
 const keySignalCard: React.CSSProperties = {
   padding: '12px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
-  background: '#f8fafc',
+  background: 'rgba(15, 23, 42, 0.5)',
 };
 
 const keySignalLabel: React.CSSProperties = {
@@ -1724,15 +1725,15 @@ const tableStyle: React.CSSProperties = {
 const thStyle: React.CSSProperties = {
   textAlign: 'left',
   padding: '6px 8px',
-  borderBottom: '2px solid #e5e7eb',
-  color: '#475569',
+  borderBottom: '2px solid rgba(51, 65, 85, 0.5)',
+  color: '#cbd5e1',
   fontWeight: 600,
 };
 
 const tdStyle: React.CSSProperties = {
   padding: '6px 8px',
-  borderBottom: '1px solid #f1f5f9',
-  color: '#334155',
+  borderBottom: '1px solid rgba(51, 65, 85, 0.3)',
+  color: '#e2e8f0',
 };
 
 const statsGrid: React.CSSProperties = {
@@ -1744,9 +1745,9 @@ const statsGrid: React.CSSProperties = {
 
 const statCard: React.CSSProperties = {
   padding: '12px',
-  border: '1px solid #e5e7eb',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
-  background: '#f8fafc',
+  background: 'rgba(15, 23, 42, 0.5)',
 };
 
 const statLabel: React.CSSProperties = {
@@ -1765,7 +1766,7 @@ const statValue: React.CSSProperties = {
 const disclaimerStyle: React.CSSProperties = {
   marginTop: '12px',
   fontSize: '12px',
-  color: '#dc2626',
+  color: '#fbbf24',
 };
 
 const disclaimerListStyle: React.CSSProperties = {
@@ -1791,10 +1792,10 @@ const notesListStyle: React.CSSProperties = {
 const noticeStyle: React.CSSProperties = {
   marginTop: '8px',
   padding: '10px 12px',
-  border: '1px dashed #f59e0b',
+  border: '1px dashed rgba(251, 191, 36, 0.5)',
   borderRadius: '6px',
-  background: '#fffbeb',
-  color: '#92400e',
+  background: 'rgba(120, 53, 15, 0.25)',
+  color: '#fbbf24',
   fontSize: '13px',
 };
 
@@ -1802,10 +1803,10 @@ const adSlotStyle: React.CSSProperties = {
   margin: '16px 0',
   padding: '24px',
   textAlign: 'center',
-  background: '#f1f5f9',
-  border: '1px dashed #cbd5e1',
+  background: 'rgba(15, 23, 42, 0.4)',
+  border: '1px dashed rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
-  color: '#94a3b8',
+  color: '#64748b',
   fontSize: '12px',
 };
 
@@ -1816,7 +1817,7 @@ const loadingStyle: React.CSSProperties = {
 
 const errorStyle: React.CSSProperties = {
   fontSize: '14px',
-  color: '#dc2626',
+  color: '#f87171',
 };
 
 const twoColGrid: React.CSSProperties = {
@@ -1830,7 +1831,7 @@ const cleanupListStyle: React.CSSProperties = {
   margin: '8px 0 0',
   paddingLeft: '18px',
   fontSize: '13px',
-  color: '#334155',
+  color: '#e2e8f0',
 };
 
 const cleanupMetaStyle: React.CSSProperties = {
@@ -1841,10 +1842,10 @@ const cleanupMetaStyle: React.CSSProperties = {
 const highVisDisclaimerStyle: React.CSSProperties = {
   marginTop: '16px',
   padding: '12px 14px',
-  border: '1px solid #f59e0b',
+  border: '1px solid rgba(251, 191, 36, 0.5)',
   borderRadius: '6px',
-  background: '#fffbeb',
-  color: '#92400e',
+  background: 'rgba(120, 53, 15, 0.25)',
+  color: '#fbbf24',
   fontSize: '13px',
   fontWeight: 500,
   lineHeight: 1.5,

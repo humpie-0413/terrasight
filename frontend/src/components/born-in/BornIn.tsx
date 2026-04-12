@@ -196,8 +196,8 @@ export default function BornIn() {
 
 const sectionStyle: React.CSSProperties = {
   padding: '40px 24px',
-  borderTop: '1px solid #e5e7eb',
-  background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+  borderTop: '1px solid rgba(51, 65, 85, 0.5)',
+  background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%)',
 };
 
 const innerStyle: React.CSSProperties = {
@@ -210,7 +210,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: '11px',
   textTransform: 'uppercase',
   letterSpacing: '0.1em',
-  color: '#0369a1',
+  color: '#60a5fa',
   fontWeight: 600,
   marginBottom: '8px',
 };
@@ -218,13 +218,13 @@ const labelStyle: React.CSSProperties = {
 const h2Style: React.CSSProperties = {
   margin: '0 0 10px',
   fontSize: '22px',
-  color: '#0c4a6e',
+  color: '#f1f5f9',
 };
 
 const bodyStyle: React.CSSProperties = {
   margin: '0 0 20px',
   fontSize: '14px',
-  color: '#0369a1',
+  color: '#94a3b8',
   lineHeight: 1.6,
 };
 
@@ -239,11 +239,11 @@ const inputRowStyle: React.CSSProperties = {
 const inputStyle: React.CSSProperties = {
   padding: '8px 12px',
   fontSize: '15px',
-  border: '1px solid #7dd3fc',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '6px',
   width: '120px',
-  background: '#fff',
-  color: '#0c4a6e',
+  background: 'rgba(15, 23, 42, 0.8)',
+  color: '#f1f5f9',
   fontFamily: 'system-ui, sans-serif',
   outline: 'none',
 };
@@ -281,20 +281,21 @@ const cardsRowStyle: React.CSSProperties = {
 };
 
 const cardStyle: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #bae6fd',
+  background: 'rgba(15, 23, 42, 0.6)',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '8px',
   padding: '14px 16px',
   minWidth: '170px',
   flex: '1 1 170px',
   maxWidth: '220px',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+  backdropFilter: 'blur(8px)',
 };
 
 const cardLabelStyle: React.CSSProperties = {
   fontSize: '11px',
   fontWeight: 700,
-  color: '#0369a1',
+  color: '#60a5fa',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
   marginBottom: '10px',
@@ -320,7 +321,7 @@ const colHeadStyle: React.CSSProperties = {
 const valueStyle: React.CSSProperties = {
   fontSize: '18px',
   fontWeight: 700,
-  color: '#0c4a6e',
+  color: '#f1f5f9',
   lineHeight: 1.1,
 };
 
@@ -340,7 +341,7 @@ const deltaStyle: React.CSSProperties = {
   fontSize: '13px',
   fontWeight: 700,
   padding: '4px 0',
-  borderTop: '1px solid #e0f2fe',
+  borderTop: '1px solid rgba(51, 65, 85, 0.5)',
 };
 
 const clampNoteStyle: React.CSSProperties = {
@@ -353,6 +354,5 @@ const clampNoteStyle: React.CSSProperties = {
 const noteStyle: React.CSSProperties = {
   marginTop: '20px',
   fontSize: '12px',
-  color: '#0369a1',
-  opacity: 0.75,
+  color: '#64748b',
 };

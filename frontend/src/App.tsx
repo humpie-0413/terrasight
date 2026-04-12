@@ -19,7 +19,7 @@ const Guide = lazy(() => import('./pages/Guide'));
 const fallbackStyle: React.CSSProperties = {
   padding: 40,
   textAlign: 'center',
-  color: '#64748b',
+  color: '#94a3b8',
   fontSize: '15px',
 };
 

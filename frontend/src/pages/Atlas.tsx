@@ -66,12 +66,12 @@ const headerStyle: React.CSSProperties = {
 const h1Style: React.CSSProperties = {
   margin: '0 0 8px',
   fontSize: '28px',
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 const subtitleStyle: React.CSSProperties = {
   margin: 0,
   fontSize: '15px',
-  color: '#475569',
+  color: '#94a3b8',
   maxWidth: '640px',
 };
 const gridStyle: React.CSSProperties = {
@@ -83,12 +83,13 @@ const cardStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   padding: '20px',
-  border: '1px solid #e2e8f0',
+  border: '1px solid rgba(51, 65, 85, 0.5)',
   borderRadius: '10px',
-  background: '#fff',
+  background: 'rgba(15, 23, 42, 0.6)',
+  backdropFilter: 'blur(8px)',
   textDecoration: 'none',
   color: 'inherit',
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
   transition: 'border-color 0.15s, box-shadow 0.15s',
 };
 const iconStyle: React.CSSProperties = {
@@ -100,12 +101,12 @@ const cardTitleStyle: React.CSSProperties = {
   margin: '0 0 8px',
   fontSize: '16px',
   fontWeight: 600,
-  color: '#0f172a',
+  color: '#f1f5f9',
 };
 const descStyle: React.CSSProperties = {
   margin: '0 0 16px',
   fontSize: '13px',
-  color: '#475569',
+  color: '#94a3b8',
   lineHeight: 1.55,
   flexGrow: 1,
 };
@@ -121,6 +122,7 @@ const countStyle: React.CSSProperties = {
   color: '#64748b',
   fontWeight: 500,
 };
+
 const liveStyle: React.CSSProperties = {
   color: '#16a34a',
   fontWeight: 600,
@@ -132,7 +134,7 @@ const tagsStyle: React.CSSProperties = {
 const footerNoteStyle: React.CSSProperties = {
   marginTop: '40px',
   padding: '16px',
-  borderTop: '1px solid #e5e7eb',
+  borderTop: '1px solid rgba(51, 65, 85, 0.5)',
   fontSize: '13px',
   color: '#64748b',
 };
