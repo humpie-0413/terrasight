@@ -164,7 +164,7 @@ def _build_toxic_releases_block(
             "handler_count": len(handlers),
             "top_handlers": [
                 {
-                    "name": h.handler_name,
+                    "name": h.name,
                     "city": h.city,
                     "state": h.state,
                     "waste_tons": h.waste_generated_tons,
