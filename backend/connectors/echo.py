@@ -33,6 +33,12 @@ Key behavioral differences from old echo13 API:
 MANDATORY disclaimer wherever this data is shown:
   "Regulatory compliance ≠ environmental exposure or health risk."
 =============================================================================
+
+Landmine added 2026-04-12:
+  - echodata.epa.gov blocks httpx default User-Agent as "robotic query".
+    Must send a browser-like UA header or the API returns an Error JSON
+    with "robotic or programmed query" and no QueryID.
+=============================================================================
 """
 from __future__ import annotations
 
@@ -47,6 +53,10 @@ from backend.connectors.base import BaseConnector, ConnectorResult
 BASE_URL = "https://echodata.epa.gov"
 FACILITIES_PATH = "/echo/echo_rest_services.get_facilities"
 QID_PATH = "/echo/echo_rest_services.get_qid"
+
+# ECHO blocks requests with default httpx User-Agent ("python-httpx/...").
+# Must send a descriptive UA to avoid "robotic query" block.
+_UA = "TerraSight/1.0 (environmental data portal; contact: terrasight.pages.dev)"
 
 # 100 facilities per page; 5 pages = 500 facility sample per call.
 MAX_PAGES = 5
@@ -98,9 +108,10 @@ class EchoConnector(BaseConnector):
             "p_act": "Y",
             "responseset": 100,
         }
-        timeout = httpx.Timeout(30.0, connect=10.0)
+        timeout = httpx.Timeout(60.0, connect=15.0)
+        headers = {"User-Agent": _UA}
         async with httpx.AsyncClient(
-            timeout=timeout, follow_redirects=True
+            timeout=timeout, follow_redirects=True, headers=headers,
         ) as client:
             # Hop 1: obtain QueryID and program-level header counts.
             r1 = await client.get(BASE_URL + FACILITIES_PATH, params=params)

@@ -111,8 +111,8 @@ class OpenAqConnector(BaseConnector):
                 pm25_value = float(value)
             except (TypeError, ValueError):
                 continue
-            # OpenAQ occasionally returns negative values from sensor glitches.
-            if pm25_value < 0:
+            # OpenAQ occasionally returns negative or sentinel values (9999).
+            if pm25_value < 0 or pm25_value > 1000:
                 continue
 
             dt = record.get("datetime") or {}

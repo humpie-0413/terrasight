@@ -93,6 +93,7 @@ Run these in order.
 | Landmine | Where | Fix |
 |---|---|---|
 | ECHO `ofmpub.epa.gov` → blocked | `connectors/echo.py` | Use `https://echodata.epa.gov/echo/` |
+| ECHO blocks default httpx User-Agent as "robotic query" | `connectors/echo.py` | Must send descriptive UA header; default `python-httpx/...` triggers API block |
 | ECHO `echo13_rest_services` → 404 on echodata | `connectors/echo.py` | Use `echo_rest_services` (no `13`) |
 | ECHO single-hop returns no Facilities | `connectors/echo.py` | Two-hop required: `get_facilities` → QueryID → `get_qid` paginated |
 | ECHO `FacLong` absent from QID response | `connectors/echo.py` | Only `FacLat` available; facility map deferred |

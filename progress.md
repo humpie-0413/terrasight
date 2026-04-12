@@ -311,9 +311,10 @@ SDWIS       HTTP 200  count=5  status=ok  (Houston 10개 ZIP 프리픽스 fan-ou
 
 ---
 
-### F.0 — 전수조사 + 커넥터 수리 + RCRA 추가 (2026-04-12) ✅
+### F.0 — 전수조사 + 커넥터 수리 + RCRA 추가 + 프로덕션 점검 (2026-04-12) ✅
 
 27개 커넥터 전수 라이브 프로브 + 놓친 환경데이터 갭 리서치 실시.
+프로덕션(Render) 전 경로 점검 실시.
 3개 고장 커넥터 수리 + RCRA 신규 추가 + 15개 신규 후보 발굴.
 
 **수리:**
@@ -346,6 +347,23 @@ SDWIS       HTTP 200  count=5  status=ok  (Houston 10개 ZIP 프리픽스 fan-ou
 - **USDM**: US Drought Monitor API — JRC 드로트 차단 대체 + 신규 Climate Trends 카드
 - **NWS Alerts**: 실시간 기상 경보 → FIRMS 이후 두 번째 Globe 이벤트 레이어
 - **NREL 호스트 이전**: `developer.nrel.gov` → `developer.nlr.gov` (2026-04-30 데드라인)
+
+**프로덕션(Render) 전 경로 점검 (2026-04-12):**
+
+| 카테고리 | 점검 대상 | 결과 |
+|---------|----------|------|
+| 홈 APIs (8개) | trends 5카드, fires, sst, air-monitors, coral, storms, story, born-in | ✅ 8/8 정상 (coral 수리 확인) |
+| Local Reports (5 metros × 10블록) | Houston, New York, LA, Chicago, Miami | ✅ 9/10 ok, related=pending (설계상) |
+| Rankings (6개) | epa-violations, pm25, tri, ghg, superfund, sdwis | ⚠️ **epa-violations 50/50 ERROR** (수정 완료 — UA 헤더 누락) |
+| Atlas / 기타 (10+개) | categories, reports, search, layers, releases, sites, sdwis | ✅ 전부 정상 |
+
+**ECHO 랭킹 수리 (blocking issue):**
+- **원인**: echodata.epa.gov가 httpx 기본 User-Agent (`python-httpx/...`)를 "robotic query"로 차단
+- **수정**: 서술적 UA 헤더 추가 (`TerraSight/1.0`) + 타임아웃 30→60s 증가
+- curl은 기본 UA로 통과하므로 이전 테스트에서 발견 안 됨
+
+**OpenAQ 이상치 수리 (cosmetic):**
+- pm25=9999 sentinel 값 → `pm25 > 1000` 필터 추가
 
 ---
 
