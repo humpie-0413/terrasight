@@ -12,6 +12,7 @@ export default defineConfig({
             '@deck.gl/core',
             '@deck.gl/layers',
             '@deck.gl/geo-layers',
+            '@deck.gl/aggregation-layers',
           ],
         },
       },

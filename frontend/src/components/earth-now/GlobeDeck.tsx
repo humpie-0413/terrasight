@@ -10,6 +10,7 @@ import {
 import { Deck, MapView, _GlobeView as GlobeView } from '@deck.gl/core';
 import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
+import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 
 import MetaLine from '../common/MetaLine';
 import { TrustTag } from '../../utils/trustTags';
@@ -17,11 +18,11 @@ import { useApi } from '../../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ActiveEvent = 'fires' | 'storms' | 'monitors' | 'earthquakes' | null;
-export type ActiveContinuous =
-  | 'ocean-heat' | 'coral' | 'cmems-sla'
-  | 'gibs-aod' | 'gibs-pm25' | 'gibs-oco2' | 'gibs-flood'
+export type ActiveCategory =
+  | 'air-quality' | 'fires-smoke' | 'ocean-health'
+  | 'earthquakes' | 'climate-co2' | 'climate-flood' | 'storms'
   | null;
+
 export type ViewMode = 'globe' | 'map';
 
 export interface GlobeHandle {
@@ -29,9 +30,8 @@ export interface GlobeHandle {
 }
 
 interface GlobeProps {
-  activeEvent: ActiveEvent;
-  activeContinuous: ActiveContinuous;
-  onLayerChange: (type: 'event' | 'continuous', key: string | null) => void;
+  activeCategory: ActiveCategory;
+  onCategoryChange: (key: ActiveCategory) => void;
 }
 
 // ─── Data interfaces ──────────────────────────────────────────────────────────
@@ -45,9 +45,6 @@ interface FiresResponse { count: number; configured: boolean; message?: string; 
 interface SstPoint { lat: number; lon: number; sst_c: number; }
 interface SstResponse { count: number; configured: boolean; stats: { min_c: number | null; max_c: number | null; mean_c: number | null }; points: SstPoint[]; }
 
-interface AirMonitor { lat: number; lon: number; pm25: number; location_name: string; datetime_utc: string; country: string | null; }
-interface AirMonitorsResponse { count: number; configured: boolean; message?: string; monitors: AirMonitor[]; }
-
 interface Storm { sid: string; name: string; basin: string; season: string; lat: number; lon: number; wind_kt: number; pres_hpa: number; sshs: number; iso_time: string; }
 interface StormsResponse { count: number; configured: boolean; storms: Storm[]; }
 
@@ -57,12 +54,8 @@ interface EarthquakeResponse { count: number; configured: boolean; status: strin
 interface CoralPoint { lat: number; lon: number; bleaching_alert: number; dhw: number; sst_c: number; sst_anomaly_c: number; }
 interface CoralResponse { count: number; configured: boolean; status: string; points: CoralPoint[]; }
 
-interface SlaPoint { lat: number; lon: number; sla_m: number; }
-interface SlaResponse { count: number; configured: boolean; status: string; message?: string; points: SlaPoint[]; }
-
 // ─── Tile URLs ────────────────────────────────────────────────────────────────
 
-// EPSG:3857 (Web Mercator) — matches deck.gl's internal tile indexing
 const BLUEMARBLE_TILE_URL =
   'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg';
 
@@ -89,75 +82,88 @@ const GIBS_LAYER_NAMES: Record<string, string> = {
   'gibs-flood': 'MODIS_Terra_Flood_3-Day',
 };
 
-function getGibsDate(): string {
+// Per-layer date: monthly products need first-of-month, daily use yesterday
+function getGibsDate(layerKey: string): string {
   const d = new Date();
-  d.setDate(d.getDate() - 1); // yesterday for data availability
+  if (layerKey === 'gibs-pm25') {
+    // MERRA-2 monthly has ~2 month latency
+    d.setMonth(d.getMonth() - 2);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  }
+  d.setDate(d.getDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
-// ─── Layer category definitions ───────────────────────────────────────────────
+// ─── Category definitions (ordered by public interest) ────────────────────────
 
-interface LayerDef {
-  key: string; label: string; type: 'event' | 'continuous';
-  activeColor: string; tag: TrustTag; cadence: string;
-  source: string; sourceUrl: string; available: boolean; note?: string;
+interface CategoryDef {
+  key: string;
+  name: string;
+  description: string;
+  activeColor: string;
+  tag: TrustTag;
+  cadence: string;
+  source: string;
+  sourceUrl: string;
+  /** Which internal layer keys to activate */
+  activates: string[];
 }
-
-interface CategoryDef { name: string; layers: LayerDef[]; }
 
 const CATEGORIES: CategoryDef[] = [
   {
-    name: 'Atmosphere',
-    layers: [
-      { key: 'gibs-pm25', label: 'PM2.5 (MERRA-2)', type: 'continuous', activeColor: '#a855f7', tag: TrustTag.Derived, cadence: 'Monthly', source: 'NASA GIBS / MERRA-2', sourceUrl: 'https://disc.gsfc.nasa.gov/datasets/M2TMNXAER_5.12.4/', available: true },
-      { key: 'gibs-aod', label: 'Aerosol Optical Depth', type: 'continuous', activeColor: '#f59e0b', tag: TrustTag.NearRealTime, cadence: 'Daily', source: 'NASA GIBS / MODIS Terra', sourceUrl: 'https://worldview.earthdata.nasa.gov/', available: true },
-      { key: 'monitors', label: 'Air Monitors (PM2.5)', type: 'event', activeColor: '#ca8a04', tag: TrustTag.Observed, cadence: 'Varies', source: 'OpenAQ', sourceUrl: 'https://openaq.org/', available: true },
-    ],
+    key: 'air-quality', name: 'Air Quality',
+    description: 'Global PM2.5 aerosol concentration',
+    activeColor: '#a855f7', tag: TrustTag.Derived, cadence: 'Monthly',
+    source: 'NASA GIBS / MERRA-2', sourceUrl: 'https://disc.gsfc.nasa.gov/datasets/M2TMNXAER_5.12.4/',
+    activates: ['gibs-pm25'],
   },
   {
-    name: 'Fire & Land',
-    layers: [
-      { key: 'fires', label: 'Active Fires', type: 'event', activeColor: '#dc2626', tag: TrustTag.NearRealTime, cadence: 'NRT ~3h', source: 'NASA FIRMS', sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/', available: true },
-      { key: 'deforestation', label: 'Deforestation', type: 'continuous', activeColor: '#16a34a', tag: TrustTag.Derived, cadence: 'Annual', source: 'Hansen / GFW', sourceUrl: 'https://www.globalforestwatch.org/', available: false, note: 'Country-level points require polygon query (P1)' },
-      { key: 'drought', label: 'Drought Index', type: 'continuous', activeColor: '#b45309', tag: TrustTag.Derived, cadence: 'Weekly', source: 'JRC GWIS', sourceUrl: 'https://gwis.jrc.ec.europa.eu/', available: false, note: 'JRC GWIS drought index — Phase P1' },
-    ],
+    key: 'fires-smoke', name: 'Fires & Smoke',
+    description: 'Active fire hotspots + aerosol spread',
+    activeColor: '#dc2626', tag: TrustTag.NearRealTime, cadence: 'NRT ~3h',
+    source: 'NASA FIRMS + MODIS AOD', sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/',
+    activates: ['fires', 'gibs-aod'],
   },
   {
-    name: 'Ocean',
-    layers: [
-      { key: 'ocean-heat', label: 'Sea Surface Temp', type: 'continuous', activeColor: '#0284c7', tag: TrustTag.Observed, cadence: 'Daily', source: 'NOAA OISST v2.1', sourceUrl: 'https://coralreefwatch.noaa.gov/product/5km/', available: true },
-      { key: 'coral', label: 'Coral Bleaching Alert', type: 'continuous', activeColor: '#f97316', tag: TrustTag.NearRealTime, cadence: 'Daily', source: 'NOAA Coral Reef Watch', sourceUrl: 'https://coralreefwatch.noaa.gov/', available: true },
-      { key: 'cmems-sla', label: 'Sea Level Anomaly', type: 'continuous', activeColor: '#3b82f6', tag: TrustTag.Derived, cadence: 'Daily', source: 'CMEMS / Copernicus Marine', sourceUrl: 'https://marine.copernicus.eu/', available: true },
-    ],
+    key: 'ocean-health', name: 'Ocean Health',
+    description: 'Sea surface temperature + coral bleaching stress',
+    activeColor: '#0284c7', tag: TrustTag.Observed, cadence: 'Daily',
+    source: 'NOAA OISST + CRW', sourceUrl: 'https://coralreefwatch.noaa.gov/',
+    activates: ['sst', 'coral'],
   },
   {
-    name: 'GHG',
-    layers: [
-      { key: 'gibs-oco2', label: 'CO₂ Column (OCO-2)', type: 'continuous', activeColor: '#22c55e', tag: TrustTag.Observed, cadence: 'Daily', source: 'NASA GIBS / OCO-2', sourceUrl: 'https://ocov2.jpl.nasa.gov/', available: true },
-      { key: 'gibs-ch4', label: 'CH₄ (TROPOMI)', type: 'continuous', activeColor: '#84cc16', tag: TrustTag.Observed, cadence: 'Daily', source: 'Copernicus GES DISC', sourceUrl: 'https://disc.gsfc.nasa.gov/', available: false, note: 'Satellite data coming soon' },
-    ],
+    key: 'earthquakes', name: 'Earthquakes',
+    description: 'M4+ seismic events (7 days)',
+    activeColor: '#ef4444', tag: TrustTag.Observed, cadence: 'NRT ~5 min',
+    source: 'USGS', sourceUrl: 'https://earthquake.usgs.gov/',
+    activates: ['earthquakes'],
   },
   {
-    name: 'Hazards',
-    layers: [
-      { key: 'storms', label: 'Tropical Storms', type: 'event', activeColor: '#ec4899', tag: TrustTag.NearRealTime, cadence: 'NRT ~6h', source: 'ATCF / IBTrACS', sourceUrl: 'https://www.nrlmry.navy.mil/atcf_web/atlas/ibtracks/', available: true },
-      { key: 'earthquakes', label: 'Earthquakes (M4+)', type: 'event', activeColor: '#ef4444', tag: TrustTag.Observed, cadence: 'NRT ~5 min', source: 'USGS', sourceUrl: 'https://earthquake.usgs.gov/', available: true },
-      { key: 'gibs-flood', label: 'Flood Detection', type: 'continuous', activeColor: '#0ea5e9', tag: TrustTag.NearRealTime, cadence: '3-Day', source: 'NASA GIBS / MODIS Terra', sourceUrl: 'https://worldview.earthdata.nasa.gov/', available: true },
-    ],
+    key: 'climate-co2', name: 'CO₂ Column',
+    description: 'Atmospheric CO₂ concentration',
+    activeColor: '#22c55e', tag: TrustTag.Observed, cadence: 'Daily',
+    source: 'NASA OCO-2', sourceUrl: 'https://ocov2.jpl.nasa.gov/',
+    activates: ['gibs-oco2'],
+  },
+  {
+    key: 'climate-flood', name: 'Flood Detection',
+    description: '3-day flood composite',
+    activeColor: '#0ea5e9', tag: TrustTag.NearRealTime, cadence: '3-Day',
+    source: 'NASA MODIS Terra', sourceUrl: 'https://worldview.earthdata.nasa.gov/',
+    activates: ['gibs-flood'],
+  },
+  {
+    key: 'storms', name: 'Tropical Storms',
+    description: 'Active cyclone tracking',
+    activeColor: '#ec4899', tag: TrustTag.NearRealTime, cadence: 'NRT ~6h',
+    source: 'NOAA IBTrACS', sourceUrl: 'https://www.nrlmry.navy.mil/atcf_web/atlas/ibtracks/',
+    activates: ['storms'],
   },
 ];
 
-const LAYER_LOOKUP = new Map<string, LayerDef>(
-  CATEGORIES.flatMap((c) => c.layers.map((l) => [l.key, l] as [string, LayerDef])),
+const CATEGORY_LOOKUP = new Map<string, CategoryDef>(
+  CATEGORIES.map((c) => [c.key, c]),
 );
-
-const TRUST_TAG_COLORS: Record<TrustTag, string> = {
-  [TrustTag.Observed]: '#22c55e',
-  [TrustTag.NearRealTime]: '#f59e0b',
-  [TrustTag.ForecastModel]: '#8b5cf6',
-  [TrustTag.Derived]: '#64748b',
-  [TrustTag.Estimated]: '#6b7280',
-};
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -187,9 +193,7 @@ function lerpColor(
   return [...stops[0][1], 255];
 }
 
-// Round 1 color improvements: nullschool.net / windy.com inspired palettes
 function fireColorRGBA(frp: number): [number, number, number, number] {
-  // Hot metal palette: white-hot core → orange → deep crimson
   if (frp >= 500) return rgbArr(180, 20, 20, 245);
   if (frp >= 200) return rgbArr(220, 50, 10, 235);
   if (frp >= 100) return rgbArr(245, 100, 10, 225);
@@ -199,49 +203,22 @@ function fireColorRGBA(frp: number): [number, number, number, number] {
 }
 
 function fireRadius(frp: number): number {
-  return Math.max(3, Math.min(12, 3 + Math.log10(Math.max(frp, 1)) * 3));
+  return Math.max(3, Math.min(14, 3 + Math.log10(Math.max(frp, 1)) * 3.5));
 }
 
-// SST palette inspired by nullschool.net ocean visualization
 function sstColorRGBA(c: number): [number, number, number, number] {
   return lerpColor([
-    [-2, [10, 10, 60]],    // deep navy
-    [2, [15, 40, 120]],    // dark blue
-    [8, [20, 80, 180]],    // blue
-    [14, [30, 150, 200]],  // cyan
-    [18, [60, 200, 160]],  // teal-green
-    [22, [180, 220, 60]],  // chartreuse
-    [26, [250, 180, 20]],  // amber
-    [29, [230, 80, 10]],   // burnt orange
-    [32, [170, 10, 10]],   // deep red
+    [-2, [10, 10, 60]], [2, [15, 40, 120]], [8, [20, 80, 180]],
+    [14, [30, 150, 200]], [18, [60, 200, 160]], [22, [180, 220, 60]],
+    [26, [250, 180, 20]], [29, [230, 80, 10]], [32, [170, 10, 10]],
   ], c);
 }
 
-function pm25ColorRGBA(pm: number): [number, number, number, number] {
-  if (pm <= 12) return rgbArr(0, 228, 0, 200);
-  if (pm <= 35.4) return rgbArr(255, 255, 0, 200);
-  if (pm <= 55.4) return rgbArr(255, 126, 0, 210);
-  if (pm <= 150.4) return rgbArr(255, 0, 0, 220);
-  if (pm <= 250.4) return rgbArr(143, 63, 151, 230);
-  return rgbArr(126, 0, 35, 240);
-}
-
-// Coral DHW palette — NOAA Coral Reef Watch official colors
 function dhwColorRGBA(dhw: number): [number, number, number, number] {
   return lerpColor([
-    [0, [180, 200, 240]],   // cool blue (no stress)
-    [2, [255, 255, 100]],   // watch yellow
-    [4, [255, 200, 0]],     // warning amber
-    [8, [255, 120, 0]],     // alert orange
-    [12, [220, 30, 30]],    // alert 2 red
-    [16, [140, 20, 180]],   // extreme purple
+    [0, [180, 200, 240]], [2, [255, 255, 100]], [4, [255, 200, 0]],
+    [8, [255, 120, 0]], [12, [220, 30, 30]], [16, [140, 20, 180]],
   ], dhw);
-}
-
-function slaColorRGBA(sla_m: number): [number, number, number, number] {
-  return lerpColor([
-    [-0.3, [59, 130, 246]], [0, [200, 200, 255]], [0.3, [220, 38, 38]],
-  ], sla_m);
 }
 
 function stormColorRGBA(windKt: number): [number, number, number, number] {
@@ -272,57 +249,31 @@ function earthquakeRadius(mag: number): number {
   return Math.max(4, 4 + (mag - 4) * 5);
 }
 
-// ─── ViewState type ───────────────────────────────────────────────────────────
+// Fire heatmap color ramp for 2D mode
+const FIRE_HEATMAP_COLORS: [number, number, number][] = [
+  [255, 255, 200], [255, 237, 160], [254, 204, 92],
+  [253, 141, 60], [240, 59, 32], [189, 0, 38],
+];
 
-interface GlobeViewState {
-  longitude: number;
-  latitude: number;
-  zoom: number;
-}
+// ─── ViewState ────────────────────────────────────────────────────────────────
 
-const INITIAL_VIEW_STATE: GlobeViewState = {
-  longitude: 0,
-  latitude: 20,
-  zoom: 1.2,
-};
+interface GlobeViewState { longitude: number; latitude: number; zoom: number; }
+const INITIAL_VIEW_STATE: GlobeViewState = { longitude: 0, latitude: 20, zoom: 1.2 };
 
-// ─── LayerPanel ───────────────────────────────────────────────────────────────
+// ─── LayerBar (bottom control strip) ──────────────────────────────────────────
 
-interface LayerPanelProps {
-  activeEvent: ActiveEvent;
-  activeContinuous: ActiveContinuous;
-  onLayerChange: (type: 'event' | 'continuous', key: string | null) => void;
+function LayerBar({
+  activeCategory, onCategoryChange, viewMode, onViewModeChange,
+}: {
+  activeCategory: ActiveCategory;
+  onCategoryChange: (key: ActiveCategory) => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  slaConfigured: boolean;
-  slaStatus?: string;
-  airConfigured: boolean;
-}
-
-function LayerPanel({
-  activeEvent, activeContinuous, onLayerChange,
-  viewMode, onViewModeChange,
-  slaConfigured, airConfigured,
-}: LayerPanelProps) {
-  const [selectedCat, setSelectedCat] = useState<string | null>('Fire & Land');
-
-  const isActive = (layer: LayerDef): boolean =>
-    layer.type === 'event' ? activeEvent === layer.key : activeContinuous === layer.key;
-
-  const isDisabled = (layer: LayerDef): boolean => {
-    if (!layer.available) return true;
-    if (layer.key === 'cmems-sla' && !slaConfigured) return true;
-    if (layer.key === 'monitors' && !airConfigured) return true;
-    return false;
-  };
-
-  const selectedLayers = CATEGORIES.find((c) => c.name === selectedCat)?.layers ?? [];
-
+}) {
   return (
     <div style={layerBarStyle}>
-      {/* Top row: view toggle + category tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', overflowX: 'auto' }}>
-        {/* View mode toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '3px', overflowX: 'auto', paddingBottom: 2 }}>
+        {/* View toggle */}
         <button type="button"
           onClick={() => onViewModeChange(viewMode === 'globe' ? 'map' : 'globe')}
           style={{
@@ -334,88 +285,47 @@ function LayerPanel({
           {viewMode === 'globe' ? '3D' : '2D'}
         </button>
 
-        <div style={{ width: 1, height: 18, background: 'rgba(51,65,85,0.4)', margin: '0 6px', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 20, background: 'rgba(51,65,85,0.4)', margin: '0 4px', flexShrink: 0 }} />
 
-        {CATEGORIES.map((cat) => (
-          <button key={cat.name} type="button"
-            onClick={() => setSelectedCat((prev) => prev === cat.name ? null : cat.name)}
-            style={{
-              padding: '5px 10px',
-              background: selectedCat === cat.name ? 'rgba(59,130,246,0.15)' : 'transparent',
-              border: 'none', borderRadius: '6px',
-              color: selectedCat === cat.name ? '#e2e8f0' : '#64748b',
-              fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'system-ui, sans-serif', whiteSpace: 'nowrap', flexShrink: 0,
-              transition: 'background 0.15s, color 0.15s',
-            }}>
-            {cat.name}
-          </button>
-        ))}
+        {CATEGORIES.map((cat) => {
+          const active = activeCategory === cat.key;
+          return (
+            <button key={cat.key} type="button"
+              onClick={() => onCategoryChange(active ? null : cat.key as ActiveCategory)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '5px',
+                padding: '5px 12px', fontSize: '11px', fontWeight: active ? 700 : 500,
+                border: '1px solid',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                fontFamily: 'system-ui, sans-serif',
+                whiteSpace: 'nowrap', flexShrink: 0,
+                background: active ? cat.activeColor : 'rgba(30,41,59,0.5)',
+                color: active ? '#fff' : '#94a3b8',
+                borderColor: active ? cat.activeColor : 'rgba(51,65,85,0.4)',
+                transition: 'background 0.2s, border-color 0.2s, color 0.2s',
+                boxShadow: active ? `0 0 12px ${cat.activeColor}40` : 'none',
+              }}>
+              {cat.name}
+            </button>
+          );
+        })}
       </div>
-
-      {/* Layer pills for selected category */}
-      {selectedCat && selectedLayers.length > 0 && (
-        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
-          {selectedLayers.map((layer) => {
-            const active = isActive(layer);
-            const disabled = isDisabled(layer);
-            const tagColor = TRUST_TAG_COLORS[layer.tag];
-            return (
-              <button key={layer.key} type="button" disabled={disabled}
-                onClick={() => !disabled && onLayerChange(layer.type, active ? null : layer.key)}
-                title={disabled ? (layer.note ?? 'Not available') : undefined}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '5px',
-                  padding: '4px 10px', fontSize: '11px', fontWeight: active ? 600 : 400,
-                  border: '1px solid', borderRadius: '14px',
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  fontFamily: 'system-ui, sans-serif',
-                  background: active ? layer.activeColor : 'rgba(30,41,59,0.5)',
-                  color: active ? '#fff' : '#94a3b8',
-                  borderColor: active ? layer.activeColor : 'rgba(51,65,85,0.4)',
-                  opacity: disabled ? 0.3 : 1,
-                  whiteSpace: 'nowrap', flexShrink: 0,
-                  transition: 'background 0.2s, border-color 0.2s',
-                }}>
-                <span style={{
-                  width: 5, height: 5, borderRadius: '50%',
-                  background: tagColor, flexShrink: 0,
-                }} />
-                {layer.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── Legend component ─────────────────────────────────────────────────────────
+// ─── Legend ────────────────────────────────────────────────────────────────────
 
-function Legend({ activeEvent, activeContinuous }: { activeEvent: ActiveEvent; activeContinuous: ActiveContinuous }) {
-  if (activeEvent === 'fires') return (
+function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
+  if (activeCategory === 'fires-smoke') return (
     <div style={legendStyle}>
       <div style={legendTitleStyle}>Fire Radiative Power (MW)</div>
-      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(255,230,120), rgb(255,200,60), rgb(255,160,20), rgb(245,100,10), rgb(220,50,10), rgb(180,20,20))', height: 10, borderRadius: 3 }} />
+      <div style={{ background: 'linear-gradient(to right, rgb(255,230,120), rgb(255,200,60), rgb(255,160,20), rgb(245,100,10), rgb(220,50,10), rgb(180,20,20))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>0</span><span>10</span><span>50</span><span>100</span><span>200</span><span>500+</span></div>
     </div>
   );
-  if (activeEvent === 'monitors') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>PM2.5 AQI</div>
-      <div style={legendBarStyle}>
-        <span style={{ ...legendSwatch, background: '#00e400' }} />
-        <span style={{ ...legendSwatch, background: '#ffff00' }} />
-        <span style={{ ...legendSwatch, background: '#ff7e00' }} />
-        <span style={{ ...legendSwatch, background: '#ff0000' }} />
-        <span style={{ ...legendSwatch, background: '#8f3f97' }} />
-        <span style={{ ...legendSwatch, background: '#7e0023' }} />
-      </div>
-      <div style={legendLabelsStyle}><span>Good</span><span>Mod</span><span>USG</span><span>Unhealthy</span><span>VU</span><span>Haz</span></div>
-    </div>
-  );
-  if (activeEvent === 'earthquakes') return (
+  if (activeCategory === 'earthquakes') return (
     <div style={legendStyle}>
       <div style={legendTitleStyle}>Earthquake Magnitude</div>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -429,38 +339,30 @@ function Legend({ activeEvent, activeContinuous }: { activeEvent: ActiveEvent; a
       </div>
     </div>
   );
-  if (activeEvent === 'storms') return (
+  if (activeCategory === 'storms') return (
     <div style={legendStyle}>
-      <div style={legendTitleStyle}>Storm Wind Speed (kt)</div>
-      <div style={legendBarStyle}>
-        <span style={{ ...legendSwatch, background: '#fff', border: '1px solid #475569' }} />
-        <span style={{ ...legendSwatch, background: '#eab308' }} />
-        <span style={{ ...legendSwatch, background: '#f97316' }} />
-        <span style={{ ...legendSwatch, background: '#dc2626' }} />
-        <span style={{ ...legendSwatch, background: '#ec4899' }} />
-        <span style={{ ...legendSwatch, background: '#7c3aed' }} />
+      <div style={legendTitleStyle}>Storm Intensity (kt)</div>
+      <div style={{ display: 'flex', gap: 0 }}>
+        {['#fff', '#eab308', '#f97316', '#dc2626', '#ec4899', '#7c3aed'].map((c, i) => (
+          <span key={i} style={{ flex: 1, height: 10, background: c, border: c === '#fff' ? '1px solid #475569' : 'none' }} />
+        ))}
       </div>
       <div style={legendLabelsStyle}><span>TD</span><span>TS</span><span>C1</span><span>C2</span><span>C3</span><span>C4+</span></div>
     </div>
   );
-  if (activeContinuous === 'ocean-heat') return (
+  if (activeCategory === 'ocean-health') return (
     <div style={legendStyle}>
-      <div style={legendTitleStyle}>Sea Surface Temperature (°C)</div>
-      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(10,10,60), rgb(20,80,180), rgb(60,200,160), rgb(180,220,60), rgb(250,180,20), rgb(170,10,10))', height: 10, borderRadius: 3 }} />
+      <div style={legendTitleStyle}>Sea Surface Temp (°C) + Coral DHW</div>
+      <div style={{ background: 'linear-gradient(to right, rgb(10,10,60), rgb(20,80,180), rgb(60,200,160), rgb(180,220,60), rgb(250,180,20), rgb(170,10,10))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>-2</span><span>8</span><span>18</span><span>22</span><span>26</span><span>32+</span></div>
-    </div>
-  );
-  if (activeContinuous === 'coral') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>Degree Heating Weeks (°C-weeks)</div>
-      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(180,200,240), rgb(255,200,0), rgb(255,120,0), rgb(220,30,30), rgb(140,20,180))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>0</span><span>4</span><span>8</span><span>12</span><span>16+</span></div>
+      <div style={{ marginTop: 6, background: 'linear-gradient(to right, rgb(180,200,240), rgb(255,200,0), rgb(255,120,0), rgb(220,30,30), rgb(140,20,180))', height: 6, borderRadius: 2 }} />
+      <div style={{ ...legendLabelsStyle, marginTop: 1 }}><span>0</span><span>DHW</span><span>8</span><span>12</span><span>16+</span></div>
     </div>
   );
   return null;
 }
 
-// ─── Tooltip component ────────────────────────────────────────────────────────
+// ─── Tooltip ──────────────────────────────────────────────────────────────────
 
 function Tooltip({ info }: { info: { x: number; y: number; object: Record<string, unknown>; layer: { id: string } } | null }) {
   if (!info?.object) return null;
@@ -468,31 +370,24 @@ function Tooltip({ info }: { info: { x: number; y: number; object: Record<string
   const layerId = info.layer?.id ?? '';
 
   let content = '';
-  if (layerId === 'fires-layer') {
+  if (layerId === 'fires-layer' || layerId === 'fires-heatmap') {
     const f = obj as unknown as FireHotspot;
-    content = `<b>FIRMS hotspot</b><br/>${f.acq_date} ${f.acq_time} UTC (${f.daynight === 'D' ? 'day' : 'night'})<br/>FRP: ${f.frp?.toFixed(1)} MW · confidence: ${f.confidence || '—'}<br/>${f.lat?.toFixed(2)}°, ${f.lon?.toFixed(2)}°`;
+    content = `<b>Fire hotspot</b><br/>${f.acq_date} ${f.acq_time} UTC<br/>FRP: ${f.frp?.toFixed(1)} MW<br/>${f.lat?.toFixed(2)}°, ${f.lon?.toFixed(2)}°`;
   } else if (layerId === 'storms-layer') {
     const s = obj as unknown as Storm;
-    content = `<b>${s.name}</b> (${s.basin} basin)<br/>${s.iso_time} UTC<br/>Wind: ${s.wind_kt} kt · Pressure: ${s.pres_hpa} hPa · SSHS: ${s.sshs}<br/>${s.lat?.toFixed(2)}°, ${s.lon?.toFixed(2)}°`;
+    content = `<b>${s.name}</b> (${s.basin})<br/>${s.iso_time} UTC<br/>Wind: ${s.wind_kt} kt · ${s.pres_hpa} hPa<br/>${s.lat?.toFixed(2)}°, ${s.lon?.toFixed(2)}°`;
   } else if (layerId === 'earthquakes-layer') {
     const e = obj as unknown as Earthquake;
-    content = `<b>M${e.magnitude?.toFixed(1)}</b> — ${e.place}<br/>Depth: ${e.depth_km?.toFixed(1)} km<br/>${e.time_utc} UTC${e.tsunami ? '<br/><span style="color:#ef4444;font-weight:600;">⚠ Tsunami flag</span>' : ''}<br/><span style="color:#94a3b8;">${e.lat?.toFixed(2)}°, ${e.lon?.toFixed(2)}°</span>`;
-  } else if (layerId === 'monitors-layer') {
-    const m = obj as unknown as AirMonitor;
-    content = `<b>${m.location_name}</b>${m.country ? ` · ${m.country}` : ''}<br/>PM2.5: ${m.pm25?.toFixed(1)} µg/m³<br/><span style="color:#94a3b8;">${m.datetime_utc || '—'}</span>`;
+    content = `<b>M${e.magnitude?.toFixed(1)}</b> — ${e.place}<br/>Depth: ${e.depth_km?.toFixed(1)} km<br/>${e.time_utc} UTC${e.tsunami ? '<br/><span style="color:#ef4444;font-weight:600">⚠ Tsunami</span>' : ''}`;
   } else if (layerId === 'sst-layer') {
     const s = obj as unknown as SstPoint;
-    content = `<b>Ocean Heat</b><br/>SST: ${s.sst_c?.toFixed(1)}°C<br/>${s.lat?.toFixed(2)}°, ${s.lon?.toFixed(2)}°`;
+    content = `<b>SST</b> ${s.sst_c?.toFixed(1)}°C<br/>${s.lat?.toFixed(2)}°, ${s.lon?.toFixed(2)}°`;
   } else if (layerId === 'coral-layer') {
     const c = obj as unknown as CoralPoint;
-    content = `<b>Coral Bleaching</b><br/>DHW: ${c.dhw?.toFixed(1)} °C-weeks<br/>SST: ${c.sst_c?.toFixed(1)}°C<br/>${c.lat?.toFixed(2)}°, ${c.lon?.toFixed(2)}°`;
-  } else if (layerId === 'sla-layer') {
-    const s = obj as unknown as SlaPoint;
-    content = `<b>Sea Level Anomaly</b><br/>SLA: ${s.sla_m >= 0 ? '+' : ''}${s.sla_m?.toFixed(3)} m<br/>${s.lat?.toFixed(2)}°, ${s.lon?.toFixed(2)}°`;
+    content = `<b>Coral stress</b><br/>DHW: ${c.dhw?.toFixed(1)} °C-wk · SST: ${c.sst_c?.toFixed(1)}°C`;
   }
 
   if (!content) return null;
-
   return (
     <div style={{
       position: 'absolute', left: info.x + 14, top: info.y - 14, pointerEvents: 'none',
@@ -501,15 +396,15 @@ function Tooltip({ info }: { info: { x: number; y: number; object: Record<string
       fontSize: '12px', lineHeight: '1.5',
       fontFamily: 'system-ui, sans-serif', maxWidth: 300, zIndex: 25,
       backdropFilter: 'blur(14px)',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     }} dangerouslySetInnerHTML={{ __html: content }} />
   );
 }
 
-// ─── Main Globe component ─────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
-  { activeEvent, activeContinuous, onLayerChange },
+  { activeCategory, onCategoryChange },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -518,20 +413,18 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
   const deckRef = useRef<any>(null);
   const [viewState, setViewState] = useState<GlobeViewState>(INITIAL_VIEW_STATE);
   const [viewMode, setViewMode] = useState<ViewMode>('globe');
-  const lastInteractionRef = useRef(0); // timestamp of last user interaction
-  const viewStateRef = useRef(INITIAL_VIEW_STATE); // ref mirror for animation loop
+  const lastInteractionRef = useRef(0);
+  const viewStateRef = useRef(INITIAL_VIEW_STATE);
   const [hoverInfo, setHoverInfo] = useState<{
     x: number; y: number; object: Record<string, unknown>; layer: { id: string };
   } | null>(null);
   const [dims, setDims] = useState({ width: 800, height: 600 });
 
-  // Data fetches
+  // Data fetches — only global data, no US-specific
   const { data: firesData } = useApi<FiresResponse>('/earth-now/fires');
   const { data: sstData } = useApi<SstResponse>('/earth-now/sst');
-  const { data: airData } = useApi<AirMonitorsResponse>('/earth-now/air-monitors');
   const { data: stormsData } = useApi<StormsResponse>('/earth-now/storms');
   const { data: coralData } = useApi<CoralResponse>('/earth-now/coral');
-  const { data: slaData } = useApi<SlaResponse>('/earth-now/sea-level-anomaly');
   const { data: earthquakeData } = useApi<EarthquakeResponse>('/hazards/earthquakes?min_magnitude=4&limit=500&days=7');
 
   // Responsive sizing
@@ -546,11 +439,12 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     return () => observer.disconnect();
   }, []);
 
-  // Expose flyTo
   useImperativeHandle(ref, () => ({
     flyTo: (lat: number, lng: number, altitude = 1.8) => {
       const zoom = Math.max(0.5, 4 - altitude);
-      setViewState({ latitude: lat, longitude: lng, zoom });
+      const vs = { latitude: lat, longitude: lng, zoom };
+      viewStateRef.current = vs;
+      setViewState(vs);
     },
   }), []);
 
@@ -563,13 +457,18 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     }
   }, []);
 
+  // Compute which internal layer keys are active
+  const activeLayers = useMemo(() => {
+    const cat = CATEGORIES.find((c) => c.key === activeCategory);
+    return new Set(cat?.activates ?? []);
+  }, [activeCategory]);
+
   // ── Build deck.gl layers ──────────────────────────────────────────────────
 
   const layers = useMemo(() => {
     const result: unknown[] = [];
-    const gibsDate = getGibsDate();
 
-    // 1. Base tiles — Globe: BlueMarble (GIBS EPSG:3857), Map: Carto Dark
+    // 1. Base tiles
     const baseTileUrl = viewMode === 'globe' ? BLUEMARBLE_TILE_URL : CARTO_DARK_URL;
     const baseMaxZoom = viewMode === 'globe' ? 8 : 19;
     result.push(
@@ -580,13 +479,10 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
         maxZoom: baseMaxZoom,
         tileSize: 256,
         renderSubLayers: (props: Record<string, unknown>) => {
-          const tileProps = props.tile as {
-            bbox: { west: number; south: number; east: number; north: number };
-          };
+          const tileProps = props.tile as { bbox: { west: number; south: number; east: number; north: number } };
           const { west, south, east, north } = tileProps.bbox;
           return new BitmapLayer({
-            ...props,
-            data: undefined,
+            ...props, data: undefined,
             image: props.data as string,
             bounds: [west, south, east, north],
           });
@@ -594,33 +490,29 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       }),
     );
 
-    // 2. GIBS WMS overlay — uses getTileData for proper bbox construction
-    const gibsLayerName = activeContinuous ? GIBS_LAYER_NAMES[activeContinuous] : null;
-    if (gibsLayerName) {
+    // 2. GIBS WMS overlay tiles — for any active gibs-* layer
+    const gibsKey = ['gibs-pm25', 'gibs-aod', 'gibs-oco2', 'gibs-flood'].find((k) => activeLayers.has(k));
+    if (gibsKey) {
+      const gibsLayerName = GIBS_LAYER_NAMES[gibsKey];
+      const gibsDate = getGibsDate(gibsKey);
       result.push(
         new TileLayer({
           id: 'gibs-overlay',
           minZoom: 0,
           maxZoom: 5,
           tileSize: 256,
-          opacity: 0.7,
+          opacity: 0.75,
           getTileData: (tileInfo: unknown) => {
-            const tile = tileInfo as {
-              bbox: { west: number; south: number; east: number; north: number };
-            };
+            const tile = tileInfo as { bbox: { west: number; south: number; east: number; north: number } };
             const { west, south, east, north } = tile.bbox;
-            // WMS 1.1.1 BBOX order: minx,miny,maxx,maxy = west,south,east,north
             const url = `${GIBS_WMS_BASE}&LAYERS=${gibsLayerName}&TIME=${gibsDate}&BBOX=${west},${south},${east},${north}&WIDTH=256&HEIGHT=256`;
             return loadWmsImage(url);
           },
           renderSubLayers: (props: Record<string, unknown>) => {
-            const tileProps = props.tile as {
-              bbox: { west: number; south: number; east: number; north: number };
-            };
+            const tileProps = props.tile as { bbox: { west: number; south: number; east: number; north: number } };
             const { west, south, east, north } = tileProps.bbox;
             return new BitmapLayer({
-              ...props,
-              data: undefined,
+              ...props, data: undefined,
               image: props.data as string,
               bounds: [west, south, east, north],
             });
@@ -629,31 +521,62 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       );
     }
 
-    // Round 2: All data layers get transitions for smooth fade
     const fadeTransition = { getRadius: { duration: 600, easing: (t: number) => t }, getFillColor: { duration: 400 } };
 
-    // 3. Fire points
-    if (activeEvent === 'fires' && firesData?.fires) {
-      result.push(
-        new ScatterplotLayer({
-          id: 'fires-layer',
-          data: firesData.fires,
-          getPosition: (d: FireHotspot) => [d.lon, d.lat],
-          getFillColor: (d: FireHotspot) => fireColorRGBA(d.frp),
-          getRadius: (d: FireHotspot) => fireRadius(d.frp),
-          radiusUnits: 'pixels' as const,
-          radiusMinPixels: 2,
-          radiusMaxPixels: 14,
-          pickable: true,
-          onHover,
-          antialiasing: true,
-          transitions: fadeTransition,
-        }),
-      );
+    // 3. Fire layer — HeatmapLayer in 2D, ScatterplotLayer with glow in 3D
+    if (activeLayers.has('fires') && firesData?.fires) {
+      if (viewMode === 'map') {
+        result.push(
+          new HeatmapLayer({
+            id: 'fires-heatmap',
+            data: firesData.fires,
+            getPosition: (d: FireHotspot) => [d.lon, d.lat],
+            getWeight: (d: FireHotspot) => Math.log10(Math.max(d.frp, 1)) + 1,
+            radiusPixels: 50,
+            intensity: 2,
+            threshold: 0.03,
+            colorRange: FIRE_HEATMAP_COLORS,
+          }),
+        );
+      } else {
+        // 3D Globe: glow ring + core point
+        result.push(
+          new ScatterplotLayer({
+            id: 'fires-glow',
+            data: firesData.fires,
+            getPosition: (d: FireHotspot) => [d.lon, d.lat],
+            getFillColor: (d: FireHotspot) => {
+              const c = fireColorRGBA(d.frp);
+              return [c[0], c[1], c[2], 40] as [number, number, number, number];
+            },
+            getRadius: (d: FireHotspot) => fireRadius(d.frp) * 2.5,
+            radiusUnits: 'pixels' as const,
+            radiusMinPixels: 4,
+            radiusMaxPixels: 36,
+            pickable: false,
+          }),
+        );
+        result.push(
+          new ScatterplotLayer({
+            id: 'fires-layer',
+            data: firesData.fires,
+            getPosition: (d: FireHotspot) => [d.lon, d.lat],
+            getFillColor: (d: FireHotspot) => fireColorRGBA(d.frp),
+            getRadius: (d: FireHotspot) => fireRadius(d.frp),
+            radiusUnits: 'pixels' as const,
+            radiusMinPixels: 2,
+            radiusMaxPixels: 14,
+            pickable: true,
+            onHover,
+            antialiasing: true,
+            transitions: fadeTransition,
+          }),
+        );
+      }
     }
 
-    // 4. Storm points — with stroked outline for visibility
-    if (activeEvent === 'storms' && stormsData?.storms) {
+    // 4. Storm points
+    if (activeLayers.has('storms') && stormsData?.storms) {
       result.push(
         new ScatterplotLayer({
           id: 'storms-layer',
@@ -674,9 +597,8 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       );
     }
 
-    // 5. Earthquake points — outer ring for emphasis
-    if (activeEvent === 'earthquakes' && earthquakeData?.earthquakes) {
-      // Outer glow ring (slightly larger, semi-transparent)
+    // 5. Earthquake points — glow ring + core
+    if (activeLayers.has('earthquakes') && earthquakeData?.earthquakes) {
       result.push(
         new ScatterplotLayer({
           id: 'earthquakes-glow',
@@ -688,12 +610,10 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           },
           getRadius: (d: Earthquake) => earthquakeRadius(d.magnitude) * 2,
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 6,
-          radiusMaxPixels: 48,
+          radiusMinPixels: 6, radiusMaxPixels: 48,
           pickable: false,
         }),
       );
-      // Core point
       result.push(
         new ScatterplotLayer({
           id: 'earthquakes-layer',
@@ -702,8 +622,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           getFillColor: (d: Earthquake) => earthquakeColorRGBA(d.magnitude),
           getRadius: (d: Earthquake) => earthquakeRadius(d.magnitude),
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 3,
-          radiusMaxPixels: 24,
+          radiusMinPixels: 3, radiusMaxPixels: 24,
           stroked: true,
           getLineColor: rgbArr(255, 255, 255, 100),
           lineWidthMinPixels: 1,
@@ -714,37 +633,17 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       );
     }
 
-    // 6. Air Monitor points
-    if (activeEvent === 'monitors' && airData?.monitors) {
-      result.push(
-        new ScatterplotLayer({
-          id: 'monitors-layer',
-          data: airData.monitors,
-          getPosition: (d: AirMonitor) => [d.lon, d.lat],
-          getFillColor: (d: AirMonitor) => pm25ColorRGBA(d.pm25),
-          getRadius: 5,
-          radiusUnits: 'pixels' as const,
-          radiusMinPixels: 3,
-          radiusMaxPixels: 8,
-          pickable: true,
-          onHover,
-          transitions: fadeTransition,
-        }),
-      );
-    }
-
-    // 7. SST scatter (continuous) — larger points for coverage feel
-    if (activeContinuous === 'ocean-heat' && sstData?.points) {
+    // 6. SST scatter — larger radius for pseudo-continuous look
+    if (activeLayers.has('sst') && sstData?.points) {
       result.push(
         new ScatterplotLayer({
           id: 'sst-layer',
           data: sstData.points,
           getPosition: (d: SstPoint) => [d.lon, d.lat],
           getFillColor: (d: SstPoint) => sstColorRGBA(d.sst_c),
-          getRadius: 10,
+          getRadius: 14,
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 5,
-          radiusMaxPixels: 14,
+          radiusMinPixels: 7, radiusMaxPixels: 20,
           pickable: true,
           onHover,
           transitions: fadeTransition,
@@ -752,37 +651,17 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       );
     }
 
-    // 8. Coral bleaching scatter (continuous)
-    if (activeContinuous === 'coral' && coralData?.points) {
+    // 7. Coral bleaching scatter — shown simultaneously with SST in ocean-health
+    if (activeLayers.has('coral') && coralData?.points) {
       result.push(
         new ScatterplotLayer({
           id: 'coral-layer',
           data: coralData.points,
           getPosition: (d: CoralPoint) => [d.lon, d.lat],
           getFillColor: (d: CoralPoint) => dhwColorRGBA(d.dhw),
-          getRadius: 10,
+          getRadius: 12,
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 5,
-          radiusMaxPixels: 14,
-          pickable: true,
-          onHover,
-          transitions: fadeTransition,
-        }),
-      );
-    }
-
-    // 9. SLA scatter (continuous)
-    if (activeContinuous === 'cmems-sla' && slaData?.points) {
-      result.push(
-        new ScatterplotLayer({
-          id: 'sla-layer',
-          data: slaData.points,
-          getPosition: (d: SlaPoint) => [d.lon, d.lat],
-          getFillColor: (d: SlaPoint) => slaColorRGBA(d.sla_m),
-          getRadius: 7,
-          radiusUnits: 'pixels' as const,
-          radiusMinPixels: 4,
-          radiusMaxPixels: 10,
+          radiusMinPixels: 6, radiusMaxPixels: 16,
           pickable: true,
           onHover,
           transitions: fadeTransition,
@@ -791,13 +670,12 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     }
 
     return result;
-  }, [activeEvent, activeContinuous, viewMode, firesData, stormsData, earthquakeData, airData, sstData, coralData, slaData, onHover]);
+  }, [activeLayers, viewMode, firesData, stormsData, earthquakeData, sstData, coralData, onHover]);
 
-  // ── Initialize / update Deck instance ─────────────────────────────────────
+  // ── Deck instance ────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!canvasRef.current) return;
-
     const currentView = viewMode === 'globe'
       ? new GlobeView({ id: 'globe', controller: true })
       : new MapView({ id: 'globe', controller: true });
@@ -807,9 +685,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
         canvas: canvasRef.current,
         width: dims.width,
         height: dims.height,
-        initialViewState: viewMode === 'map'
-          ? { ...INITIAL_VIEW_STATE, zoom: 2 }
-          : INITIAL_VIEW_STATE,
+        initialViewState: viewMode === 'map' ? { ...INITIAL_VIEW_STATE, zoom: 2 } : INITIAL_VIEW_STATE,
         views: currentView,
         layers: layers as never[],
         onViewStateChange: ({ viewState: vs }: { viewState: Record<string, unknown> }) => {
@@ -818,41 +694,30 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           viewStateRef.current = newVs;
           setViewState(newVs);
         },
-        getCursor: ({ isHovering }: { isHovering: boolean }) =>
-          isHovering ? 'pointer' : 'grab',
+        getCursor: ({ isHovering }: { isHovering: boolean }) => isHovering ? 'pointer' : 'grab',
       });
     } else {
       deckRef.current.setProps({
-        width: dims.width,
-        height: dims.height,
+        width: dims.width, height: dims.height,
         views: currentView,
         layers: layers as never[],
         viewState,
       });
     }
-
-    return () => {
-      // Don't finalize on re-render, only on unmount
-    };
   }, [layers, dims, viewMode, viewState]);
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      deckRef.current?.finalize();
-      deckRef.current = null;
-    };
+    return () => { deckRef.current?.finalize(); deckRef.current = null; };
   }, []);
 
-  // Auto-rotation: subtle idle globe spin (globe mode only)
+  // Auto-rotation (globe only, after 6s idle)
   useEffect(() => {
     if (viewMode !== 'globe') return;
     let rafId: number;
     const rotate = () => {
-      // Only auto-rotate if no user interaction for 6 seconds
       if (Date.now() - lastInteractionRef.current > 6000 && deckRef.current) {
         const vs = { ...viewStateRef.current };
-        vs.longitude = (vs.longitude + 0.015) % 360; // ~0.9°/sec at 60fps
+        vs.longitude = (vs.longitude + 0.015) % 360;
         viewStateRef.current = vs;
         deckRef.current.setProps({ viewState: vs });
       }
@@ -862,55 +727,36 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     return () => cancelAnimationFrame(rafId);
   }, [viewMode]);
 
-  // ── Meta + status ─────────────────────────────────────────────────────────
+  // ── Active category metadata ─────────────────────────────────────────────
 
-  const activeMeta = useMemo(() => {
-    const key = activeContinuous || activeEvent;
-    if (key) {
-      const def = LAYER_LOOKUP.get(key);
-      if (def) return { cadence: def.cadence, tag: def.tag, source: def.source, sourceUrl: def.sourceUrl };
-    }
-    return { cadence: 'NRT ~3h', tag: TrustTag.Observed, source: 'NASA FIRMS', sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/' };
-  }, [activeContinuous, activeEvent]);
-
-  const slaConfigured = slaData ? slaData.configured && slaData.status === 'ok' : true;
-  const airConfigured = airData ? airData.configured : true;
-
-  // Loading state
-  const isLoading = !firesData && !sstData && !airData;
-
-  // Active layer info for top-center indicator
-  const activeLayerDef = useMemo(() => {
-    const key = activeEvent || activeContinuous;
-    return key ? LAYER_LOOKUP.get(key) ?? null : null;
-  }, [activeEvent, activeContinuous]);
+  const activeCatDef = activeCategory ? CATEGORY_LOOKUP.get(activeCategory) ?? null : null;
 
   const dataCount = useMemo(() => {
-    if (activeEvent === 'fires') return firesData?.fires?.length ?? 0;
-    if (activeEvent === 'storms') return stormsData?.storms?.length ?? 0;
-    if (activeEvent === 'earthquakes') return earthquakeData?.earthquakes?.length ?? 0;
-    if (activeEvent === 'monitors') return airData?.monitors?.length ?? 0;
-    if (activeContinuous === 'ocean-heat') return sstData?.points?.length ?? 0;
-    if (activeContinuous === 'coral') return coralData?.points?.length ?? 0;
-    if (activeContinuous === 'cmems-sla') return slaData?.points?.length ?? 0;
-    return 0;
-  }, [activeEvent, activeContinuous, firesData, stormsData, earthquakeData, airData, sstData, coralData, slaData]);
+    if (!activeCategory) return 0;
+    if (activeCategory === 'fires-smoke') return firesData?.fires?.length ?? 0;
+    if (activeCategory === 'storms') return stormsData?.storms?.length ?? 0;
+    if (activeCategory === 'earthquakes') return earthquakeData?.earthquakes?.length ?? 0;
+    if (activeCategory === 'ocean-health') return (sstData?.points?.length ?? 0) + (coralData?.points?.length ?? 0);
+    return 0; // GIBS layers don't have point counts
+  }, [activeCategory, firesData, stormsData, earthquakeData, sstData, coralData]);
+
+  const isLoading = !firesData && !sstData;
 
   return (
     <div ref={containerRef} style={containerStyle}>
-      {/* CSS atmosphere glow — only in globe mode */}
+      {/* CSS atmosphere glow — globe mode only */}
       {viewMode === 'globe' && <div style={atmosphereGlowStyle} />}
 
-      {/* deck.gl canvas */}
+      {/* Canvas */}
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
 
-      {/* Edge vignette — cinematic depth */}
+      {/* Edge vignette */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
         boxShadow: 'inset 0 0 150px 60px rgba(2,4,8,0.5)',
       }} />
 
-      {/* Loading overlay */}
+      {/* Loading */}
       {isLoading && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 5,
@@ -921,8 +767,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
             <div style={{
               width: 32, height: 32, borderRadius: '50%',
               border: '2px solid #1e293b', borderTopColor: '#3b82f6',
-              animation: 'spin 0.8s linear infinite',
-              margin: '0 auto 10px',
+              animation: 'spin 0.8s linear infinite', margin: '0 auto 10px',
             }} />
             <div style={{ color: '#64748b', fontSize: '12px', fontFamily: 'system-ui, sans-serif' }}>
               Loading data layers…
@@ -934,8 +779,8 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       {/* Tooltip */}
       <Tooltip info={hoverInfo} />
 
-      {/* Active layer indicator — top center pill */}
-      {activeLayerDef && (
+      {/* Active category pill — top center */}
+      {activeCatDef && (
         <div style={{
           position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
           zIndex: 10,
@@ -948,53 +793,54 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
         }}>
           <span style={{
             width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-            background: activeLayerDef.activeColor,
-            boxShadow: `0 0 8px ${activeLayerDef.activeColor}`,
+            background: activeCatDef.activeColor,
+            boxShadow: `0 0 8px ${activeCatDef.activeColor}`,
             animation: 'pulse-glow 3s ease-in-out infinite',
           }} />
-          <span style={{ fontWeight: 600 }}>{activeLayerDef.label}</span>
+          <span style={{ fontWeight: 600 }}>{activeCatDef.name}</span>
           {dataCount > 0 && (
-            <span style={{ color: '#64748b', fontSize: '11px', fontWeight: 400 }}>
+            <span style={{ color: '#64748b', fontSize: '11px' }}>
               {dataCount.toLocaleString()}
             </span>
           )}
+          <span style={{ color: '#475569', fontSize: '10px' }}>{activeCatDef.description}</span>
         </div>
       )}
 
-      {/* Meta line (top-left) */}
-      <div style={metaOverlayStyle}>
-        <MetaLine cadence={activeMeta.cadence} tag={activeMeta.tag} source={activeMeta.source} sourceUrl={activeMeta.sourceUrl} />
-      </div>
+      {/* MetaLine (top-left) */}
+      {activeCatDef && (
+        <div style={metaOverlayStyle}>
+          <MetaLine cadence={activeCatDef.cadence} tag={activeCatDef.tag} source={activeCatDef.source} sourceUrl={activeCatDef.sourceUrl} />
+        </div>
+      )}
 
-      {/* Layer bar (bottom) */}
-      <LayerPanel
-        activeEvent={activeEvent} activeContinuous={activeContinuous}
-        onLayerChange={onLayerChange}
-        viewMode={viewMode} onViewModeChange={setViewMode}
-        slaConfigured={slaConfigured} slaStatus={slaData?.status}
-        airConfigured={airConfigured}
-      />
-
-      {/* Gradient fade into bottom bar */}
+      {/* Gradient fade above bottom bar */}
       <div style={{
-        position: 'absolute', bottom: 56, left: 0, right: 0, height: 40, zIndex: 14,
+        position: 'absolute', bottom: 48, left: 0, right: 0, height: 40, zIndex: 14,
         background: 'linear-gradient(to bottom, transparent, rgba(10,14,26,0.35))',
         pointerEvents: 'none',
       }} />
 
-      {/* Legend (bottom-left, above bar) */}
-      <Legend activeEvent={activeEvent} activeContinuous={activeContinuous} />
+      {/* Legend */}
+      <Legend activeCategory={activeCategory} />
 
-      {/* Coordinates display — above bottom bar, right */}
+      {/* Coordinates */}
       <div style={{
-        position: 'absolute', bottom: 72, right: 12, zIndex: 10,
+        position: 'absolute', bottom: 60, right: 12, zIndex: 10,
         background: 'rgba(10,14,26,0.5)', borderRadius: '4px',
         padding: '3px 8px', fontSize: '10px', color: '#475569',
-        fontFamily: 'ui-monospace, monospace', letterSpacing: '0.02em',
-        pointerEvents: 'none',
+        fontFamily: 'ui-monospace, monospace', pointerEvents: 'none',
       }}>
         {viewState.latitude.toFixed(1)}° {viewState.longitude.toFixed(1)}° z{viewState.zoom.toFixed(1)}
       </div>
+
+      {/* Bottom bar */}
+      <LayerBar
+        activeCategory={activeCategory}
+        onCategoryChange={onCategoryChange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
     </div>
   );
 });
@@ -1004,17 +850,13 @@ export default GlobeDeck;
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const containerStyle: React.CSSProperties = {
-  position: 'relative',
-  width: '100%',
-  height: '100%',
+  position: 'relative', width: '100%', height: '100%',
   background: 'radial-gradient(ellipse at 50% 48%, #0b1030 0%, #060a1a 40%, #020408 100%)',
   overflow: 'hidden',
 };
 
 const atmosphereGlowStyle: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  zIndex: 0,
+  position: 'absolute', inset: 0, zIndex: 0,
   background: [
     'radial-gradient(circle at 50% 50%, rgba(40,80,200,0.14) 0%, rgba(30,70,180,0.06) 28%, transparent 52%)',
     'radial-gradient(circle at 48% 52%, rgba(20,60,160,0.08) 0%, transparent 42%)',
@@ -1039,7 +881,7 @@ const layerBarStyle: React.CSSProperties = {
 };
 
 const legendStyle: React.CSSProperties = {
-  position: 'absolute', bottom: 72, left: 12, zIndex: 10,
+  position: 'absolute', bottom: 60, left: 12, zIndex: 10,
   background: 'rgba(10,14,26,0.82)', backdropFilter: 'blur(8px)',
   border: '1px solid rgba(51,65,85,0.4)', borderRadius: '8px',
   padding: '8px 12px', minWidth: 160, maxWidth: 260,
@@ -1049,10 +891,6 @@ const legendTitleStyle: React.CSSProperties = {
   fontSize: '11px', fontWeight: 600, color: '#cbd5e1',
   marginBottom: 6, fontFamily: 'system-ui, sans-serif',
 };
-
-const legendBarStyle: React.CSSProperties = { display: 'flex', gap: 0 };
-
-const legendSwatch: React.CSSProperties = { flex: 1, height: 10 };
 
 const legendLabelsStyle: React.CSSProperties = {
   display: 'flex', justifyContent: 'space-between',

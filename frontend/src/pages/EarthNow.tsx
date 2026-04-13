@@ -1,18 +1,11 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import type { GlobeHandle } from '../components/earth-now/GlobeDeck';
+import type { ActiveCategory, GlobeHandle } from '../components/earth-now/GlobeDeck';
 import StoryPanel from '../components/earth-now/StoryPanel';
 
 const GlobeDeck = lazy(() => import('../components/earth-now/GlobeDeck'));
 
-type ActiveEvent = 'fires' | 'storms' | 'monitors' | 'earthquakes' | null;
-type ActiveContinuous =
-  | 'ocean-heat' | 'coral' | 'cmems-sla'
-  | 'gibs-aod' | 'gibs-pm25' | 'gibs-oco2' | 'gibs-flood'
-  | null;
-
 export default function EarthNow() {
-  const [activeEvent, setActiveEvent] = useState<ActiveEvent>('fires');
-  const [activeContinuous, setActiveContinuous] = useState<ActiveContinuous>(null);
+  const [activeCategory, setActiveCategory] = useState<ActiveCategory>('fires-smoke');
   const globeRef = useRef<GlobeHandle>(null);
   const [storyOpen, setStoryOpen] = useState(false);
 
@@ -20,9 +13,9 @@ export default function EarthNow() {
     layerOn: string,
     camera: { lat: number; lng: number; altitude: number },
   ) => {
-    if (layerOn === 'firms') setActiveEvent('fires');
-    if (layerOn === 'oisst') setActiveContinuous('ocean-heat');
-    if (layerOn === 'openaq') setActiveEvent('monitors');
+    if (layerOn === 'firms') setActiveCategory('fires-smoke');
+    if (layerOn === 'oisst') setActiveCategory('ocean-health');
+    if (layerOn === 'openaq') setActiveCategory('air-quality');
     globeRef.current?.flyTo(camera.lat, camera.lng, camera.altitude);
   };
 
@@ -53,19 +46,15 @@ export default function EarthNow() {
       }>
         <GlobeDeck
           ref={globeRef}
-          activeEvent={activeEvent}
-          activeContinuous={activeContinuous}
-          onLayerChange={(type, key) => {
-            if (type === 'event') setActiveEvent(key as ActiveEvent);
-            else setActiveContinuous(key as ActiveContinuous);
-          }}
+          activeCategory={activeCategory}
+          onCategoryChange={setActiveCategory}
         />
       </Suspense>
 
-      {/* Floating Story Panel overlay — above bottom bar, right side */}
+      {/* Floating Story Panel */}
       <div style={{
         position: 'absolute',
-        bottom: 80,
+        bottom: 64,
         right: 16,
         zIndex: 20,
         width: 300,
