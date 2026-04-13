@@ -5,7 +5,7 @@ import StoryPanel from '../components/earth-now/StoryPanel';
 const GlobeDeck = lazy(() => import('../components/earth-now/GlobeDeck'));
 
 export default function EarthNow() {
-  const [activeCategory, setActiveCategory] = useState<ActiveCategory>('fires-smoke');
+  const [activeCategory, setActiveCategory] = useState<ActiveCategory>('air-quality');
   const globeRef = useRef<GlobeHandle>(null);
   const [storyOpen, setStoryOpen] = useState(false);
 
@@ -13,8 +13,8 @@ export default function EarthNow() {
     layerOn: string,
     camera: { lat: number; lng: number; altitude: number },
   ) => {
-    if (layerOn === 'firms') setActiveCategory('fires-smoke');
-    if (layerOn === 'oisst') setActiveCategory('ocean-health');
+    if (layerOn === 'firms') setActiveCategory('wildfires');
+    if (layerOn === 'oisst') setActiveCategory('ocean-crisis');
     if (layerOn === 'openaq') setActiveCategory('air-quality');
     globeRef.current?.flyTo(camera.lat, camera.lng, camera.altitude);
   };

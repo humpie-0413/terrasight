@@ -10,6 +10,7 @@ from backend.api import (
     disasters,
     drinking_water,
     earth_now,
+    earth_now_integrated,
     hazards,
     layers,
     rankings,
@@ -43,6 +44,16 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def add_cache_headers(request, call_next):
+    """Add Cache-Control to earth-now and integrated endpoints (5 min cache)."""
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/earth-now/") or path.startswith("/api/hazards/"):
+        response.headers["Cache-Control"] = "public, max-age=300"
+    return response
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -50,6 +61,11 @@ async def health() -> dict[str, str]:
 
 app.include_router(trends.router, prefix="/api/trends", tags=["trends"])
 app.include_router(earth_now.router, prefix="/api/earth-now", tags=["earth-now"])
+app.include_router(
+    earth_now_integrated.router,
+    prefix="/api/earth-now/integrated",
+    tags=["earth-now-integrated"],
+)
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(atlas.router, prefix="/api/atlas", tags=["atlas"])
 app.include_router(rankings.router, prefix="/api/rankings", tags=["rankings"])

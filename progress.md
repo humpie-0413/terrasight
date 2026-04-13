@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-13 (Phase L: Earth Now 근본 재설계 완료)
+**최종 업데이트:** 2026-04-13 (Phase M: Earth Now 2차 혁신 완료)
 
 ---
 
@@ -1101,18 +1101,71 @@ Globe 레이어 시스템을 완전히 재설계. 글로벌 데이터만 표시,
 
 ---
 
+### M — Earth Now 2차 혁신 (2026-04-13) ✅
+
+4가지 핵심 문제 해결: 로딩 속도, GIBS PM2.5, 데이터 통합, 카테고리 재설계.
+
+**문제 1: 로딩 속도 → lazy fetch**
+- `useApi` 훅에 `enabled` 플래그 추가 — `false`이면 fetch 스킵
+- 카테고리 전환 시 필요한 데이터만 fetch (GIBS 타일 카테고리는 fetch 불필요)
+- 기존 데이터 캐시 유지: `enabled=false`로 전환해도 이전 데이터 보존
+- 백엔드 `Cache-Control: public, max-age=300` (5분) 미들웨어 추가
+- GlobeDeck: 5개 동시 fetch → 최대 1개 lazy fetch
+
+**문제 2: GIBS PM2.5 수정 (근본 원인 2건)**
+| 원인 | 수정 |
+|------|------|
+| 잘못된 레이어명 (`Total_Aerosol_Optical_Thickness`) | `MERRA2_Dust_Surface_Mass_Concentration_PM25_Monthly` |
+| 날짜 latency 2개월 → 실제 3개월 (2026-02-01 = 404) | `d.setMonth(d.getMonth() - 3)` → 2026-01-01 사용 |
+
+- WMTS 타일 직접 확인: 2026-01-01 = HTTP 200, 4.3 KB PNG (실제 PM2.5 데이터)
+- TileMatrixSet: `GoogleMapsCompatible_Level6` (Level8이 아님)
+
+**문제 3: 백엔드 데이터 통합**
+신규 파일: `backend/api/earth_now_integrated.py`
+
+| 엔드포인트 | 입력 | 출력 |
+|-----------|------|------|
+| `GET /api/earth-now/integrated/ocean-health` | SST + Coral DHW (asyncio.gather) | 2° 격자 stress_score (0~1) |
+| `GET /api/earth-now/integrated/fire-density?resolution=2` | FIRMS top-2000 | 격자별 fire_count, avg_frp, max_frp |
+
+Ocean stress formula: `clamp((sst_anomaly / 5.0) * 0.4 + (dhw / 8.0) * 0.6, 0, 1)`
+
+**문제 4: 카테고리 사용자 질문 중심 재설계**
+
+| 순서 | 아이콘 | 이름 | 사용자 질문 | 기본 |
+|------|--------|------|----------|------|
+| 1 | 🌬️ | Air Quality | "오늘 공기 괜찮아?" | **✓ 기본** |
+| 2 | 🔥 | Wildfires | "어디서 불이 나?" | |
+| 3 | 🌊 | Ocean Crisis | "바다가 얼마나 뜨거워?" | |
+| 4 | 🌍 | Earthquakes | "지진 어디서 났어?" | |
+| 5 | 🌡️ | CO₂ & GHG | "온실가스 어디서 많이?" | |
+| 6 | 🌀 | Storms | "태풍 어디에 있어?" | |
+| 7 | 🌧️ | Floods | "홍수 위험 지역은?" | |
+
+- 기본 카테고리: fires-smoke → **air-quality** (항상 데이터 있어서 빈 화면 방지)
+- 카테고리 pill에 이모지 아이콘 추가
+- 상단 pill에 사용자 질문 표시 (예: "How is the air today?")
+- Ocean Health → **Ocean Crisis** (SST+DHW 통합 stress_score 1개 레이어)
+
+**번들:**
+- GlobeDeck: 6.76 → **6.54 KB** gz (-0.22 KB, lazy fetch로 코드 축소)
+- deckgl-vendor: 232.43 KB (변동 없음)
+
+---
+
 ### 기존 블로커 (일부 해소)
 
 - ~~**Bundle 코드 스플리팅** — 599 KB gzip~~ ✅ **해소 (G.2→J)** — deck.gl 마이그레이션,
   main chunk **56.30 KB**, deckgl-vendor **226.98 KB** (총 283 KB, 이전 대비 -244 KB)
 - ~~**Globe 성능 한계 (10K 포인트)** — react-globe.gl per-mesh 병목~~ ✅ **해소 (J)** —
   deck.gl GPU-instanced ScatterplotLayer, 1M+ 포인트 가능
-- ~~**BlueMarble 타일 미표시** — EPSG:4326 tile matrix 불일치~~ ✅ **해소 (K)** — EPSG:3857
-  `GoogleMapsCompatible_Level8` 엔드포인트 사용
-- ~~**GIBS WMS 오버레이 미작동** — URL 템플릿 플레이스홀더 미지원~~ ✅ **해소 (K)** —
-  `getTileData` 콜백으로 직접 WMS BBOX URL 구성
+- ~~**BlueMarble 타일 미표시**~~ ✅ **해소 (K)** — EPSG:3857 엔드포인트
+- ~~**GIBS WMS 오버레이 미작동**~~ ✅ **해소 (K)** — `getTileData` 콜백
 - ~~**Auto-rotate 미구현**~~ ✅ **해소 (K)** — 6초 유휴 시 0.9°/sec 회전
-- ~~**2D Map 스타일 basemap 없음**~~ ✅ **해소 (K)** — Carto Dark `dark_nolabels` 적용
+- ~~**2D Map 스타일 basemap 없음**~~ ✅ **해소 (K)** — Carto Dark `dark_nolabels`
+- ~~**GIBS PM2.5 미표시**~~ ✅ **해소 (M)** — 레이어명 수정 + 3개월 latency
+- ~~**전체 데이터 동시 로드**~~ ✅ **해소 (M)** — useApi `enabled` lazy fetch
 - **CMEMS P1** — `copernicusmarine` 패키지 + Keycloak 자격증명 재검증
 - **커스텀 도메인** — CF Pages + Render (옵션 0에 포함)
 - **Story Panel 프리셋** (1 → 5-10개) (옵션 B에 포함)
