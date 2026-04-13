@@ -158,13 +158,27 @@ handle them exactly as described.
 
 ### NOAA OISST
 - PODAAC GHRSST is a fallback. Primary is **NOAA CoastWatch ERDDAP
-  griddap CSV** at `ncdcOisst21NrtAgg`, stride 20, two header rows,
+  griddap CSV** at `ncdcOisst21NrtAgg`, two header rows,
   filter NaN land cells, convert 0–360 lon to -180..180.
+- **Stride options:** stride=20 (~1,700 pts, JSON endpoint), stride=5
+  (~7,000 pts, used by ocean surface PNG endpoint for continuous surface).
 
 ### NASA FIRMS
 - Area API: `api/area/csv/{MAP_KEY}/{SOURCE}/{AREA}/{DAYS}`. Full
-  global 24h VIIRS is 30k+ points — cap to top N by FRP before
-  sending to the browser.
+  global 24h VIIRS is 30k+ points — default limit raised to 5000 (was 1500).
+- **Density PNG endpoint** (`/api/earth-now/integrated/fires/density-png`):
+  uses ALL fires (no cap), renders Gaussian KDE → equirectangular PNG
+  (4320×2160), cached 15 min. Served as BitmapLayer on GlobeView.
+
+### NOAA IBTrACS (Storms)
+- Storms endpoint now exposes `track_points` array per storm (full track
+  history from IBTrACS CSV). Frontend renders as PathLayer (track lines
+  colored by intensity) + ScatterplotLayer (current position dots).
+
+### New Backend Endpoints (Globe-First Redesign, 2026-04-14)
+- `GET /api/earth-now/integrated/fires/density-png` — fire density PNG
+- `GET /api/earth-now/integrated/ocean/surface-png` — ocean stress PNG
+- Both use `backend/utils/surface_renderer.py` (numpy + scipy + matplotlib + Pillow)
 
 ### OpenAQ v3
 - v1/v2 retired 2025-01-31. Use `/locations?parameters_id=2&limit=1000`

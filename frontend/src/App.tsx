@@ -1,10 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/header/Header';
-import Home from './pages/Home';
+import EarthNow from './pages/EarthNow';
 
-// Lazy-load all non-home routes so they split into separate async chunks.
-const EarthNow = lazy(() => import('./pages/EarthNow'));
+// Lazy-load all non-globe routes so they split into separate async chunks.
 const Trends = lazy(() => import('./pages/Trends'));
 const Reports = lazy(() => import('./pages/Reports'));
 const LocalReport = lazy(() => import('./pages/LocalReport'));
@@ -29,8 +28,8 @@ export default function App() {
       <Header />
       <Suspense fallback={<div style={fallbackStyle}>Loading…</div>}>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/earth-now" element={<EarthNow />} />
+          <Route path="/" element={<EarthNow />} />
+          <Route path="/earth-now" element={<Navigate to="/" replace />} />
           <Route path="/trends" element={<Trends />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/reports/:cbsaSlug" element={<LocalReport />} />

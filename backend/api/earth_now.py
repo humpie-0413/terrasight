@@ -67,7 +67,7 @@ async def list_layers() -> list[dict]:
 @router.get("/fires")
 async def get_fires(
     days: int = Query(1, ge=1, le=10),
-    limit: int = Query(1500, ge=1, le=10000),
+    limit: int = Query(5000, ge=1, le=10000),
 ) -> dict[str, Any]:
     """NASA FIRMS global VIIRS_SNPP_NRT active fires for the past `days`.
 
@@ -226,7 +226,7 @@ async def get_air_monitors(
 
 @router.get("/storms")
 async def get_storms() -> dict[str, Any]:
-    """NOAA IBTrACS active tropical storms — latest track point per storm."""
+    """NOAA IBTrACS active tropical storms — latest position + full track history."""
     from backend.connectors.ibtracs import IbtracsCsvConnector
 
     connector = IbtracsCsvConnector()
@@ -255,6 +255,15 @@ async def get_storms() -> dict[str, Any]:
                 "pres_hpa": pt.pres_hpa,
                 "sshs": pt.sshs,
                 "iso_time": pt.iso_time,
+                "track_points": [
+                    {
+                        "lat": tp.lat,
+                        "lon": tp.lon,
+                        "wind_kt": tp.wind_kt,
+                        "iso_time": tp.iso_time,
+                    }
+                    for tp in storm.track
+                ],
             }
         )
 

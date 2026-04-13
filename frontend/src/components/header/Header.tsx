@@ -4,20 +4,25 @@ import { Link, useLocation } from 'react-router-dom';
 export default function Header() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const isGlobe = location.pathname === '/';
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
+  // On globe page: hide "Earth Now" since user is already there
+  const navItems = isGlobe ? NAV_ITEMS.filter((i) => i.to !== '/earth-now') : NAV_ITEMS;
+
   return (
-    <header style={headerStyle}>
+    <header style={isGlobe ? headerTransparentStyle : headerStyle}>
       <nav style={navStyle}>
         <Link to="/" style={logoStyle} onClick={() => setOpen(false)}>
           TerraSight
         </Link>
 
         <div className="desktop-nav" style={desktopLinks}>
-          {NAV_ITEMS.map(({ to, label }) => (
+          {navItems.map(({ to, label }) => (
             <Link key={to} to={to} style={{
               ...navLinkStyle,
+              ...(isGlobe ? navLinkGlobeStyle : {}),
               ...(isActive(to) ? activeLinkStyle : {}),
             }}>{label}</Link>
           ))}
@@ -34,8 +39,8 @@ export default function Header() {
       </nav>
 
       {open && (
-        <div style={mobileMenuStyle}>
-          {NAV_ITEMS.map(({ to, label }) => (
+        <div style={isGlobe ? mobileMenuGlobeStyle : mobileMenuStyle}>
+          {navItems.map(({ to, label }) => (
             <Link key={to} to={to} style={{
               ...mobileLinkStyle,
               ...(isActive(to) ? { color: '#60a5fa' } : {}),
@@ -61,6 +66,19 @@ const headerStyle: React.CSSProperties = {
   background: 'rgba(10, 14, 26, 0.85)',
   backdropFilter: 'blur(12px)',
   borderBottom: '1px solid rgba(51, 65, 85, 0.5)',
+};
+const headerTransparentStyle: React.CSSProperties = {
+  position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+  background: 'transparent',
+  borderBottom: 'none',
+  pointerEvents: 'auto',
+};
+const navLinkGlobeStyle: React.CSSProperties = {
+  background: 'rgba(10,14,26,0.5)',
+  backdropFilter: 'blur(8px)',
+  borderRadius: '16px',
+  border: '1px solid rgba(51,65,85,0.3)',
+  padding: '5px 14px',
 };
 const navStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -88,6 +106,11 @@ const hamburgerStyle: React.CSSProperties = {
 const mobileMenuStyle: React.CSSProperties = {
   display: 'flex', flexDirection: 'column', padding: '8px 16px 16px',
   borderTop: '1px solid rgba(51, 65, 85, 0.5)', background: 'rgba(10, 14, 26, 0.95)',
+};
+const mobileMenuGlobeStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', padding: '8px 16px 16px',
+  background: 'rgba(10, 14, 26, 0.92)', backdropFilter: 'blur(12px)',
+  borderRadius: '0 0 12px 12px',
 };
 const mobileLinkStyle: React.CSSProperties = {
   padding: '10px 8px', fontSize: '15px', color: '#cbd5e1',

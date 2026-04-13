@@ -12,6 +12,7 @@ import math
 from typing import Any
 
 from fastapi import APIRouter, Query
+from fastapi.responses import Response
 
 from backend.config import get_settings
 from backend.connectors.coral_reef_watch import CoralReefWatchConnector
@@ -297,3 +298,147 @@ async def fire_density(
         },
         "notes": notes,
     }
+
+
+# ---------------------------------------------------------------------------
+# 3. Fire Density PNG — Gaussian KDE surface for BitmapLayer
+# ---------------------------------------------------------------------------
+
+@router.get("/fires/density-png")
+async def fire_density_png() -> Response:
+    """Render ALL 24h fire hotspots as a Gaussian KDE density PNG.
+
+    Returns an equirectangular RGBA PNG (4320x2160) suitable for
+    BitmapLayer overlay on the globe. Cached for 15 minutes.
+    """
+    from backend.utils.surface_renderer import render_density_png
+
+    settings = get_settings()
+    if not settings.firms_map_key:
+        return Response(
+            content=b"",
+            media_type="image/png",
+            status_code=204,
+        )
+
+    connector = FirmsConnector(map_key=settings.firms_map_key)
+    try:
+        raw = await connector.fetch(days=1)
+        result = connector.normalize(raw)
+    except Exception:
+        return Response(content=b"", media_type="image/png", status_code=502)
+
+    # Use ALL fires for the density surface (no cap)
+    points = [(h.lat, h.lon, max(h.frp, 1.0)) for h in result.values]
+    if not points:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    png_bytes = render_density_png(
+        points,
+        width=4320,
+        height=2160,
+        colormap="hot",
+        sigma=3.0,
+        alpha_min=0.1,
+    )
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=900"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 4. Ocean Surface PNG — SST × Coral DHW stress for BitmapLayer
+# ---------------------------------------------------------------------------
+
+@router.get("/ocean/surface-png")
+async def ocean_surface_png() -> Response:
+    """Render ocean stress as an equirectangular RGBA PNG.
+
+    Combines OISST SST anomaly and Coral Reef Watch DHW into a
+    continuous ocean stress surface. Cached for 6 hours.
+    """
+    from backend.utils.surface_renderer import render_density_png
+
+    APPROX_MEAN_SST = 25.0
+
+    sst_connector = OisstConnector()
+    coral_connector = CoralReefWatchConnector()
+
+    sst_points: list[Any] = []
+    coral_points: list[Any] = []
+
+    async def _fetch_sst() -> None:
+        nonlocal sst_points
+        try:
+            raw = await sst_connector.fetch(stride=5)
+            result = sst_connector.normalize(raw)
+            sst_points = result.values if isinstance(result.values, list) else []
+        except Exception:
+            pass
+
+    async def _fetch_coral() -> None:
+        nonlocal coral_points
+        try:
+            raw = await coral_connector.fetch(include_no_stress=True)
+            result = coral_connector.normalize(raw)
+            if isinstance(result.values, list):
+                coral_points = result.values
+        except Exception:
+            pass
+
+    await asyncio.gather(_fetch_sst(), _fetch_coral())
+
+    if not sst_points and not coral_points:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    # Build stress points from combined data
+    # Grid at ~0.5° and compute stress per cell
+    RESOLUTION = 0.5
+    grid: dict[tuple[float, float], dict[str, list[float]]] = {}
+
+    for pt in sst_points:
+        if pt.lat < -60.0 or pt.lat > 60.0:
+            continue
+        key = _grid_key(pt.lat, pt.lon, RESOLUTION)
+        cell = grid.setdefault(key, {"sst": [], "dhw": []})
+        cell["sst"].append(pt.sst_c)
+
+    for pt in coral_points:
+        if pt.lat < -60.0 or pt.lat > 60.0:
+            continue
+        key = _grid_key(pt.lat, pt.lon, RESOLUTION)
+        cell = grid.setdefault(key, {"sst": [], "dhw": []})
+        cell["dhw"].append(pt.dhw)
+
+    stress_points: list[tuple[float, float, float]] = []
+    for (lat, lon), cell in grid.items():
+        avg_sst = sum(cell["sst"]) / len(cell["sst"]) if cell["sst"] else None
+        avg_dhw = sum(cell["dhw"]) / len(cell["dhw"]) if cell["dhw"] else None
+
+        sst_anomaly = (avg_sst - APPROX_MEAN_SST) if avg_sst is not None else 0.0
+        sst_component = (sst_anomaly / 5.0) * 0.4
+        dhw_component = ((avg_dhw / 8.0) * 0.6) if avg_dhw is not None else 0.0
+        stress = _clamp(sst_component + dhw_component)
+        if stress > 0.01:
+            stress_points.append((lat + RESOLUTION / 2, lon + RESOLUTION / 2, stress))
+
+    if not stress_points:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    png_bytes = render_density_png(
+        stress_points,
+        width=2160,
+        height=1080,
+        colormap="RdYlBu_r",
+        sigma=2.0,
+        alpha_min=0.15,
+    )
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=21600"},
+    )

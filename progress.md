@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-13 (Phase M: Earth Now 2차 혁신 완료)
+**최종 업데이트:** 2026-04-14 (Globe-First Redesign: Phase 1-6 완료)
 
 ---
 
@@ -31,8 +31,8 @@
 | Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
 | SEO 랭킹 페이지 | **6개** (+4 Phase E: TRI · GHG · Superfund · Drinking Water) |
 | SEO 가이드 페이지 | **4개** |
-| 번들 사이즈 (main chunk) | **56.30 KB gzipped** ✅ |
-| 코드 스플리팅 | deck.gl vendor **226.98 KB** (lazy) + GlobeDeck 6.78 KB + LocalReport 6.59 KB + 11 route chunks |
+| 번들 사이즈 (main chunk) | **56.64 KB gzipped** ✅ |
+| 코드 스플리팅 | deck.gl vendor **232.44 KB** (lazy) + GlobeDeck 6.78 KB + LocalReport 6.57 KB + 11 route chunks |
 | Globe 라이브러리 | **deck.gl v9.2.11** (react-globe.gl → deck.gl 마이그레이션 완료, three.js 제거) |
 | 테마 | **다크 테마** (글래스모피즘 + 별 파티클 글로브 배경) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
@@ -45,6 +45,43 @@
 | Soil, Land & Site | 1 live (forest cover only) | **3 live** (+ Superfund, Brownfields) |
 | Water (drinking) | WQP only (surface) | **2 live** (+ SDWIS compliance) |
 | Emissions / Facilities | ECHO (compliance) + Climate TRACE (country) | **3 live** (+ GHGRP 시설 GHG) |
+
+---
+
+## Globe-First Redesign (2026-04-14)
+
+### Phase 1: Globe = Landing Page ✅
+- `/` now renders EarthNow (fullscreen globe, 100vh)
+- `/earth-now` redirects to `/`
+- `Home.tsx` deleted (card grid removed)
+- Header: transparent floating overlay on globe page, opaque on others
+- "Earth Now" nav item hidden when on globe (user is already there)
+- Nav pills on globe page: glassmorphism pill style
+
+### Phase 2: GIBS Fixes + Quick Wins ✅
+- Air Quality default switched from GIBS PM2.5 (MERRA-2 monthly, 3mo stale) → GIBS AOD (MODIS Terra daily, 1-day lag)
+- GIBS overlay opacity reduced 0.75 → 0.50 (BlueMarble visible beneath)
+- CO₂ question reframed: "Where did OCO-2 measure CO₂ today?" + cadence note about nadir swath ~3-5% coverage
+- Fire limit raised from 1500 → 5000 default
+
+### Phase 3: Fire Density Surface ✅
+- New `backend/utils/surface_renderer.py` — shared Gaussian KDE → equirectangular PNG renderer (numpy + scipy + matplotlib + Pillow)
+- New endpoint `GET /api/earth-now/integrated/fires/density-png` — renders ALL 24h fires as density PNG (4320×2160), 15min cache
+- Frontend GlobeView: `BitmapLayer` density surface + `ScatterplotLayer` overlay (top 5000 for hover)
+- MapView: existing `HeatmapLayer` unchanged
+
+### Phase 4: Ocean Continuous Surface ✅
+- New endpoint `GET /api/earth-now/integrated/ocean/surface-png` — combines OISST (stride=5, ~7000pts) + Coral DHW into stress PNG (2160×1080), 6h cache
+- Frontend: `BitmapLayer` ocean stress surface + sparse `ScatterplotLayer` (top 300 stressed cells) for hover tooltips
+
+### Phase 5: Storm Tracks ✅
+- Backend: storms API now exposes `track_points` array per storm (full IBTrACS track history)
+- Frontend: `PathLayer` draws storm track lines colored by intensity + existing `ScatterplotLayer` for current positions
+
+### Phase 6: Polish + Mobile ✅
+- Mobile (<640px): LayerBar shows icons only (text labels hidden)
+- Mobile (<640px): StoryPanel hidden
+- Dependencies added: numpy, scipy, matplotlib, Pillow
 
 ---
 

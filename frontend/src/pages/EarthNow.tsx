@@ -22,7 +22,7 @@ export default function EarthNow() {
   return (
     <main style={{
       position: 'relative',
-      height: 'calc(100vh - 52px)',
+      height: '100vh',
       overflow: 'hidden',
       background: '#020408',
     }}>
@@ -52,7 +52,7 @@ export default function EarthNow() {
       </Suspense>
 
       {/* Floating Story Panel */}
-      <div style={{
+      <div className="globe-story-panel" style={{
         position: 'absolute',
         bottom: 64,
         right: 16,

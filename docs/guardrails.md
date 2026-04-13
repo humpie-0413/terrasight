@@ -29,8 +29,8 @@ Non-negotiable rules and the checks to run before declaring any feature
 ## Layer composition rule (Earth Now globe)
 
 At most **one continuous field + one event overlay** active at the
-same time. Layer groups in `frontend/src/components/earth-now/Globe.tsx`
-enforce this client-side. Examples:
+same time. Layer groups in `frontend/src/components/earth-now/GlobeDeck.tsx`
+enforce this client-side via the category pill system. Examples:
 
 - ✅ Ocean Heat (continuous) + Fires (event)
 - ✅ Air Monitors (continuous) + Fires (event)

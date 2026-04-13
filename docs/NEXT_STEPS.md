@@ -1,6 +1,6 @@
 # TerraSight — Next Steps Plan
 
-**Last updated:** 2026-04-12
+**Last updated:** 2026-04-14
 **Companion to:** `progress.md` (backwards-looking reference) · this doc is
 forwards-looking. `progress.md` logs what has been shipped; this file
 plans what comes next.
@@ -443,9 +443,18 @@ Before merging any Phase D connector, verify it meets TerraSight's
 - ✅ Atlas `api_endpoint` field added to 5 datasets
 - ✅ Bundle code splitting: LocalReport lazy route (main chunk 598 KB gzipped)
 
+## Globe-First Redesign — ✅ DONE (2026-04-14)
+
+Globe is now the landing page (`/`). Home.tsx card grid deleted.
+Transparent header on globe, opaque on other pages.
+Fire density PNG + ocean stress PNG continuous surfaces.
+Storm track PathLayer. Air quality switched to daily AOD.
+GIBS opacity halved. Mobile responsive (icons-only pills <640px).
+New backend dependencies: numpy, scipy, matplotlib, Pillow.
+
 ## Phase F — Monetization + Growth (next)
 
-- **AdSense application** — 50 metros × 10 blocks = 500 data surfaces, 6 rankings + 4 guides + Atlas 8 categories × 17 datasets → content requirement exceeded. Apply now.
+- **AdSense application** — 50 metros × 14 blocks = 700 data surfaces, 6 rankings + 4 guides + Atlas 8 categories × 23 datasets → content requirement exceeded. Apply now.
 - **Custom domain** — Cloudflare Pages + Render both sides.
 - **SEO guides** — `/guides/understanding-tri-reports`, `/guides/reading-ghgrp-data`, `/guides/superfund-basics`, `/guides/sdwis-violations-explained`
 - **Story Panel preset expansion** — current count is 1; target 5–10.

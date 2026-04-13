@@ -8,13 +8,15 @@ import {
   useState,
 } from 'react';
 import { Deck, MapView, _GlobeView as GlobeView } from '@deck.gl/core';
-import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { BitmapLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 
 import MetaLine from '../common/MetaLine';
 import { TrustTag } from '../../utils/trustTags';
 import { useApi } from '../../hooks/useApi';
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +53,8 @@ interface OceanHealthResponse {
   stats: { min_stress: number; max_stress: number; mean_stress: number };
 }
 
-interface Storm { sid: string; name: string; basin: string; season: string; lat: number; lon: number; wind_kt: number; pres_hpa: number; sshs: number; iso_time: string; }
+interface StormTrackPoint { lat: number; lon: number; wind_kt: number; iso_time: string; }
+interface Storm { sid: string; name: string; basin: string; season: string; lat: number; lon: number; wind_kt: number; pres_hpa: number; sshs: number; iso_time: string; track_points?: StormTrackPoint[]; }
 interface StormsResponse { count: number; configured: boolean; storms: Storm[]; }
 
 interface Earthquake { lat: number; lon: number; depth_km: number; magnitude: number; place: string; time_utc: string; event_url: string; tsunami: boolean; }
@@ -115,9 +118,9 @@ const CATEGORIES: CategoryDef[] = [
   {
     key: 'air-quality', icon: '🌬️', name: 'Air Quality',
     question: 'How is the air today?',
-    activeColor: '#a855f7', tag: TrustTag.Derived, cadence: 'Monthly',
-    source: 'NASA MERRA-2 PM2.5', sourceUrl: 'https://disc.gsfc.nasa.gov/',
-    activates: ['gibs-pm25'],
+    activeColor: '#a855f7', tag: TrustTag.NearRealTime, cadence: 'Daily (1-day lag)',
+    source: 'NASA MODIS Terra AOD', sourceUrl: 'https://worldview.earthdata.nasa.gov/',
+    activates: ['gibs-aod'],
   },
   {
     key: 'wildfires', icon: '🔥', name: 'Wildfires',
@@ -142,8 +145,8 @@ const CATEGORIES: CategoryDef[] = [
   },
   {
     key: 'co2-ghg', icon: '🌡️', name: 'CO₂ & GHG',
-    question: 'Where are greenhouse gases concentrated?',
-    activeColor: '#22c55e', tag: TrustTag.Observed, cadence: 'Daily',
+    question: 'Where did OCO-2 measure CO₂ today?',
+    activeColor: '#22c55e', tag: TrustTag.Observed, cadence: 'Daily (nadir swath ~3-5% coverage)',
     source: 'NASA OCO-2', sourceUrl: 'https://ocov2.jpl.nasa.gov/',
     activates: ['gibs-oco2'],
   },
@@ -303,7 +306,7 @@ function LayerBar({
                 boxShadow: active ? `0 0 14px ${cat.activeColor}50` : 'none',
               }}>
               <span style={{ fontSize: '13px' }}>{cat.icon}</span>
-              {cat.name}
+              <span className="layer-pill-text">{cat.name}</span>
             </button>
           );
         })}
@@ -504,7 +507,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           minZoom: 0,
           maxZoom: gibsKey === 'gibs-pm25' ? 6 : 5,
           tileSize: 256,
-          opacity: 0.75,
+          opacity: 0.50,
           getTileData: (tileInfo: unknown) => {
             const tile = tileInfo as { bbox: { west: number; south: number; east: number; north: number } };
             const { west, south, east, north } = tile.bbox;
@@ -526,7 +529,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
 
     const fade = { getRadius: { duration: 600, easing: (t: number) => t }, getFillColor: { duration: 400 } };
 
-    // 3. Fires — HeatmapLayer (2D) or ScatterGlow (3D)
+    // 3. Fires — HeatmapLayer (2D) or Density PNG + Scatter (3D)
     if (activeLayers.has('fires') && firesData?.fires) {
       if (viewMode === 'map') {
         result.push(
@@ -542,18 +545,16 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           }),
         );
       } else {
+        // Density surface from backend PNG
         result.push(
-          new ScatterplotLayer({
-            id: 'fires-glow',
-            data: firesData.fires,
-            getPosition: (d: FireHotspot) => [d.lon, d.lat],
-            getFillColor: (d: FireHotspot) => { const c = fireColorRGBA(d.frp); return [c[0], c[1], c[2], 40] as [number, number, number, number]; },
-            getRadius: (d: FireHotspot) => fireRadius(d.frp) * 2.5,
-            radiusUnits: 'pixels' as const,
-            radiusMinPixels: 4, radiusMaxPixels: 36,
-            pickable: false,
+          new BitmapLayer({
+            id: 'fires-density-surface',
+            image: `${API_BASE}/earth-now/integrated/fires/density-png`,
+            bounds: [-180, -90, 180, 90] as [number, number, number, number],
+            opacity: 0.7,
           }),
         );
+        // Scatter overlay for hover interaction (top fires by FRP)
         result.push(
           new ScatterplotLayer({
             id: 'fires-layer',
@@ -570,8 +571,28 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       }
     }
 
-    // 4. Storms
+    // 4. Storms — track lines + current position
     if (activeLayers.has('storms') && stormsData?.storms) {
+      // Track lines for each storm
+      const stormsWithTracks = stormsData.storms.filter((s) => s.track_points && s.track_points.length > 1);
+      if (stormsWithTracks.length > 0) {
+        result.push(
+          new PathLayer({
+            id: 'storm-tracks',
+            data: stormsWithTracks,
+            getPath: (d: Storm) => (d.track_points ?? []).map((tp) => [tp.lon, tp.lat] as [number, number]),
+            getColor: (d: Storm) => stormColorRGBA(d.wind_kt),
+            getWidth: 2,
+            widthUnits: 'pixels' as const,
+            widthMinPixels: 1,
+            widthMaxPixels: 4,
+            jointRounded: true,
+            capRounded: true,
+            pickable: false,
+          }),
+        );
+      }
+      // Current position dots
       result.push(
         new ScatterplotLayer({
           id: 'storms-layer',
@@ -616,21 +637,36 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       );
     }
 
-    // 6. Ocean Health — integrated stress grid
-    if (activeLayers.has('ocean-integrated') && oceanData?.grid) {
+    // 6. Ocean Health — continuous surface + tooltip scatter overlay
+    if (activeLayers.has('ocean-integrated')) {
+      // Continuous surface from backend PNG
       result.push(
-        new ScatterplotLayer({
-          id: 'ocean-health-layer',
-          data: oceanData.grid,
-          getPosition: (d: OceanHealthCell) => [d.lon, d.lat],
-          getFillColor: (d: OceanHealthCell) => oceanStressColor(d.stress_score),
-          getRadius: 16,
-          radiusUnits: 'pixels' as const,
-          radiusMinPixels: 8, radiusMaxPixels: 22,
-          pickable: true, onHover,
-          transitions: fade,
+        new BitmapLayer({
+          id: 'ocean-surface',
+          image: `${API_BASE}/earth-now/integrated/ocean/surface-png`,
+          bounds: [-180, -90, 180, 90] as [number, number, number, number],
+          opacity: 0.65,
         }),
       );
+      // Sparse scatter overlay for hover tooltips (from existing JSON grid)
+      if (oceanData?.grid) {
+        // Show top stressed cells for tooltip interaction
+        const topCells = [...oceanData.grid]
+          .sort((a, b) => b.stress_score - a.stress_score)
+          .slice(0, 300);
+        result.push(
+          new ScatterplotLayer({
+            id: 'ocean-health-layer',
+            data: topCells,
+            getPosition: (d: OceanHealthCell) => [d.lon, d.lat],
+            getFillColor: (d: OceanHealthCell) => { const c = oceanStressColor(d.stress_score); return [c[0], c[1], c[2], 0] as [number, number, number, number]; },
+            getRadius: 20,
+            radiusUnits: 'pixels' as const,
+            radiusMinPixels: 10, radiusMaxPixels: 30,
+            pickable: true, onHover,
+          }),
+        );
+      }
     }
 
     return result;

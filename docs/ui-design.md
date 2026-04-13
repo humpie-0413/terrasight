@@ -17,6 +17,9 @@ priority for Phase G (the next UI sprint).
 | **PS** | Point Scatter | pointsData (size/color by value) | Globe |
 | **HX** | HexBin Heatmap | hexBinPointsData | Globe |
 | **PG** | Polygon / Area | GeoJSON polygons overlay | Globe |
+| **BMP** | Bitmap Surface | BitmapLayer (PNG from backend) | Globe (continuous fields) |
+| **PL** | Path Lines | PathLayer (track lines) | Globe (storm tracks) |
+| **HM** | Heatmap | HeatmapLayer (screen-space, 2D only) | Globe (MapView) |
 | **SK** | Sparkline Card | custom SVG 220×48 path | Trends strip |
 | **SC** | Stat Cards | 2–4 metric cards in CSS grid | Local Report |
 | **TBL** | Data Table | HTML `<table>`, 13px, striped | Local Report / Atlas |
@@ -42,14 +45,14 @@ priority for Phase G (the next UI sprint).
 | 9 | `gibs.py` (CO₂ OCO-2) | global raster tile | **GT** | — | Globe |
 | 10 | `gibs.py` (Flood Detection) | global raster tile | **GT** | — | Globe |
 | 11 | `gibs.py` (CH₄ TROPOMI) | global raster tile (P1) | **GT** | — | Globe |
-| 12 | `oisst.py` (SST) | lat/lon/sst grid ~1700 pts | **HX** | — | Globe |
-| 13 | `coral_reef_watch.py` (DHW) | lat/lon/dhw grid | **HX** | — | Globe |
+| 12 | `oisst.py` (SST) | lat/lon/sst grid ~7000 pts (stride=5) | **BMP** (PNG surface) | HX fallback | Globe |
+| 13 | `coral_reef_watch.py` (DHW) | lat/lon/dhw grid | **BMP** (integrated w/ SST) | HX fallback | Globe |
 | 14 | `cmems.py` (SLA) | lat/lon/sla grid (pending) | **HX** | — | Globe |
 | 15 | `jrc_drought.py` (EDO) | WMS tiles (Europe only) | **GT** | — | Globe (P1) |
 | 16 | `global_forest_watch.py` (Tree Loss) | annual aggregate (CONUS) | — | TBL | Atlas only (no globe viz) |
 | | **— Globe: Event Overlays —** | | | | |
-| 17 | `firms.py` (Fires) | lat/lon/frp points ~1500 | **PS** | — | Globe |
-| 18 | `ibtracs.py` (Storms) | lat/lon/wind track points | **PS** | — | Globe |
+| 17 | `firms.py` (Fires) | lat/lon/frp points ~5000 + density PNG | **BMP** (density surface, 3D) + **HM** (2D) | PS overlay | Globe |
+| 18 | `ibtracs.py` (Storms) | lat/lon/wind track points + full track | **PL** (PathLayer tracks) + **PS** | — | Globe |
 | 19 | `earthquake.py` (Earthquakes) | lat/lon/mag/depth points | **PS** | — | Globe (new) |
 | 20 | `openaq.py` (Air Monitors) | lat/lon/pm25 points ~1000 | **PS** | — | Globe |
 | 21 | `nws_alerts.py` (Weather Alerts) | GeoJSON polygons + severity | **PG** | TL | Globe (new), LR |
@@ -83,8 +86,11 @@ priority for Phase G (the next UI sprint).
 |------|-------|-------------|
 | Sparkline Card (SK) | 6 | CO₂, Temp, Sea Ice, CH₄, Sea Level, **Drought (new)** |
 | GIBS Tile (GT) | 5–6 | PM2.5, AOD, OCO-2, Flood, CH₄ (P1), JRC (P1) |
-| Point Scatter (PS) | 4 | Fires, Storms, **Earthquakes (new)**, Air Monitors |
-| HexBin (HX) | 3 | SST, Coral, SLA |
+| Point Scatter (PS) | 4 | Fires (overlay), Storms (current pos), **Earthquakes (new)**, Air Monitors |
+| Bitmap Surface (BMP) | 2 | Fire density PNG, Ocean stress PNG |
+| Path Lines (PL) | 1 | Storm tracks |
+| Heatmap (HM) | 1 | Fires (2D MapView) |
+| HexBin (HX) | 1 | SLA (fallback) |
 | Polygon (PG) | 1 | **NWS Alerts (new)** |
 | Stat Cards (SC) | 11 | AirNow, ECHO, TRI, GHGRP, SDWIS, PFAS, RCRA, CO-OPS, USGS, WQP + 1 |
 | Data Table (TBL) | 14 | Nearly every LR block has a detail table |
@@ -97,14 +103,18 @@ priority for Phase G (the next UI sprint).
 
 ## Part 2: Globe Layer Restructuring
 
-### Current State: 13 layers in 5 categories
+### Current State: 7 categories (Globe-First Redesign, 2026-04-14)
+
+Globe is now the landing page (`/`). Category pill system with 7 categories:
 
 ```
-Atmosphere (3):  PM2.5, AOD, Air Monitors
-Fire & Land (3): Fires, Deforestation (P1), Drought (P1)
-Ocean (3):       SST, Coral, SLA
-GHG (2):         CO₂ OCO-2, CH₄ (P1)
-Hazards (2):     Storms, Floods
+Air Quality (1):    AOD MODIS Terra (daily, was PM2.5 monthly)   — GIBS BitmapLayer
+Wildfires (2):      Fire density PNG (continuous) + scatter       — BitmapLayer + ScatterplotLayer
+Ocean Crisis (1):   Ocean stress PNG (SST×DHW integrated)        — BitmapLayer + scatter tooltips
+Earthquakes (1):    USGS M4+ seismic events                      — ScatterplotLayer (glow + core)
+CO₂ & GHG (1):     OCO-2 nadir swath (sparse by design)         — GIBS BitmapLayer
+Storms (1):         IBTrACS track lines + current position       — PathLayer + ScatterplotLayer
+Floods (1):         MODIS Terra 3-Day flood detection            — GIBS BitmapLayer
 ```
 
 ### Proposed: 16 layers in 6 categories
