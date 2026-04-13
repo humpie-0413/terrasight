@@ -614,6 +614,9 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       );
     }
 
+    // Round 2: All data layers get transitions for smooth fade
+    const fadeTransition = { getRadius: { duration: 600, easing: (t: number) => t }, getFillColor: { duration: 400 } };
+
     // 3. Fire points
     if (activeEvent === 'fires' && firesData?.fires) {
       result.push(
@@ -629,12 +632,12 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           pickable: true,
           onHover,
           antialiasing: true,
-          parameters: { blend: true },
+          transitions: fadeTransition,
         }),
       );
     }
 
-    // 4. Storm points
+    // 4. Storm points — with stroked outline for visibility
     if (activeEvent === 'storms' && stormsData?.storms) {
       result.push(
         new ScatterplotLayer({
@@ -647,16 +650,35 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           radiusMinPixels: 3,
           radiusMaxPixels: 18,
           stroked: true,
-          getLineColor: rgbArr(255, 255, 255, 120),
+          getLineColor: rgbArr(255, 255, 255, 100),
           lineWidthMinPixels: 1,
           pickable: true,
           onHover,
+          transitions: fadeTransition,
         }),
       );
     }
 
-    // 5. Earthquake points
+    // 5. Earthquake points — outer ring for emphasis
     if (activeEvent === 'earthquakes' && earthquakeData?.earthquakes) {
+      // Outer glow ring (slightly larger, semi-transparent)
+      result.push(
+        new ScatterplotLayer({
+          id: 'earthquakes-glow',
+          data: earthquakeData.earthquakes,
+          getPosition: (d: Earthquake) => [d.lon, d.lat],
+          getFillColor: (d: Earthquake) => {
+            const c = earthquakeColorRGBA(d.magnitude);
+            return [c[0], c[1], c[2], 60] as [number, number, number, number];
+          },
+          getRadius: (d: Earthquake) => earthquakeRadius(d.magnitude) * 2,
+          radiusUnits: 'pixels' as const,
+          radiusMinPixels: 6,
+          radiusMaxPixels: 48,
+          pickable: false,
+        }),
+      );
+      // Core point
       result.push(
         new ScatterplotLayer({
           id: 'earthquakes-layer',
@@ -668,10 +690,11 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           radiusMinPixels: 3,
           radiusMaxPixels: 24,
           stroked: true,
-          getLineColor: rgbArr(255, 255, 255, 80),
+          getLineColor: rgbArr(255, 255, 255, 100),
           lineWidthMinPixels: 1,
           pickable: true,
           onHover,
+          transitions: fadeTransition,
         }),
       );
     }
@@ -690,11 +713,12 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           radiusMaxPixels: 8,
           pickable: true,
           onHover,
+          transitions: fadeTransition,
         }),
       );
     }
 
-    // 7. SST scatter (continuous)
+    // 7. SST scatter (continuous) — larger points for coverage feel
     if (activeContinuous === 'ocean-heat' && sstData?.points) {
       result.push(
         new ScatterplotLayer({
@@ -702,12 +726,13 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           data: sstData.points,
           getPosition: (d: SstPoint) => [d.lon, d.lat],
           getFillColor: (d: SstPoint) => sstColorRGBA(d.sst_c),
-          getRadius: 8,
+          getRadius: 10,
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 4,
-          radiusMaxPixels: 12,
+          radiusMinPixels: 5,
+          radiusMaxPixels: 14,
           pickable: true,
           onHover,
+          transitions: fadeTransition,
         }),
       );
     }
@@ -720,12 +745,13 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           data: coralData.points,
           getPosition: (d: CoralPoint) => [d.lon, d.lat],
           getFillColor: (d: CoralPoint) => dhwColorRGBA(d.dhw),
-          getRadius: 8,
+          getRadius: 10,
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 4,
-          radiusMaxPixels: 12,
+          radiusMinPixels: 5,
+          radiusMaxPixels: 14,
           pickable: true,
           onHover,
+          transitions: fadeTransition,
         }),
       );
     }
@@ -738,12 +764,13 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           data: slaData.points,
           getPosition: (d: SlaPoint) => [d.lon, d.lat],
           getFillColor: (d: SlaPoint) => slaColorRGBA(d.sla_m),
-          getRadius: 6,
+          getRadius: 7,
           radiusUnits: 'pixels' as const,
-          radiusMinPixels: 3,
+          radiusMinPixels: 4,
           radiusMaxPixels: 10,
           pickable: true,
           onHover,
+          transitions: fadeTransition,
         }),
       );
     }
@@ -813,13 +840,32 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
   const slaConfigured = slaData ? slaData.configured && slaData.status === 'ok' : true;
   const airConfigured = airData ? airData.configured : true;
 
+  // Loading state
+  const isLoading = !firesData && !sstData && !airData;
+
   return (
     <div ref={containerRef} style={containerStyle}>
-      {/* CSS atmosphere glow */}
-      <div style={atmosphereGlowStyle} />
+      {/* CSS atmosphere glow — only in globe mode */}
+      {viewMode === 'globe' && <div style={atmosphereGlowStyle} />}
 
       {/* deck.gl canvas */}
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
+
+      {/* Loading overlay — Round 4 */}
+      {isLoading && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 5,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(4,6,16,0.6)', pointerEvents: 'none',
+        }}>
+          <div style={{
+            color: '#94a3b8', fontSize: '14px', fontFamily: 'system-ui, sans-serif',
+            animation: 'fadeInUp 0.5s ease-out',
+          }}>
+            Loading data layers…
+          </div>
+        </div>
+      )}
 
       {/* Tooltip */}
       <Tooltip info={hoverInfo} />
@@ -827,6 +873,18 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       {/* Meta line (top-left) */}
       <div style={metaOverlayStyle}>
         <MetaLine cadence={activeMeta.cadence} tag={activeMeta.tag} source={activeMeta.source} sourceUrl={activeMeta.sourceUrl} />
+      </div>
+
+      {/* View mode badge (bottom-right) — Round 4 */}
+      <div style={{
+        position: 'absolute', bottom: 12, right: 12, zIndex: 10,
+        background: 'rgba(10,14,26,0.75)', backdropFilter: 'blur(6px)',
+        border: '1px solid rgba(51,65,85,0.4)', borderRadius: '6px',
+        padding: '4px 10px', fontSize: '10px', color: '#64748b',
+        fontFamily: 'system-ui, sans-serif', textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+      }}>
+        {viewMode === 'globe' ? '3D Globe' : '2D Mercator'}
       </div>
 
       {/* Layer panel (top-right) */}

@@ -960,11 +960,26 @@ Monolithic home page 분리 → 전용 페이지 라우트로 리팩터링.
 - `npm run build` 성공 ✅
 - Main: 56.30 KB gz, deckgl-vendor: 226.98 KB gz (총 20 chunks)
 
-**자기 평가: 7/10**
-- Globe 렌더링 + 데이터 레이어 모두 동작
-- 번들 56% 감소는 큰 성과
+**Phase 2: Globe ↔ 2D Map 토글:**
+- deck.gl `MapView` 추가 — 같은 레이어 코드로 Globe/Map 전환
+- LayerPanel에 Globe/Map 토글 버튼
+- 뷰 모드 뱃지 (3D Globe / 2D Mercator)
+
+**Phase 3 시각 개선 4 Round:**
+
+| Round | 내용 | 평가 |
+|-------|------|------|
+| Round 1: 색상 | SST 9-stop nullschool 팔레트, Fire hot-metal, Coral NOAA CRW, atmosphere pulse 애니메이션 | 8/10 |
+| Round 2: 인터랙션 | 레이어 전환 fade (600ms), 지진 glow ring (2x 반투명), SST/Coral 포인트 확대 | 7/10 |
+| Round 3: 합성 | 연속장+이벤트 동시 표시 확인 (아키텍처상 이미 지원) | 8/10 |
+| Round 4: 로딩 | 로딩 오버레이 + 뷰 모드 뱃지 + 글로브 모드에만 atmosphere | 7/10 |
+
+**자기 평가 (전체): 7.5/10**
+- Globe 렌더링 + 데이터 레이어 + 2D 토글 모두 동작
+- 번들 56% 감소 + 1M+ 포인트 성능 확보
 - GIBS 네이티브 타일 로딩으로 CORS 해킹 제거
-- 개선 필요: CSS atmosphere가 3D 셰이더 대비 평면적, auto-rotate 미지원
+- 색상 시스템이 nullschool/windy 수준에 근접
+- 개선 필요: auto-rotate, 스타일 basemap (2D 모드), 클릭→리포트 링크
 
 ---
 

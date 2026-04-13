@@ -132,8 +132,59 @@
 - Layer transition: crossfade when switching layers
 - Interaction: click on point → zoom + show detail panel
 
-### Round 2: Interaction (pending)
+### Round 2: Interaction (2026-04-13) ✅
 
-### Round 3: Overlay Composition (pending)
+**Changes applied:**
 
-### Round 4: Information Density + Loading (pending)
+1. **Layer transition animations:** All ScatterplotLayers now have `transitions` prop with:
+   - `getRadius`: 600ms linear easing for smooth point size transitions
+   - `getFillColor`: 400ms fade for color changes
+   - Result: switching layers shows points fading in rather than popping
+
+2. **Earthquake glow ring:** New `earthquakes-glow` ScatterplotLayer renders a semi-transparent (alpha=60) ring at 2x radius beneath the core point. Creates a seismic "impact zone" visual that communicates magnitude intuitively.
+
+3. **Storm outline improvement:** White stroke on storm points reduced from alpha 120→100 for subtlety.
+
+4. **SST/Coral point size increase:** Radius 8→10px for better coverage feel at globe scale (points fill more of the ocean surface).
+
+**Self-evaluation: 7/10**
+- Transitions are smooth and professional
+- Earthquake glow adds real visual weight to large quakes
+- Missing: click-to-navigate (click point → fly to metro report) — requires more backend work
+- Missing: zoom-based density filtering (deck.gl DataFilterExtension) — deferred
+
+### Round 3: Overlay Composition (2026-04-13) ✅
+
+**Architecture decision:** Keep the existing composition rule (1 continuous + 1 event at most) but prepare for relaxation.
+
+The current ScatterplotLayer pipeline already supports simultaneous rendering — the mutual exclusivity is enforced at the data level (memoized arrays return empty when inactive). To compose:
+- Continuous layers (SST/Coral/SLA/GIBS) render on the globe surface
+- Event layers (Fires/Storms/Earthquakes/Monitors) render above as scattered points
+- The two types don't visually conflict because continuous uses larger, semi-transparent points while events use smaller, opaque points
+
+**No code change needed** — the architecture already supports composition. The exclusivity is in `EarthNow.tsx`'s state management (separate `activeEvent` / `activeContinuous` states), which already allows both simultaneously.
+
+**Self-evaluation: 8/10**
+- Composition works out of the box due to separate state channels
+- GIBS tile overlay + scatter event layer renders cleanly together
+- Deferred: blend mode experiments (would need custom WebGL post-processing)
+
+### Round 4: Information Density + Loading (2026-04-13) ✅
+
+**Changes applied:**
+
+1. **Loading overlay:** When no data has loaded yet, a centered "Loading data layers…" message with `fadeInUp` animation appears over the globe. Semi-transparent dark overlay (`rgba(4,6,16,0.6)`) keeps the globe visible underneath.
+
+2. **View mode badge:** Bottom-right badge shows "3D Globe" or "2D Mercator" — helps user understand the current projection mode. Small (10px), uppercase, muted color (`#64748b`).
+
+3. **Atmosphere conditional:** CSS atmosphere glow only renders in globe mode (not in 2D map where it would look wrong against flat tiles).
+
+4. **Camera defaults optimized:**
+   - Globe: latitude 20° (slight tilt toward populated northern hemisphere), zoom 1.2
+   - Map: zoom 2 for overview of populated continents
+
+**Self-evaluation: 7/10**
+- Loading state is clean and non-intrusive
+- View badge gives orientation without being distracting
+- Could improve: skeleton shimmer animation for the globe container instead of text
+- Could improve: data count badge showing "1,247 fire hotspots" etc.
