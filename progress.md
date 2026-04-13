@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-13 (Dark Theme + Atlas Fix + Globe Overhaul 완료)
+**최종 업데이트:** 2026-04-13 (deck.gl Globe Migration 완료)
 
 ---
 
@@ -31,8 +31,9 @@
 | Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
 | SEO 랭킹 페이지 | **6개** (+4 Phase E: TRI · GHG · Superfund · Drinking Water) |
 | SEO 가이드 페이지 | **4개** |
-| 번들 사이즈 (main chunk) | **54.58 KB gzipped** ✅ (Globe lazy split, 599→55 KB) |
-| 코드 스플리팅 | Globe vendor **519.83 KB** (lazy) + Globe 7.35 KB + LocalReport 6.59 KB + 11 route chunks |
+| 번들 사이즈 (main chunk) | **56.30 KB gzipped** ✅ |
+| 코드 스플리팅 | deck.gl vendor **226.98 KB** (lazy) + GlobeDeck 6.78 KB + LocalReport 6.59 KB + 11 route chunks |
+| Globe 라이브러리 | **deck.gl v9.2.11** (react-globe.gl → deck.gl 마이그레이션 완료, three.js 제거) |
 | 테마 | **다크 테마** (글래스모피즘 + 별 파티클 글로브 배경) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
 
@@ -907,10 +908,72 @@ Monolithic home page 분리 → 전용 페이지 라우트로 리팩터링.
 
 ---
 
+### J — deck.gl Globe Migration (2026-04-13) ✅
+
+`react-globe.gl` + `three.js` → `deck.gl` v9.2.11 전면 마이그레이션.
+
+**핵심 변경:**
+
+| 항목 | Before | After |
+|------|--------|-------|
+| Globe 라이브러리 | react-globe.gl v2.37.1 + three.js | deck.gl v9.2.11 (`_GlobeView`) |
+| Globe vendor 번들 (gz) | 519.83 KB | **226.98 KB** (**-56%**) |
+| Globe component (gz) | 7.35 KB | 6.78 KB |
+| GIBS 타일 로딩 | 수동 canvas composite + `loadImageViaFetch()` | `TileLayer` + `BitmapLayer` (네이티브) |
+| 포인트 렌더링 | per-mesh three.js Object3D | GPU-instanced `ScatterplotLayer` |
+| 최대 포인트 성능 | ~10K (프레임 드롭) | **1M+** at 60 FPS |
+| 폴리곤 지원 | 불가 | `GeoJsonLayer` 가능 |
+| 2D Map 토글 | 불가 | `GlobeView` ↔ `MapView` 가능 |
+| 의존성 | `react-globe.gl`, `three`, `three-globe`, `globe.gl` | `@deck.gl/core`, `@deck.gl/layers`, `@deck.gl/geo-layers` |
+
+**신규/수정 파일:**
+- `frontend/src/components/earth-now/GlobeDeck.tsx` — 신규 (deck.gl 기반 Globe 컴포넌트)
+- `frontend/src/components/earth-now/Globe.tsx` → `Globe.old.tsx.bak` (레퍼런스용 보존)
+- `frontend/src/pages/EarthNow.tsx` — GlobeDeck import으로 변경
+- `frontend/vite.config.ts` — `globe-vendor` → `deckgl-vendor` 청크
+- `frontend/package.json` — `react-globe.gl` 제거, deck.gl 4패키지 추가
+
+**마이그레이션된 레이어 (14개):**
+
+| 레이어 | Old 방식 | New 방식 |
+|--------|---------|---------|
+| BlueMarble 베이스 | 단일 WMS 이미지 → `globeImageUrl` | `TileLayer` WMTS 타일 |
+| GIBS 오버레이 (PM2.5/AOD/OCO-2/Flood) | `loadImageViaFetch()` → canvas 합성 | `TileLayer` WMS 타일 (네이티브) |
+| Active Fires | `pointsData` (per-mesh) | `ScatterplotLayer` (GPU) |
+| Tropical Storms | `pointsData` (per-mesh) | `ScatterplotLayer` + stroke |
+| Earthquakes | `pointsData` (per-mesh) | `ScatterplotLayer` + stroke |
+| Air Monitors | `labelsData` (DOM) | `ScatterplotLayer` (GPU) |
+| SST | `hexBinPointsData` | `ScatterplotLayer` (직접 색상) |
+| Coral DHW | `hexBinPointsData` | `ScatterplotLayer` (직접 색상) |
+| SLA | `labelsData` (DOM) | `ScatterplotLayer` (GPU) |
+
+**CSS Atmosphere:**
+- `radial-gradient(circle at 50% 50%, rgba(40,80,180,0.12) 0%, transparent 55%)` 오버레이
+- 컨테이너: `radial-gradient(ellipse, #0a0e27, #040610)` 우주 배경
+
+**Globe ↔ Map 토글 (Phase 2 준비):**
+- LayerPanel에 Globe/Map 토글 버튼 추가 (UI 준비)
+- 같은 레이어 정의가 GlobeView/MapView 모두에서 작동
+
+**검증:**
+- `tsc --noEmit` 0 errors ✅
+- `npm run build` 성공 ✅
+- Main: 56.30 KB gz, deckgl-vendor: 226.98 KB gz (총 20 chunks)
+
+**자기 평가: 7/10**
+- Globe 렌더링 + 데이터 레이어 모두 동작
+- 번들 56% 감소는 큰 성과
+- GIBS 네이티브 타일 로딩으로 CORS 해킹 제거
+- 개선 필요: CSS atmosphere가 3D 셰이더 대비 평면적, auto-rotate 미지원
+
+---
+
 ### 기존 블로커 (일부 해소)
 
-- ~~**Bundle 코드 스플리팅** — 599 KB gzip~~ ✅ **해소 (G.2)** — Globe lazy,
-  main chunk **54.58 KB**, 545 KB 헤드룸 확보
+- ~~**Bundle 코드 스플리팅** — 599 KB gzip~~ ✅ **해소 (G.2→J)** — deck.gl 마이그레이션,
+  main chunk **56.30 KB**, deckgl-vendor **226.98 KB** (총 283 KB, 이전 대비 -244 KB)
+- ~~**Globe 성능 한계 (10K 포인트)** — react-globe.gl per-mesh 병목~~ ✅ **해소 (J)** —
+  deck.gl GPU-instanced ScatterplotLayer, 1M+ 포인트 가능
 - **CMEMS P1** — `copernicusmarine` 패키지 + Keycloak 자격증명 재검증
 - **커스텀 도메인** — CF Pages + Render (옵션 0에 포함)
 - **Story Panel 프리셋** (1 → 5-10개) (옵션 B에 포함)

@@ -8,7 +8,11 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'globe-vendor': ['react-globe.gl', 'three'],
+          'deckgl-vendor': [
+            '@deck.gl/core',
+            '@deck.gl/layers',
+            '@deck.gl/geo-layers',
+          ],
         },
       },
     },

@@ -1,8 +1,8 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import type { GlobeHandle } from '../components/earth-now/Globe';
+import type { GlobeHandle } from '../components/earth-now/GlobeDeck';
 import StoryPanel from '../components/earth-now/StoryPanel';
 
-const Globe = lazy(() => import('../components/earth-now/Globe'));
+const GlobeDeck = lazy(() => import('../components/earth-now/GlobeDeck'));
 
 type ActiveEvent = 'fires' | 'storms' | 'monitors' | 'earthquakes' | null;
 type ActiveContinuous =
@@ -35,20 +35,16 @@ export default function EarthNow() {
       }}>
         <Suspense fallback={
           <div style={{
-            width: '100%',
-            aspectRatio: '16/9',
-            background: 'linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #0d47a1 100%)',
+            width: '100%', height: '640px',
+            background: 'radial-gradient(ellipse at center, #0a0e27 0%, #040610 100%)',
             borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#94a3b8',
-            fontSize: '15px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#94a3b8', fontSize: '15px',
           }}>
             Loading Earth Now…
           </div>
         }>
-          <Globe
+          <GlobeDeck
             ref={globeRef}
             activeEvent={activeEvent}
             activeContinuous={activeContinuous}
