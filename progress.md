@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-13 (deck.gl Globe Migration 완료)
+**최종 업데이트:** 2026-04-13 (Phase K: 타일 수정 + UI/UX 재설계 완료)
 
 ---
 
@@ -979,7 +979,62 @@ Monolithic home page 분리 → 전용 페이지 라우트로 리팩터링.
 - 번들 56% 감소 + 1M+ 포인트 성능 확보
 - GIBS 네이티브 타일 로딩으로 CORS 해킹 제거
 - 색상 시스템이 nullschool/windy 수준에 근접
-- 개선 필요: auto-rotate, 스타일 basemap (2D 모드), 클릭→리포트 링크
+- 개선 필요: ~~auto-rotate~~, ~~스타일 basemap (2D 모드)~~, 클릭→리포트 링크
+
+---
+
+### K — 타일 수정 + UI/UX 전면 재설계 (2026-04-13) ✅
+
+BlueMarble/GIBS 타일 미표시 버그 수정 + Globe 페이지 전면 재설계 5 Round.
+
+**타일 버그 수정 (2건):**
+
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| BlueMarble 검은 화면 | GIBS EPSG:4326 타일 매트릭스 ↔ deck.gl Web Mercator 인덱스 불일치 | EPSG:3857 `GoogleMapsCompatible_Level8` 엔드포인트 사용 |
+| GIBS WMS 오버레이 미작동 | `{south},{west}` 플레이스홀더 deck.gl 미지원 + BBOX 순서 오류 | `getTileData` 콜백으로 직접 URL 구성 |
+
+**UI/UX 재설계 5 Round:**
+
+| Round | 내용 | 평가 |
+|-------|------|------|
+| R1: 타일 수정 + 풀스크린 | EPSG:3857 + Carto Dark basemap + `calc(100vh - 52px)` 풀스크린 | 6/10 |
+| R2: 옵저버토리 비주얼 | 에지 비네트 + 활성 레이어 pill + 데이터 카운트 + 좌표 표시 + 대기 강화 | 7/10 |
+| R3: 하단 바 레이아웃 | 우측 아코디언 → **하단 탭바** (windy.com 스타일), 레이어 pill, +240px 글로브 폭 | **8/10** |
+| R4: 폴리시 | 툴팁 재설계 (shadow+blur) + 자동 회전 (6초 유휴) + MetaLine 투명도 조정 + 모바일 | 8/10 |
+| R5: 최종 | 하단 바 그래디언트 페이드 + 스타일 통일 + docs 기록 | 8.5/10 |
+
+**레이아웃 비교 (A vs B):**
+
+| 항목 | Layout A (우측 패널) | Layout B (하단 바) |
+|------|---------------------|-------------------|
+| Globe 폭 | ~75% | **100%** |
+| 레이어 접근 | 3클릭 (Layers → 카테고리 → 레이어) | **1-2클릭** (탭 → pill) |
+| 레퍼런스 | 일반 GIS 도구 | **windy.com / Google Earth** |
+| 결론 | ✗ 폐기 | **✓ 채택** |
+
+**신규 기능:**
+- **활성 레이어 pill** — 상단 중앙, 레이어명 + 데이터 포인트 수 + 발광 도트
+- **좌표 표시** — 하단 우측, `lat° lon° z{zoom}` monospace
+- **자동 회전** — 6초 유휴 시 Globe 0.9°/sec 회전, 상호작용 시 즉시 정지
+- **에지 비네트** — `boxShadow: inset 0 0 150px 60px` 시네마틱 깊이감
+- **하단 그래디언트** — Globe → 컨트롤바 자연스러운 전환
+- **2D Map 베이스맵** — Carto Dark `dark_nolabels` (라벨 없는 다크 타일)
+- **로딩 스피너** — 텍스트 → ring spinner + 텍스트
+- **StoryPanel 오버레이** — 그리드에서 분리, 플로팅 접이식 카드
+
+**검증:**
+- `tsc --noEmit` 0 errors ✅
+- `npm run build` 성공 ✅
+- GlobeDeck: 7.78 KB gz (7.23 → 7.78, +0.55 KB)
+- Main: 56.30 KB gz (변동 없음)
+
+**자기 평가: 8.5/10**
+- 타일 수정으로 BlueMarble 정상 표시
+- 풀스크린 + 하단 바 = 전문 도구 수준 UX
+- 자동 회전으로 "살아있는" 느낌
+- windy.com / nullschool 수준의 비주얼 달성
+- 남은 과제: Globe ↔ Map 전환 애니메이션, 클릭→리포트 네비게이션
 
 ---
 
@@ -989,6 +1044,12 @@ Monolithic home page 분리 → 전용 페이지 라우트로 리팩터링.
   main chunk **56.30 KB**, deckgl-vendor **226.98 KB** (총 283 KB, 이전 대비 -244 KB)
 - ~~**Globe 성능 한계 (10K 포인트)** — react-globe.gl per-mesh 병목~~ ✅ **해소 (J)** —
   deck.gl GPU-instanced ScatterplotLayer, 1M+ 포인트 가능
+- ~~**BlueMarble 타일 미표시** — EPSG:4326 tile matrix 불일치~~ ✅ **해소 (K)** — EPSG:3857
+  `GoogleMapsCompatible_Level8` 엔드포인트 사용
+- ~~**GIBS WMS 오버레이 미작동** — URL 템플릿 플레이스홀더 미지원~~ ✅ **해소 (K)** —
+  `getTileData` 콜백으로 직접 WMS BBOX URL 구성
+- ~~**Auto-rotate 미구현**~~ ✅ **해소 (K)** — 6초 유휴 시 0.9°/sec 회전
+- ~~**2D Map 스타일 basemap 없음**~~ ✅ **해소 (K)** — Carto Dark `dark_nolabels` 적용
 - **CMEMS P1** — `copernicusmarine` 패키지 + Keycloak 자격증명 재검증
 - **커스텀 도메인** — CF Pages + Render (옵션 0에 포함)
 - **Story Panel 프리셋** (1 → 5-10개) (옵션 B에 포함)

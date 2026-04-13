@@ -14,6 +14,7 @@ export default function EarthNow() {
   const [activeEvent, setActiveEvent] = useState<ActiveEvent>('fires');
   const [activeContinuous, setActiveContinuous] = useState<ActiveContinuous>(null);
   const globeRef = useRef<GlobeHandle>(null);
+  const [storyOpen, setStoryOpen] = useState(false);
 
   const handleExploreOnGlobe = (
     layerOn: string,
@@ -26,36 +27,81 @@ export default function EarthNow() {
   };
 
   return (
-    <main style={{ padding: '0 24px 24px' }}>
-      <h1 style={{ margin: '16px 0', fontSize: '24px', color: '#f1f5f9', fontWeight: 700 }}>Earth Now</h1>
-      <section style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 2.5fr) minmax(260px, 1fr)',
-        gap: '16px',
-      }}>
-        <Suspense fallback={
-          <div style={{
-            width: '100%', height: '640px',
-            background: 'radial-gradient(ellipse at center, #0a0e27 0%, #040610 100%)',
-            borderRadius: '12px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#94a3b8', fontSize: '15px',
-          }}>
-            Loading Earth Now…
+    <main style={{
+      position: 'relative',
+      height: 'calc(100vh - 52px)',
+      overflow: 'hidden',
+      background: '#020408',
+    }}>
+      <Suspense fallback={
+        <div style={{
+          width: '100%', height: '100%',
+          background: 'radial-gradient(ellipse at center, #0a0e27 0%, #020408 100%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#475569', fontSize: '13px', fontFamily: 'system-ui, sans-serif',
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              border: '2px solid #1e293b', borderTopColor: '#3b82f6',
+              animation: 'spin 0.8s linear infinite',
+              margin: '0 auto 12px',
+            }} />
+            Initializing Earth Now…
           </div>
-        }>
-          <GlobeDeck
-            ref={globeRef}
-            activeEvent={activeEvent}
-            activeContinuous={activeContinuous}
-            onLayerChange={(type, key) => {
-              if (type === 'event') setActiveEvent(key as ActiveEvent);
-              else setActiveContinuous(key as ActiveContinuous);
-            }}
-          />
-        </Suspense>
-        <StoryPanel onExploreOnGlobe={handleExploreOnGlobe} />
-      </section>
+        </div>
+      }>
+        <GlobeDeck
+          ref={globeRef}
+          activeEvent={activeEvent}
+          activeContinuous={activeContinuous}
+          onLayerChange={(type, key) => {
+            if (type === 'event') setActiveEvent(key as ActiveEvent);
+            else setActiveContinuous(key as ActiveContinuous);
+          }}
+        />
+      </Suspense>
+
+      {/* Floating Story Panel overlay — above bottom bar, right side */}
+      <div style={{
+        position: 'absolute',
+        bottom: 80,
+        right: 16,
+        zIndex: 20,
+        width: 300,
+      }}>
+        <button
+          type="button"
+          onClick={() => setStoryOpen(!storyOpen)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            background: 'rgba(10,14,26,0.85)', backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(51,65,85,0.4)',
+            borderRadius: storyOpen ? '8px 8px 0 0' : '8px',
+            color: '#cbd5e1', fontSize: 12, fontWeight: 600,
+            padding: '8px 14px', cursor: 'pointer',
+            fontFamily: 'system-ui, sans-serif', textAlign: 'left',
+          }}
+        >
+          <span>Climate Story</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#475569' }}>
+            {storyOpen ? '▼' : '▲'}
+          </span>
+        </button>
+        {storyOpen && (
+          <div style={{
+            background: 'rgba(10,14,26,0.92)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(51,65,85,0.4)',
+            borderTop: 'none',
+            borderRadius: '0 0 8px 8px',
+            maxHeight: '50vh',
+            overflowY: 'auto',
+          }}>
+            <StoryPanel onExploreOnGlobe={handleExploreOnGlobe} />
+          </div>
+        )}
+      </div>
     </main>
   );
 }

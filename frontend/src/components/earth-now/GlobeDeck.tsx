@@ -60,10 +60,14 @@ interface CoralResponse { count: number; configured: boolean; status: string; po
 interface SlaPoint { lat: number; lon: number; sla_m: number; }
 interface SlaResponse { count: number; configured: boolean; status: string; message?: string; points: SlaPoint[]; }
 
-// ─── BlueMarble Tile URL ──────────────────────────────────────────────────────
+// ─── Tile URLs ────────────────────────────────────────────────────────────────
 
+// EPSG:3857 (Web Mercator) — matches deck.gl's internal tile indexing
 const BLUEMARBLE_TILE_URL =
-  'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08/{z}/{y}/{x}.jpg';
+  'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/2004-08/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg';
+
+const CARTO_DARK_URL =
+  'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png';
 
 // ─── GIBS WMS overlay ─────────────────────────────────────────────────────────
 
@@ -71,6 +75,12 @@ const GIBS_WMS_BASE =
   'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
   '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
   '&STYLES=&FORMAT=image/png&TRANSPARENT=TRUE&SRS=EPSG:4326';
+
+function loadWmsImage(url: string): Promise<ImageBitmap> {
+  return fetch(url, { mode: 'cors' })
+    .then((r) => r.blob())
+    .then((b) => createImageBitmap(b));
+}
 
 const GIBS_LAYER_NAMES: Record<string, string> = {
   'gibs-pm25': 'MERRA2_Total_Aerosol_Optical_Thickness_550nm_Scattering_Monthly',
@@ -292,10 +302,9 @@ interface LayerPanelProps {
 function LayerPanel({
   activeEvent, activeContinuous, onLayerChange,
   viewMode, onViewModeChange,
-  slaConfigured, slaStatus, airConfigured,
+  slaConfigured, airConfigured,
 }: LayerPanelProps) {
-  const [openCategory, setOpenCategory] = useState<string | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [selectedCat, setSelectedCat] = useState<string | null>('Fire & Land');
 
   const isActive = (layer: LayerDef): boolean =>
     layer.type === 'event' ? activeEvent === layer.key : activeContinuous === layer.key;
@@ -307,82 +316,75 @@ function LayerPanel({
     return false;
   };
 
+  const selectedLayers = CATEGORIES.find((c) => c.name === selectedCat)?.layers ?? [];
+
   return (
-    <div style={layerPanelStyle}>
-      {/* View mode toggle */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #1e293b' }}>
-        {(['globe', 'map'] as ViewMode[]).map((m) => (
-          <button key={m} type="button" onClick={() => onViewModeChange(m)}
+    <div style={layerBarStyle}>
+      {/* Top row: view toggle + category tabs */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '2px', overflowX: 'auto' }}>
+        {/* View mode toggle */}
+        <button type="button"
+          onClick={() => onViewModeChange(viewMode === 'globe' ? 'map' : 'globe')}
+          style={{
+            padding: '6px 10px', background: 'rgba(59,130,246,0.12)',
+            border: '1px solid rgba(59,130,246,0.2)', borderRadius: '6px',
+            color: '#94a3b8', fontSize: '12px', cursor: 'pointer',
+            fontFamily: 'system-ui, sans-serif', flexShrink: 0,
+          }}>
+          {viewMode === 'globe' ? '3D' : '2D'}
+        </button>
+
+        <div style={{ width: 1, height: 18, background: 'rgba(51,65,85,0.4)', margin: '0 6px', flexShrink: 0 }} />
+
+        {CATEGORIES.map((cat) => (
+          <button key={cat.name} type="button"
+            onClick={() => setSelectedCat((prev) => prev === cat.name ? null : cat.name)}
             style={{
-              flex: 1, padding: '6px 0', background: viewMode === m ? 'rgba(59,130,246,0.2)' : 'none',
-              border: 'none', borderBottom: viewMode === m ? '2px solid #3b82f6' : '2px solid transparent',
-              color: viewMode === m ? '#e2e8f0' : '#64748b', fontSize: '11px', fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'system-ui, sans-serif', textTransform: 'uppercase',
-              letterSpacing: '0.05em',
+              padding: '5px 10px',
+              background: selectedCat === cat.name ? 'rgba(59,130,246,0.15)' : 'transparent',
+              border: 'none', borderRadius: '6px',
+              color: selectedCat === cat.name ? '#e2e8f0' : '#64748b',
+              fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'system-ui, sans-serif', whiteSpace: 'nowrap', flexShrink: 0,
+              transition: 'background 0.15s, color 0.15s',
             }}>
-            {m === 'globe' ? '🌍 Globe' : '🗺️ Map'}
+            {cat.name}
           </button>
         ))}
       </div>
 
-      {/* Layers header */}
-      <button type="button" onClick={() => setPanelOpen((v) => !v)}
-        style={layerHeaderBtnStyle}>
-        <span>Layers</span>
-        <span style={{ fontSize: '10px', color: '#64748b' }}>{panelOpen ? '▲' : '▼'}</span>
-      </button>
-
-      {panelOpen && (
-        <div style={{ borderTop: '1px solid #1e293b' }}>
-          {CATEGORIES.map((cat) => (
-            <div key={cat.name}>
-              <button type="button"
-                onClick={() => setOpenCategory((prev) => prev === cat.name ? null : cat.name)}
-                style={categoryBtnStyle}>
-                <span>{cat.name}</span>
-                <span>{openCategory === cat.name ? '▲' : '▼'}</span>
+      {/* Layer pills for selected category */}
+      {selectedCat && selectedLayers.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+          {selectedLayers.map((layer) => {
+            const active = isActive(layer);
+            const disabled = isDisabled(layer);
+            const tagColor = TRUST_TAG_COLORS[layer.tag];
+            return (
+              <button key={layer.key} type="button" disabled={disabled}
+                onClick={() => !disabled && onLayerChange(layer.type, active ? null : layer.key)}
+                title={disabled ? (layer.note ?? 'Not available') : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  padding: '4px 10px', fontSize: '11px', fontWeight: active ? 600 : 400,
+                  border: '1px solid', borderRadius: '14px',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  fontFamily: 'system-ui, sans-serif',
+                  background: active ? layer.activeColor : 'rgba(30,41,59,0.5)',
+                  color: active ? '#fff' : '#94a3b8',
+                  borderColor: active ? layer.activeColor : 'rgba(51,65,85,0.4)',
+                  opacity: disabled ? 0.3 : 1,
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                  transition: 'background 0.2s, border-color 0.2s',
+                }}>
+                <span style={{
+                  width: 5, height: 5, borderRadius: '50%',
+                  background: tagColor, flexShrink: 0,
+                }} />
+                {layer.label}
               </button>
-              {openCategory === cat.name && (
-                <div style={{ padding: '4px 8px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {cat.layers.map((layer) => {
-                    const active = isActive(layer);
-                    const disabled = isDisabled(layer);
-                    const tagColor = TRUST_TAG_COLORS[layer.tag];
-                    const tooltipNote = disabled
-                      ? (layer.note ?? (layer.key === 'cmems-sla'
-                        ? slaStatus === 'pending' ? 'Sea level data migration in progress — coming soon'
-                          : slaStatus === 'error' ? 'Sea level service error — check backend logs'
-                            : 'CMEMS credentials not configured'
-                        : layer.key === 'monitors' ? 'OPENAQ_API_KEY not configured' : undefined))
-                      : undefined;
-
-                    return (
-                      <button key={layer.key} type="button" disabled={disabled}
-                        aria-pressed={active} title={tooltipNote}
-                        onClick={() => !disabled && onLayerChange(layer.type, active ? null : layer.key)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px',
-                          fontSize: '12px', fontWeight: active ? 600 : 400,
-                          border: '1px solid', borderRadius: '5px',
-                          cursor: disabled ? 'not-allowed' : 'pointer',
-                          fontFamily: 'system-ui, sans-serif',
-                          background: active ? layer.activeColor : '#1e293b',
-                          color: active ? '#fff' : '#94a3b8',
-                          borderColor: active ? layer.activeColor : '#334155',
-                          opacity: disabled ? 0.4 : 1, textAlign: 'left',
-                        }}>
-                        <span style={{
-                          display: 'inline-block', width: 7, height: 7,
-                          borderRadius: '50%', background: tagColor, flexShrink: 0,
-                        }} />
-                        {layer.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -493,11 +495,13 @@ function Tooltip({ info }: { info: { x: number; y: number; object: Record<string
 
   return (
     <div style={{
-      position: 'absolute', left: info.x + 12, top: info.y - 12, pointerEvents: 'none',
-      background: 'rgba(10,14,26,0.92)', color: '#f1f5f9', padding: '8px 10px',
-      border: '1px solid #475569', borderRadius: '6px', fontSize: '11px',
-      fontFamily: 'system-ui, sans-serif', maxWidth: 280, zIndex: 20,
-      backdropFilter: 'blur(8px)',
+      position: 'absolute', left: info.x + 14, top: info.y - 14, pointerEvents: 'none',
+      background: 'rgba(12,18,32,0.94)', color: '#f1f5f9', padding: '10px 14px',
+      border: '1px solid rgba(71,85,105,0.35)', borderRadius: '10px',
+      fontSize: '12px', lineHeight: '1.5',
+      fontFamily: 'system-ui, sans-serif', maxWidth: 300, zIndex: 25,
+      backdropFilter: 'blur(14px)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)',
     }} dangerouslySetInnerHTML={{ __html: content }} />
   );
 }
@@ -514,6 +518,8 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
   const deckRef = useRef<any>(null);
   const [viewState, setViewState] = useState<GlobeViewState>(INITIAL_VIEW_STATE);
   const [viewMode, setViewMode] = useState<ViewMode>('globe');
+  const lastInteractionRef = useRef(0); // timestamp of last user interaction
+  const viewStateRef = useRef(INITIAL_VIEW_STATE); // ref mirror for animation loop
   const [hoverInfo, setHoverInfo] = useState<{
     x: number; y: number; object: Record<string, unknown>; layer: { id: string };
   } | null>(null);
@@ -563,14 +569,16 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     const result: unknown[] = [];
     const gibsDate = getGibsDate();
 
-    // 1. BlueMarble base tile layer
+    // 1. Base tiles — Globe: BlueMarble (GIBS EPSG:3857), Map: Carto Dark
+    const baseTileUrl = viewMode === 'globe' ? BLUEMARBLE_TILE_URL : CARTO_DARK_URL;
+    const baseMaxZoom = viewMode === 'globe' ? 8 : 19;
     result.push(
       new TileLayer({
-        id: 'bluemarble-tiles',
-        data: BLUEMARBLE_TILE_URL,
+        id: 'base-tiles',
+        data: baseTileUrl,
         minZoom: 0,
-        maxZoom: 5,
-        tileSize: 512,
+        maxZoom: baseMaxZoom,
+        tileSize: 256,
         renderSubLayers: (props: Record<string, unknown>) => {
           const tileProps = props.tile as {
             bbox: { west: number; south: number; east: number; north: number };
@@ -586,18 +594,25 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       }),
     );
 
-    // 2. GIBS overlay tile layer (for gibs-* continuous layers)
+    // 2. GIBS WMS overlay — uses getTileData for proper bbox construction
     const gibsLayerName = activeContinuous ? GIBS_LAYER_NAMES[activeContinuous] : null;
     if (gibsLayerName) {
-      const gibsUrl = `${GIBS_WMS_BASE}&LAYERS=${gibsLayerName}&TIME=${gibsDate}&BBOX={south},{west},{north},{east}&WIDTH=512&HEIGHT=512`;
       result.push(
         new TileLayer({
           id: 'gibs-overlay',
-          data: gibsUrl,
           minZoom: 0,
           maxZoom: 5,
-          tileSize: 512,
+          tileSize: 256,
           opacity: 0.7,
+          getTileData: (tileInfo: unknown) => {
+            const tile = tileInfo as {
+              bbox: { west: number; south: number; east: number; north: number };
+            };
+            const { west, south, east, north } = tile.bbox;
+            // WMS 1.1.1 BBOX order: minx,miny,maxx,maxy = west,south,east,north
+            const url = `${GIBS_WMS_BASE}&LAYERS=${gibsLayerName}&TIME=${gibsDate}&BBOX=${west},${south},${east},${north}&WIDTH=256&HEIGHT=256`;
+            return loadWmsImage(url);
+          },
           renderSubLayers: (props: Record<string, unknown>) => {
             const tileProps = props.tile as {
               bbox: { west: number; south: number; east: number; north: number };
@@ -776,7 +791,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     }
 
     return result;
-  }, [activeEvent, activeContinuous, firesData, stormsData, earthquakeData, airData, sstData, coralData, slaData, onHover]);
+  }, [activeEvent, activeContinuous, viewMode, firesData, stormsData, earthquakeData, airData, sstData, coralData, slaData, onHover]);
 
   // ── Initialize / update Deck instance ─────────────────────────────────────
 
@@ -798,7 +813,10 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
         views: currentView,
         layers: layers as never[],
         onViewStateChange: ({ viewState: vs }: { viewState: Record<string, unknown> }) => {
-          setViewState(vs as unknown as GlobeViewState);
+          lastInteractionRef.current = Date.now();
+          const newVs = vs as unknown as GlobeViewState;
+          viewStateRef.current = newVs;
+          setViewState(newVs);
         },
         getCursor: ({ isHovering }: { isHovering: boolean }) =>
           isHovering ? 'pointer' : 'grab',
@@ -826,6 +844,24 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
     };
   }, []);
 
+  // Auto-rotation: subtle idle globe spin (globe mode only)
+  useEffect(() => {
+    if (viewMode !== 'globe') return;
+    let rafId: number;
+    const rotate = () => {
+      // Only auto-rotate if no user interaction for 6 seconds
+      if (Date.now() - lastInteractionRef.current > 6000 && deckRef.current) {
+        const vs = { ...viewStateRef.current };
+        vs.longitude = (vs.longitude + 0.015) % 360; // ~0.9°/sec at 60fps
+        viewStateRef.current = vs;
+        deckRef.current.setProps({ viewState: vs });
+      }
+      rafId = requestAnimationFrame(rotate);
+    };
+    rafId = requestAnimationFrame(rotate);
+    return () => cancelAnimationFrame(rafId);
+  }, [viewMode]);
+
   // ── Meta + status ─────────────────────────────────────────────────────────
 
   const activeMeta = useMemo(() => {
@@ -843,6 +879,23 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
   // Loading state
   const isLoading = !firesData && !sstData && !airData;
 
+  // Active layer info for top-center indicator
+  const activeLayerDef = useMemo(() => {
+    const key = activeEvent || activeContinuous;
+    return key ? LAYER_LOOKUP.get(key) ?? null : null;
+  }, [activeEvent, activeContinuous]);
+
+  const dataCount = useMemo(() => {
+    if (activeEvent === 'fires') return firesData?.fires?.length ?? 0;
+    if (activeEvent === 'storms') return stormsData?.storms?.length ?? 0;
+    if (activeEvent === 'earthquakes') return earthquakeData?.earthquakes?.length ?? 0;
+    if (activeEvent === 'monitors') return airData?.monitors?.length ?? 0;
+    if (activeContinuous === 'ocean-heat') return sstData?.points?.length ?? 0;
+    if (activeContinuous === 'coral') return coralData?.points?.length ?? 0;
+    if (activeContinuous === 'cmems-sla') return slaData?.points?.length ?? 0;
+    return 0;
+  }, [activeEvent, activeContinuous, firesData, stormsData, earthquakeData, airData, sstData, coralData, slaData]);
+
   return (
     <div ref={containerRef} style={containerStyle}>
       {/* CSS atmosphere glow — only in globe mode */}
@@ -851,18 +904,29 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       {/* deck.gl canvas */}
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
 
-      {/* Loading overlay — Round 4 */}
+      {/* Edge vignette — cinematic depth */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
+        boxShadow: 'inset 0 0 150px 60px rgba(2,4,8,0.5)',
+      }} />
+
+      {/* Loading overlay */}
       {isLoading && (
         <div style={{
           position: 'absolute', inset: 0, zIndex: 5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(4,6,16,0.6)', pointerEvents: 'none',
+          background: 'rgba(4,6,16,0.5)', pointerEvents: 'none',
         }}>
-          <div style={{
-            color: '#94a3b8', fontSize: '14px', fontFamily: 'system-ui, sans-serif',
-            animation: 'fadeInUp 0.5s ease-out',
-          }}>
-            Loading data layers…
+          <div style={{ textAlign: 'center', animation: 'fadeInUp 0.4s ease-out' }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%',
+              border: '2px solid #1e293b', borderTopColor: '#3b82f6',
+              animation: 'spin 0.8s linear infinite',
+              margin: '0 auto 10px',
+            }} />
+            <div style={{ color: '#64748b', fontSize: '12px', fontFamily: 'system-ui, sans-serif' }}>
+              Loading data layers…
+            </div>
           </div>
         </div>
       )}
@@ -870,24 +934,39 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       {/* Tooltip */}
       <Tooltip info={hoverInfo} />
 
+      {/* Active layer indicator — top center pill */}
+      {activeLayerDef && (
+        <div style={{
+          position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10,
+          background: 'rgba(10,14,26,0.75)', backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(51,65,85,0.3)', borderRadius: '20px',
+          padding: '5px 16px', fontSize: '12px', color: '#cbd5e1',
+          fontFamily: 'system-ui, sans-serif',
+          display: 'flex', alignItems: 'center', gap: '8px',
+          animation: 'fadeInUp 0.3s ease-out',
+        }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+            background: activeLayerDef.activeColor,
+            boxShadow: `0 0 8px ${activeLayerDef.activeColor}`,
+            animation: 'pulse-glow 3s ease-in-out infinite',
+          }} />
+          <span style={{ fontWeight: 600 }}>{activeLayerDef.label}</span>
+          {dataCount > 0 && (
+            <span style={{ color: '#64748b', fontSize: '11px', fontWeight: 400 }}>
+              {dataCount.toLocaleString()}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Meta line (top-left) */}
       <div style={metaOverlayStyle}>
         <MetaLine cadence={activeMeta.cadence} tag={activeMeta.tag} source={activeMeta.source} sourceUrl={activeMeta.sourceUrl} />
       </div>
 
-      {/* View mode badge (bottom-right) — Round 4 */}
-      <div style={{
-        position: 'absolute', bottom: 12, right: 12, zIndex: 10,
-        background: 'rgba(10,14,26,0.75)', backdropFilter: 'blur(6px)',
-        border: '1px solid rgba(51,65,85,0.4)', borderRadius: '6px',
-        padding: '4px 10px', fontSize: '10px', color: '#64748b',
-        fontFamily: 'system-ui, sans-serif', textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-      }}>
-        {viewMode === 'globe' ? '3D Globe' : '2D Mercator'}
-      </div>
-
-      {/* Layer panel (top-right) */}
+      {/* Layer bar (bottom) */}
       <LayerPanel
         activeEvent={activeEvent} activeContinuous={activeContinuous}
         onLayerChange={onLayerChange}
@@ -896,8 +975,26 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
         airConfigured={airConfigured}
       />
 
-      {/* Legend (bottom-left) */}
+      {/* Gradient fade into bottom bar */}
+      <div style={{
+        position: 'absolute', bottom: 56, left: 0, right: 0, height: 40, zIndex: 14,
+        background: 'linear-gradient(to bottom, transparent, rgba(10,14,26,0.35))',
+        pointerEvents: 'none',
+      }} />
+
+      {/* Legend (bottom-left, above bar) */}
       <Legend activeEvent={activeEvent} activeContinuous={activeContinuous} />
+
+      {/* Coordinates display — above bottom bar, right */}
+      <div style={{
+        position: 'absolute', bottom: 72, right: 12, zIndex: 10,
+        background: 'rgba(10,14,26,0.5)', borderRadius: '4px',
+        padding: '3px 8px', fontSize: '10px', color: '#475569',
+        fontFamily: 'ui-monospace, monospace', letterSpacing: '0.02em',
+        pointerEvents: 'none',
+      }}>
+        {viewState.latitude.toFixed(1)}° {viewState.longitude.toFixed(1)}° z{viewState.zoom.toFixed(1)}
+      </div>
     </div>
   );
 });
@@ -909,11 +1006,9 @@ export default GlobeDeck;
 const containerStyle: React.CSSProperties = {
   position: 'relative',
   width: '100%',
-  height: '640px',
+  height: '100%',
   background: 'radial-gradient(ellipse at 50% 48%, #0b1030 0%, #060a1a 40%, #020408 100%)',
-  borderRadius: '12px',
   overflow: 'hidden',
-  boxShadow: 'inset 0 0 80px rgba(10,20,60,0.5), 0 8px 32px rgba(0,0,0,0.6)',
 };
 
 const atmosphereGlowStyle: React.CSSProperties = {
@@ -921,8 +1016,9 @@ const atmosphereGlowStyle: React.CSSProperties = {
   inset: 0,
   zIndex: 0,
   background: [
-    'radial-gradient(circle at 50% 50%, rgba(50,100,220,0.10) 0%, rgba(30,70,180,0.05) 25%, transparent 50%)',
-    'radial-gradient(circle at 48% 52%, rgba(20,60,160,0.06) 0%, transparent 45%)',
+    'radial-gradient(circle at 50% 50%, rgba(40,80,200,0.14) 0%, rgba(30,70,180,0.06) 28%, transparent 52%)',
+    'radial-gradient(circle at 48% 52%, rgba(20,60,160,0.08) 0%, transparent 42%)',
+    'radial-gradient(circle at 52% 48%, rgba(60,120,255,0.04) 0%, transparent 38%)',
   ].join(', '),
   pointerEvents: 'none',
   animation: 'atmosphere-pulse 8s ease-in-out infinite',
@@ -930,35 +1026,22 @@ const atmosphereGlowStyle: React.CSSProperties = {
 
 const metaOverlayStyle: React.CSSProperties = {
   position: 'absolute', top: 12, left: 12, zIndex: 10,
-  background: 'rgba(10,14,26,0.78)', padding: '6px 10px',
-  borderRadius: '6px', backdropFilter: 'blur(6px)', pointerEvents: 'none',
+  background: 'rgba(10,14,26,0.5)', padding: '5px 10px',
+  borderRadius: '6px', backdropFilter: 'blur(8px)', pointerEvents: 'none',
+  border: '1px solid rgba(51,65,85,0.2)',
 };
 
-const layerPanelStyle: React.CSSProperties = {
-  position: 'absolute', top: 12, right: 12, zIndex: 10,
-  background: 'rgba(10,14,26,0.9)', border: '1px solid #334155',
-  borderRadius: '8px', backdropFilter: 'blur(8px)',
-  fontFamily: 'system-ui, sans-serif', minWidth: 200, maxWidth: 240,
-};
-
-const layerHeaderBtnStyle: React.CSSProperties = {
-  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer',
-  color: '#e2e8f0', fontSize: '13px', fontWeight: 600, fontFamily: 'system-ui, sans-serif',
-};
-
-const categoryBtnStyle: React.CSSProperties = {
-  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  padding: '6px 12px', background: 'none', border: 'none',
-  borderTop: '1px solid #1e293b', cursor: 'pointer',
-  color: '#94a3b8', fontSize: '11px', fontWeight: 700,
-  textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: 'system-ui, sans-serif',
+const layerBarStyle: React.CSSProperties = {
+  position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15,
+  background: 'rgba(10,14,26,0.85)', backdropFilter: 'blur(12px)',
+  borderTop: '1px solid rgba(51,65,85,0.3)',
+  padding: '8px 16px',
 };
 
 const legendStyle: React.CSSProperties = {
-  position: 'absolute', bottom: 12, left: 12, zIndex: 10,
-  background: 'rgba(10,14,26,0.88)', backdropFilter: 'blur(8px)',
-  border: '1px solid rgba(51,65,85,0.5)', borderRadius: '8px',
+  position: 'absolute', bottom: 72, left: 12, zIndex: 10,
+  background: 'rgba(10,14,26,0.82)', backdropFilter: 'blur(8px)',
+  border: '1px solid rgba(51,65,85,0.4)', borderRadius: '8px',
   padding: '8px 12px', minWidth: 160, maxWidth: 260,
 };
 
