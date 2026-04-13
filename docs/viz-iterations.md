@@ -73,27 +73,67 @@
 
 ---
 
-## Phase 2: MapView Toggle (pending)
+## Phase 2: MapView Toggle (2026-04-13) ✅
 
-Will add 2D flat map view using the same deck.gl layers with MapView instead of GlobeView.
+**Implementation:**
+- Added `MapView` import from `@deck.gl/core`
+- `viewMode` state toggles between `'globe'` and `'map'`
+- Same deck.gl layers render in both views — zero duplication
+- LayerPanel Globe/Map toggle buttons switch the view
+- Map view starts at zoom 2 for better overview
+- Both views share identical ScatterplotLayer / TileLayer / BitmapLayer instances
+
+**Self-evaluation: 7/10**
+- Toggle works, layers switch cleanly between globe and flat projection
+- Map view uses Mercator which distorts at edges but is standard
+- Missing: smooth animated transition between views (deck.gl doesn't support cross-view animation natively)
+- Missing: different base map for 2D (OpenStreetMap would add context in flat view)
+
+**Improvement direction:**
+- Add OpenStreetMap tiles as base in MapView (currently uses BlueMarble in both)
+- Add fade animation when switching views
+- Consider MapLibre integration for styled base map in 2D mode
 
 ---
 
-## Phase 3: Visual Iteration Rounds (pending)
+## Phase 3: Visual Iteration Rounds
 
-### Round 1: Color System
-- Reference: nullschool.net, windy.com
-- 3 candidate palettes per layer → select best
+### Round 1: Color System (2026-04-13) ✅
 
-### Round 2: Interaction
-- Layer transition fade
-- Click → metro report link
-- Zoom-based density adjustment
+**Reference palettes studied:** nullschool.net (earth), windy.com (temperature/wind), NOAA CRW
 
-### Round 3: Overlay Composition
-- Simultaneous continuous + event display
-- Blend mode experiments
+**Changes applied:**
 
-### Round 4: Information Density + Loading
-- Camera position optimization
-- Skeleton → data transition animation
+| Layer | Before | After | Inspiration |
+|-------|--------|-------|-------------|
+| Fires | Yellow→Red (5 discrete bands) | Hot-metal gradient (warm white→amber→crimson, 6 stops) | Windy fire layer |
+| SST | 5-stop blue→red | 9-stop navy→blue→cyan→teal→chartreuse→amber→orange→red | nullschool.net ocean |
+| Coral DHW | White→Yellow→Orange→Red→Purple | Cool blue→Yellow→Amber→Orange→Red→Purple (NOAA CRW official) | NOAA Coral Reef Watch |
+| Fire legend | Discrete swatches | Continuous gradient bar (matches new hot-metal ramp) | Windy legends |
+| SST legend | Old 5-stop gradient | Updated 6-stop matching new palette | nullschool |
+| DHW legend | Old gradient | Updated 5-stop matching NOAA CRW | NOAA CRW |
+
+**Atmosphere glow enhanced:**
+- Dual radial gradient layers for depth (50% + 45% radii, slightly offset centers)
+- Subtle 8-second pulsing animation (`atmosphere-pulse` keyframe)
+- Container box-shadow: inset glow + outer shadow for depth
+- Container gradient: darker, more dramatic space background
+
+**Self-evaluation: 8/10**
+- Fire hot-metal palette reads as more physically grounded (emission spectrum)
+- SST 9-stop gradient shows much more detail in the 14-26°C range (where most ocean is)
+- Coral DHW now matches the official NOAA CRW product colors
+- Atmosphere pulse is subtle enough to not distract
+- Could improve: earthquake and storm palettes not yet updated (next round)
+
+**Improvement direction for Round 2:**
+- Earthquake: add concentric ring animation for recent events
+- Storms: add track line connecting historical positions
+- Layer transition: crossfade when switching layers
+- Interaction: click on point → zoom + show detail panel
+
+### Round 2: Interaction (pending)
+
+### Round 3: Overlay Composition (pending)
+
+### Round 4: Information Density + Loading (pending)

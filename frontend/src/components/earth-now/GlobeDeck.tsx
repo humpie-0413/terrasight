@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Deck, _GlobeView as GlobeView } from '@deck.gl/core';
+import { Deck, MapView, _GlobeView as GlobeView } from '@deck.gl/core';
 import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
 
@@ -177,22 +177,33 @@ function lerpColor(
   return [...stops[0][1], 255];
 }
 
+// Round 1 color improvements: nullschool.net / windy.com inspired palettes
 function fireColorRGBA(frp: number): [number, number, number, number] {
-  if (frp >= 500) return rgbArr(127, 29, 29, 230);
-  if (frp >= 100) return rgbArr(220, 38, 38, 220);
-  if (frp >= 50) return rgbArr(249, 115, 22, 200);
-  if (frp >= 10) return rgbArr(234, 179, 8, 190);
-  return rgbArr(253, 224, 71, 180);
+  // Hot metal palette: white-hot core → orange → deep crimson
+  if (frp >= 500) return rgbArr(180, 20, 20, 245);
+  if (frp >= 200) return rgbArr(220, 50, 10, 235);
+  if (frp >= 100) return rgbArr(245, 100, 10, 225);
+  if (frp >= 50) return rgbArr(255, 160, 20, 210);
+  if (frp >= 10) return rgbArr(255, 200, 60, 195);
+  return rgbArr(255, 230, 120, 170);
 }
 
 function fireRadius(frp: number): number {
   return Math.max(3, Math.min(12, 3 + Math.log10(Math.max(frp, 1)) * 3));
 }
 
+// SST palette inspired by nullschool.net ocean visualization
 function sstColorRGBA(c: number): [number, number, number, number] {
   return lerpColor([
-    [-2, [8, 20, 80]], [5, [20, 90, 180]], [12, [30, 160, 200]],
-    [18, [80, 200, 140]], [24, [240, 200, 40]], [28, [230, 100, 20]], [32, [180, 10, 10]],
+    [-2, [10, 10, 60]],    // deep navy
+    [2, [15, 40, 120]],    // dark blue
+    [8, [20, 80, 180]],    // blue
+    [14, [30, 150, 200]],  // cyan
+    [18, [60, 200, 160]],  // teal-green
+    [22, [180, 220, 60]],  // chartreuse
+    [26, [250, 180, 20]],  // amber
+    [29, [230, 80, 10]],   // burnt orange
+    [32, [170, 10, 10]],   // deep red
   ], c);
 }
 
@@ -205,10 +216,15 @@ function pm25ColorRGBA(pm: number): [number, number, number, number] {
   return rgbArr(126, 0, 35, 240);
 }
 
+// Coral DHW palette — NOAA Coral Reef Watch official colors
 function dhwColorRGBA(dhw: number): [number, number, number, number] {
   return lerpColor([
-    [0, [200, 200, 255]], [4, [255, 255, 0]], [8, [255, 165, 0]],
-    [12, [220, 38, 38]], [16, [126, 34, 206]],
+    [0, [180, 200, 240]],   // cool blue (no stress)
+    [2, [255, 255, 100]],   // watch yellow
+    [4, [255, 200, 0]],     // warning amber
+    [8, [255, 120, 0]],     // alert orange
+    [12, [220, 30, 30]],    // alert 2 red
+    [16, [140, 20, 180]],   // extreme purple
   ], dhw);
 }
 
@@ -379,14 +395,8 @@ function Legend({ activeEvent, activeContinuous }: { activeEvent: ActiveEvent; a
   if (activeEvent === 'fires') return (
     <div style={legendStyle}>
       <div style={legendTitleStyle}>Fire Radiative Power (MW)</div>
-      <div style={legendBarStyle}>
-        <span style={{ ...legendSwatch, background: '#fde047' }} />
-        <span style={{ ...legendSwatch, background: '#eab308' }} />
-        <span style={{ ...legendSwatch, background: '#f97316' }} />
-        <span style={{ ...legendSwatch, background: '#dc2626' }} />
-        <span style={{ ...legendSwatch, background: '#7f1d1d' }} />
-      </div>
-      <div style={legendLabelsStyle}><span>0</span><span>10</span><span>50</span><span>100</span><span>500+</span></div>
+      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(255,230,120), rgb(255,200,60), rgb(255,160,20), rgb(245,100,10), rgb(220,50,10), rgb(180,20,20))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>0</span><span>10</span><span>50</span><span>100</span><span>200</span><span>500+</span></div>
     </div>
   );
   if (activeEvent === 'monitors') return (
@@ -434,14 +444,14 @@ function Legend({ activeEvent, activeContinuous }: { activeEvent: ActiveEvent; a
   if (activeContinuous === 'ocean-heat') return (
     <div style={legendStyle}>
       <div style={legendTitleStyle}>Sea Surface Temperature (°C)</div>
-      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(8,20,80), rgb(20,90,180), rgb(80,200,140), rgb(240,200,40), rgb(180,10,10))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>-2</span><span>5</span><span>15</span><span>25</span><span>32+</span></div>
+      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(10,10,60), rgb(20,80,180), rgb(60,200,160), rgb(180,220,60), rgb(250,180,20), rgb(170,10,10))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>-2</span><span>8</span><span>18</span><span>22</span><span>26</span><span>32+</span></div>
     </div>
   );
   if (activeContinuous === 'coral') return (
     <div style={legendStyle}>
       <div style={legendTitleStyle}>Degree Heating Weeks (°C-weeks)</div>
-      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(200,200,255), rgb(255,255,0), rgb(255,165,0), rgb(220,38,38), rgb(126,34,206))', height: 10, borderRadius: 3 }} />
+      <div style={{ ...legendBarStyle, background: 'linear-gradient(to right, rgb(180,200,240), rgb(255,200,0), rgb(255,120,0), rgb(220,30,30), rgb(140,20,180))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>0</span><span>4</span><span>8</span><span>12</span><span>16+</span></div>
     </div>
   );
@@ -746,13 +756,19 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
   useEffect(() => {
     if (!canvasRef.current) return;
 
+    const currentView = viewMode === 'globe'
+      ? new GlobeView({ id: 'globe', controller: true })
+      : new MapView({ id: 'globe', controller: true });
+
     if (!deckRef.current) {
       deckRef.current = new Deck({
         canvas: canvasRef.current,
         width: dims.width,
         height: dims.height,
-        initialViewState: INITIAL_VIEW_STATE,
-        views: new GlobeView({ id: 'globe', controller: true }),
+        initialViewState: viewMode === 'map'
+          ? { ...INITIAL_VIEW_STATE, zoom: 2 }
+          : INITIAL_VIEW_STATE,
+        views: currentView,
         layers: layers as never[],
         onViewStateChange: ({ viewState: vs }: { viewState: Record<string, unknown> }) => {
           setViewState(vs as unknown as GlobeViewState);
@@ -764,7 +780,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       deckRef.current.setProps({
         width: dims.width,
         height: dims.height,
-        views: new GlobeView({ id: 'globe', controller: true }),
+        views: currentView,
         layers: layers as never[],
         viewState,
       });
@@ -836,17 +852,22 @@ const containerStyle: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   height: '640px',
-  background: 'radial-gradient(ellipse at center, #0a0e27 0%, #040610 100%)',
+  background: 'radial-gradient(ellipse at 50% 48%, #0b1030 0%, #060a1a 40%, #020408 100%)',
   borderRadius: '12px',
   overflow: 'hidden',
+  boxShadow: 'inset 0 0 80px rgba(10,20,60,0.5), 0 8px 32px rgba(0,0,0,0.6)',
 };
 
 const atmosphereGlowStyle: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
   zIndex: 0,
-  background: 'radial-gradient(circle at 50% 50%, rgba(40,80,180,0.12) 0%, rgba(20,50,140,0.06) 30%, transparent 55%)',
+  background: [
+    'radial-gradient(circle at 50% 50%, rgba(50,100,220,0.10) 0%, rgba(30,70,180,0.05) 25%, transparent 50%)',
+    'radial-gradient(circle at 48% 52%, rgba(20,60,160,0.06) 0%, transparent 45%)',
+  ].join(', '),
   pointerEvents: 'none',
+  animation: 'atmosphere-pulse 8s ease-in-out infinite',
 };
 
 const metaOverlayStyle: React.CSSProperties = {
