@@ -80,3 +80,88 @@ def render_density_png(
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
+
+
+def render_gridded_surface_png(
+    points: Sequence[tuple[float, float, float]],
+    width: int = 3600,
+    height: int = 1800,
+    colormap: str = "RdYlBu_r",
+    sigma: float = 1.5,
+    vmin: float = -2.0,
+    vmax: float = 32.0,
+) -> bytes:
+    """Render pre-gridded lat/lon/value data as an equirectangular RGBA PNG.
+
+    Unlike render_density_png() which does KDE on sparse scattered points,
+    this function is designed for data that is ALREADY on a regular grid
+    (like OISST 0.25 deg). Empty cells remain transparent (land/ice), and
+    Gaussian smoothing only fills tiny sub-pixel gaps between ocean cells.
+
+    Args:
+        points: [(lat, lon, value), ...] — lat in -90..90, lon in -180..180.
+                Expected to be a regular grid with NaN/missing cells already
+                removed (only ocean cells present).
+        width:  output image width (3600 = 0.1 deg per pixel)
+        height: output image height (1800 = 0.1 deg per pixel)
+        colormap: matplotlib colormap name (diverging recommended for SST)
+        sigma: Gaussian smoothing in grid cells (small — just fills gaps)
+        vmin/vmax: fixed value range for colormapping
+
+    Returns:
+        PNG image bytes (RGBA).
+    """
+    from scipy.ndimage import gaussian_filter
+
+    # Initialize with NaN so we can distinguish "no data" from "zero value"
+    grid = np.full((height, width), np.nan, dtype=np.float64)
+    has_data = np.zeros((height, width), dtype=np.bool_)
+
+    lat_scale = height / 180.0
+    lon_scale = width / 360.0
+
+    for lat, lon, val in points:
+        y = int((90.0 - lat) * lat_scale)
+        x = int((lon + 180.0) * lon_scale)
+        y = max(0, min(height - 1, y))
+        x = max(0, min(width - 1, x))
+        grid[y, x] = val
+        has_data[y, x] = True
+
+    # Light Gaussian smoothing to fill tiny gaps between grid cells.
+    # Replace NaN with 0 for the filter, then re-mask.
+    grid_filled = np.where(has_data, grid, 0.0)
+    weight = has_data.astype(np.float64)
+
+    if sigma > 0:
+        smoothed_vals = gaussian_filter(grid_filled, sigma=sigma)
+        smoothed_weight = gaussian_filter(weight, sigma=sigma)
+        # Avoid division by zero
+        valid = smoothed_weight > 0.01
+        grid_out = np.where(valid, smoothed_vals / smoothed_weight, np.nan)
+    else:
+        grid_out = np.where(has_data, grid, np.nan)
+
+    # Normalize to 0..1 using fixed vmin/vmax
+    norm = np.clip((grid_out - vmin) / (vmax - vmin), 0.0, 1.0)
+
+    # Apply colormap
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.cm as cm
+
+    cmap = cm.get_cmap(colormap)
+    rgba = cmap(norm)  # (H, W, 4) float 0..1
+
+    # Set alpha: transparent where no data (NaN), opaque where data exists
+    ocean_mask = ~np.isnan(grid_out)
+    rgba[..., 3] = np.where(ocean_mask, 0.9, 0.0)
+
+    # Convert to uint8 PNG
+    img_uint8 = (rgba * 255).astype(np.uint8)
+
+    from PIL import Image
+    img = Image.fromarray(img_uint8, "RGBA")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
