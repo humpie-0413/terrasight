@@ -23,6 +23,7 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 export type ActiveCategory =
   | 'air-quality' | 'wildfires' | 'ocean-crisis'
   | 'earthquakes' | 'co2-ghg' | 'storms' | 'floods'
+  | 'sst'
   | null;
 
 export type ViewMode = 'globe' | 'map';
@@ -135,6 +136,13 @@ const CATEGORIES: CategoryDef[] = [
     activeColor: '#0284c7', tag: TrustTag.Derived, cadence: 'Daily',
     source: 'NOAA OISST + CRW (integrated)', sourceUrl: 'https://coralreefwatch.noaa.gov/',
     activates: ['ocean-integrated'],
+  },
+  {
+    key: 'sst', icon: '🌡️', name: 'Sea Surface Temp',
+    question: 'How warm are the oceans?',
+    activeColor: '#f97316', tag: TrustTag.Observed, cadence: 'Daily (1-day lag)',
+    source: 'NOAA OISST v2.1 (self-rendered)', sourceUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.html',
+    activates: ['sst-surface'],
   },
   {
     key: 'earthquakes', icon: '🌍', name: 'Earthquakes',
@@ -355,6 +363,13 @@ function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
       <div style={legendTitleStyle}>Ocean Stress Index</div>
       <div style={{ background: 'linear-gradient(to right, rgb(20,60,180), rgb(60,200,160), rgb(200,210,60), rgb(245,140,30), rgb(160,20,80))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>Healthy</span><span>Moderate</span><span>Stressed</span><span>Crisis</span></div>
+    </div>
+  );
+  if (activeCategory === 'sst') return (
+    <div style={legendStyle}>
+      <div style={legendTitleStyle}>Sea Surface Temperature (°C)</div>
+      <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>-2</span><span>8</span><span>18</span><span>26</span><span>32</span></div>
     </div>
   );
   return null;
@@ -667,6 +682,18 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           }),
         );
       }
+    }
+
+    // 7. SST — self-rendered continuous surface from OISST
+    if (activeLayers.has('sst-surface')) {
+      result.push(
+        new BitmapLayer({
+          id: 'sst-surface',
+          image: `${API_BASE}/globe/surface/sst.png`,
+          bounds: [-180, -90, 180, 90] as [number, number, number, number],
+          opacity: 0.85,
+        }),
+      );
     }
 
     return result;
