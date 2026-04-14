@@ -11,6 +11,7 @@ from backend.api import (
     drinking_water,
     earth_now,
     earth_now_integrated,
+    globe_surface,
     hazards,
     layers,
     rankings,
@@ -80,3 +81,7 @@ app.include_router(
 app.include_router(hazards.router, prefix="/api/hazards", tags=["hazards"])
 app.include_router(coast.router, prefix="/api/coast", tags=["coast"])
 app.include_router(disasters.router, prefix="/api/disasters", tags=["disasters"])
+# Self-rendering pipeline — continuous surface PNGs
+app.include_router(
+    globe_surface.router, prefix="/api/globe/surface", tags=["globe-surface"]
+)
