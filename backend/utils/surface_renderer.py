@@ -136,8 +136,12 @@ def render_gridded_surface_png(
     if sigma > 0:
         smoothed_vals = gaussian_filter(grid_filled, sigma=sigma)
         smoothed_weight = gaussian_filter(weight, sigma=sigma)
-        # Avoid division by zero
-        valid = smoothed_weight > 0.01
+        # Threshold adapts to data density — ensures sparse grids still produce
+        # continuous coverage. max_weight * 0.05 works for both dense (OISST ~43K pts)
+        # and sparse (Open-Meteo ~2,600 pts at 5° spacing).
+        max_w = float(smoothed_weight.max()) if smoothed_weight.max() > 0 else 1.0
+        threshold = max_w * 0.05
+        valid = smoothed_weight > threshold
         grid_out = np.where(valid, smoothed_vals / smoothed_weight, np.nan)
     else:
         grid_out = np.where(has_data, grid, np.nan)

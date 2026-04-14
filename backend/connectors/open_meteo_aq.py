@@ -106,29 +106,27 @@ class OpenMeteoAqConnector(BaseConnector):
                 }
 
                 # Retry with backoff on 429 rate limit
-                for attempt in range(4):
+                for attempt in range(3):
                     resp = await client.post(AQ_API_URL, json=payload)
                     if resp.status_code == 429:
-                        wait = 10 * (2 ** attempt)  # 10, 20, 40, 80s
+                        wait = 5 * (2 ** attempt)  # 5, 10, 20s
                         await asyncio.sleep(wait)
                         continue
                     resp.raise_for_status()
                     break
                 else:
-                    # All retries exhausted — raise the 429
                     resp.raise_for_status()
 
                 data = resp.json()
 
-                # Single point returns a dict, multi-point returns a list
                 if isinstance(data, list):
                     all_responses.extend(data)
                 else:
                     all_responses.append(data)
 
-                # Delay between batches to avoid rate limiting
+                # Delay between batches to stay within rate limits
                 if batch_idx < len(batches) - 1:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(4)
 
         return all_responses
 

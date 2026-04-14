@@ -9,7 +9,9 @@ on the deck.gl globe with bounds=[-180, -90, 180, 90].
 """
 from __future__ import annotations
 
-from fastapi import APIRouter
+import io
+
+from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from backend.connectors.oisst import OisstConnector
@@ -24,16 +26,16 @@ SST_CACHE_KEY = "globe_surface_sst"
 SST_CACHE_TTL = 21600  # 6 hours
 
 PM25_CACHE_KEY = "globe_surface_pm25"
-PM25_CACHE_TTL = 3600  # 1 hour
+PM25_CACHE_TTL = 21600  # 6 hours
 
 NO2_CACHE_KEY = "globe_surface_no2"
-NO2_CACHE_TTL = 3600  # 1 hour
+NO2_CACHE_TTL = 21600  # 6 hours
 
 TEMP_CACHE_KEY = "globe_surface_temperature"
-TEMP_CACHE_TTL = 3600  # 1 hour
+TEMP_CACHE_TTL = 21600  # 6 hours
 
 PRECIP_CACHE_KEY = "globe_surface_precipitation"
-PRECIP_CACHE_TTL = 3600  # 1 hour
+PRECIP_CACHE_TTL = 21600  # 6 hours
 
 
 @router.get("/sst.png")
@@ -143,12 +145,13 @@ async def pm25_surface_png() -> Response:
 
     points = [(p.lat, p.lon, p.pm25) for p in result.values]
 
+    # sigma=15: 5° grid on 1800px-wide image = 25px per cell, need ~15px blur radius
     png_bytes = render_gridded_surface_png(
         points,
         width=1800,
         height=900,
         colormap="RdYlGn_r",
-        sigma=4.0,
+        sigma=15.0,
         vmin=0.0,
         vmax=75.0,
     )
@@ -205,7 +208,7 @@ async def no2_surface_png() -> Response:
         width=1800,
         height=900,
         colormap="YlOrRd",
-        sigma=4.0,
+        sigma=15.0,
         vmin=0.0,
         vmax=80.0,
     )
@@ -262,7 +265,7 @@ async def temperature_surface_png() -> Response:
         width=1800,
         height=900,
         colormap="RdYlBu_r",
-        sigma=4.0,
+        sigma=15.0,
         vmin=-40.0,
         vmax=50.0,
     )
@@ -319,7 +322,7 @@ async def precipitation_surface_png() -> Response:
         width=1800,
         height=900,
         colormap="Blues",
-        sigma=3.0,
+        sigma=15.0,
         vmin=0.0,
         vmax=20.0,
     )
@@ -333,4 +336,80 @@ async def precipitation_surface_png() -> Response:
             "Cache-Control": f"public, max-age={PRECIP_CACHE_TTL}",
             "X-Surface-Cache": "MISS",
         },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tile endpoint — crops cached full PNG into small tiles for GlobeView
+# ---------------------------------------------------------------------------
+
+# Map layer names to their cache keys
+_LAYER_CACHE = {
+    "sst": SST_CACHE_KEY,
+    "pm25": PM25_CACHE_KEY,
+    "no2": NO2_CACHE_KEY,
+    "temperature": TEMP_CACHE_KEY,
+    "precipitation": PRECIP_CACHE_KEY,
+}
+
+
+@router.get("/tile/{layer}")
+async def surface_tile(
+    layer: str,
+    west: float = Query(...),
+    south: float = Query(...),
+    east: float = Query(...),
+    north: float = Query(...),
+) -> Response:
+    """Crop a region from a cached full-globe PNG and return it as a tile.
+
+    Used by TileLayer on the frontend to break a single equirectangular
+    PNG into small tiles, avoiding the polygon distortion that occurs
+    when draping a single large BitmapLayer on GlobeView.
+
+    Query params: west, south, east, north (degrees).
+    """
+    cache_key = _LAYER_CACHE.get(layer)
+    if not cache_key:
+        return Response(content=b"", media_type="image/png", status_code=404)
+
+    # Get the full cached PNG — use generous TTL since full PNG
+    # endpoints handle their own refresh cycle
+    full_png = surface_cache.get(cache_key, ttl_seconds=43200)
+    if not full_png:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    try:
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(full_png))
+        w, h = img.size  # e.g. 1800x900
+
+        # Convert geo bounds to pixel coords
+        # Image is equirectangular: x=0 at lon=-180, y=0 at lat=90
+        px_left = int((west + 180) / 360 * w)
+        px_right = int((east + 180) / 360 * w)
+        px_top = int((90 - north) / 180 * h)
+        px_bottom = int((90 - south) / 180 * h)
+
+        # Clamp
+        px_left = max(0, min(w, px_left))
+        px_right = max(0, min(w, px_right))
+        px_top = max(0, min(h, px_top))
+        px_bottom = max(0, min(h, px_bottom))
+
+        if px_right <= px_left or px_bottom <= px_top:
+            return Response(content=b"", media_type="image/png", status_code=204)
+
+        tile = img.crop((px_left, px_top, px_right, px_bottom))
+        buf = io.BytesIO()
+        tile.save(buf, format="PNG")
+        tile_bytes = buf.getvalue()
+    except Exception:
+        return Response(content=b"", media_type="image/png", status_code=500)
+
+    return Response(
+        content=tile_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
     )

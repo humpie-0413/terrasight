@@ -96,10 +96,10 @@ class OpenMeteoWeatherConnector(BaseConnector):
                     "forecast_days": 0,
                 }
 
-                for attempt in range(4):
+                for attempt in range(3):
                     resp = await client.post(WEATHER_API_URL, json=payload)
                     if resp.status_code == 429:
-                        wait = 10 * (2 ** attempt)
+                        wait = 5 * (2 ** attempt)  # 5, 10, 20s
                         await asyncio.sleep(wait)
                         continue
                     resp.raise_for_status()
@@ -114,7 +114,7 @@ class OpenMeteoWeatherConnector(BaseConnector):
                     all_responses.append(data)
 
                 if batch_idx < len(batches) - 1:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(4)
 
         return all_responses
 

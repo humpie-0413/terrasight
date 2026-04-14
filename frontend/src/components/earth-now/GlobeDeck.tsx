@@ -714,64 +714,50 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       }
     }
 
-    // 7. SST — self-rendered continuous surface from OISST
-    if (activeLayers.has('sst-surface')) {
-      result.push(
-        new BitmapLayer({
-          id: 'sst-surface',
-          image: `${API_BASE}/globe/surface/sst.png`,
-          bounds: [-180, -90, 180, 90] as [number, number, number, number],
-          opacity: 0.85,
-        }),
-      );
-    }
+    // 7-11. Self-rendered continuous surfaces via TileLayer
+    // Uses tile endpoint to crop the full PNG into small regions,
+    // avoiding polygon distortion on GlobeView.
+    const surfaceLayers: Array<{ key: string; layer: string; opacity: number }> = [
+      { key: 'sst-surface', layer: 'sst', opacity: 0.85 },
+      { key: 'pm25-surface', layer: 'pm25', opacity: 0.8 },
+      { key: 'temp-surface', layer: 'temperature', opacity: 0.8 },
+      { key: 'precip-surface', layer: 'precipitation', opacity: 0.75 },
+      { key: 'no2-surface', layer: 'no2', opacity: 0.8 },
+    ];
 
-    // 8. PM2.5 — self-rendered continuous surface from Open-Meteo/CAMS
-    if (activeLayers.has('pm25-surface')) {
-      result.push(
-        new BitmapLayer({
-          id: 'pm25-surface',
-          image: `${API_BASE}/globe/surface/pm25.png`,
-          bounds: [-180, -90, 180, 90] as [number, number, number, number],
-          opacity: 0.8,
-        }),
-      );
-    }
-
-    // 9. Temperature — self-rendered from Open-Meteo/GFS
-    if (activeLayers.has('temp-surface')) {
-      result.push(
-        new BitmapLayer({
-          id: 'temp-surface',
-          image: `${API_BASE}/globe/surface/temperature.png`,
-          bounds: [-180, -90, 180, 90] as [number, number, number, number],
-          opacity: 0.8,
-        }),
-      );
-    }
-
-    // 10. Precipitation — self-rendered from Open-Meteo/GFS
-    if (activeLayers.has('precip-surface')) {
-      result.push(
-        new BitmapLayer({
-          id: 'precip-surface',
-          image: `${API_BASE}/globe/surface/precipitation.png`,
-          bounds: [-180, -90, 180, 90] as [number, number, number, number],
-          opacity: 0.75,
-        }),
-      );
-    }
-
-    // 11. NO₂ — self-rendered from Open-Meteo/CAMS
-    if (activeLayers.has('no2-surface')) {
-      result.push(
-        new BitmapLayer({
-          id: 'no2-surface',
-          image: `${API_BASE}/globe/surface/no2.png`,
-          bounds: [-180, -90, 180, 90] as [number, number, number, number],
-          opacity: 0.8,
-        }),
-      );
+    for (const surf of surfaceLayers) {
+      if (activeLayers.has(surf.key)) {
+        result.push(
+          new TileLayer({
+            id: `${surf.key}-tiles`,
+            minZoom: 0,
+            maxZoom: 5,
+            tileSize: 256,
+            opacity: surf.opacity,
+            getTileData: (tileInfo: unknown) => {
+              const tile = tileInfo as { bbox: { west: number; south: number; east: number; north: number } };
+              const { west, south, east, north } = tile.bbox;
+              const url = `${API_BASE}/globe/surface/tile/${surf.layer}?west=${west}&south=${south}&east=${east}&north=${north}`;
+              return fetch(url, { mode: 'cors' })
+                .then((r) => {
+                  if (!r.ok || r.status === 204) return null;
+                  return r.blob();
+                })
+                .then((b) => b ? createImageBitmap(b) : null);
+            },
+            renderSubLayers: (props: Record<string, unknown>) => {
+              const tp = props.tile as { bbox: { west: number; south: number; east: number; north: number } };
+              const { west, south, east, north } = tp.bbox;
+              return new BitmapLayer({
+                ...props, data: undefined,
+                image: props.data as string,
+                bounds: [west, south, east, north],
+              });
+            },
+          }),
+        );
+        break; // Only one surface at a time
+      }
     }
 
     return result;
