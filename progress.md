@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-14 (Globe-First Redesign: Phase 1-6 완료)
+**최종 업데이트:** 2026-04-15 (Self-Rendering Pipeline Prototype: SST 완료)
 
 ---
 
@@ -26,7 +26,7 @@
 | Local Reports 블록 | **14개** (6→10→12→**14**: +Hazards & Disasters, +Coastal Conditions) |
 | Frontend components / pages | **~36개** |
 | Local Reports metros | **50개** ✅ (17개 해안 metro 플래그) |
-| Globe 레이어 | **14개** (5카테고리 어코디언, +Earthquake G.1) |
+| Globe 카테고리 | **8개** (7 기존 + SST self-rendered surface) |
 | Climate Trends 카드 | **6개** (CO₂ · Temp · Sea Ice · CH₄ · Sea Level · **Drought**) |
 | Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
 | SEO 랭킹 페이지 | **6개** (+4 Phase E: TRI · GHG · Superfund · Drinking Water) |
@@ -82,6 +82,20 @@
 - Mobile (<640px): LayerBar shows icons only (text labels hidden)
 - Mobile (<640px): StoryPanel hidden
 - Dependencies added: numpy, scipy, matplotlib, Pillow
+
+---
+
+## Self-Rendering Pipeline Prototype (2026-04-15)
+
+### SST (Sea Surface Temperature) ✅
+- New `render_gridded_surface_png()` in `surface_renderer.py` — handles pre-gridded data
+  (NaN-aware, diverging colormap, land=transparent, weighted Gaussian gap-fill)
+- New `surface_cache.py` — file-system PNG cache with TTL (/tmp/terrasight_cache/)
+- New router `globe_surface.py` → `GET /api/globe/surface/sst.png`
+- OISST stride=2 (~65K ocean cells) → 3600×1800 RGBA PNG, RdYlBu_r colormap, 6h cache
+- New Globe category "Sea Surface Temp" (8th pill) — BitmapLayer, observed, daily
+- Pipeline pattern: fetch → grid → smooth → colormap → PNG → cache → BitmapLayer
+- Memory footprint ~80 MB peak at stride=2 (within Render 512 MB free tier)
 
 ---
 
