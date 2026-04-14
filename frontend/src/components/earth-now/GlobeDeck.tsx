@@ -714,9 +714,9 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       }
     }
 
-    // 7-11. Self-rendered continuous surfaces via TileLayer
-    // Uses tile endpoint to crop the full PNG into small regions,
-    // avoiding polygon distortion on GlobeView.
+    // 7-11. Self-rendered continuous surfaces via 6 latitude-strip BitmapLayers.
+    // Each strip covers 30° latitude — small enough to avoid polygon
+    // distortion when projected onto the GlobeView sphere.
     const surfaceLayers: Array<{ key: string; layer: string; opacity: number }> = [
       { key: 'sst-surface', layer: 'sst', opacity: 0.85 },
       { key: 'pm25-surface', layer: 'pm25', opacity: 0.8 },
@@ -724,38 +724,21 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
       { key: 'precip-surface', layer: 'precipitation', opacity: 0.75 },
       { key: 'no2-surface', layer: 'no2', opacity: 0.8 },
     ];
+    const latStrips: [number, number][] = [[-90,-60],[-60,-30],[-30,0],[0,30],[30,60],[60,90]];
 
     for (const surf of surfaceLayers) {
       if (activeLayers.has(surf.key)) {
-        result.push(
-          new TileLayer({
-            id: `${surf.key}-tiles`,
-            minZoom: 0,
-            maxZoom: 5,
-            tileSize: 256,
-            opacity: surf.opacity,
-            getTileData: (tileInfo: unknown) => {
-              const tile = tileInfo as { bbox: { west: number; south: number; east: number; north: number } };
-              const { west, south, east, north } = tile.bbox;
-              const url = `${API_BASE}/globe/surface/tile/${surf.layer}?west=${west}&south=${south}&east=${east}&north=${north}`;
-              return fetch(url, { mode: 'cors' })
-                .then((r) => {
-                  if (!r.ok || r.status === 204) return null;
-                  return r.blob();
-                })
-                .then((b) => b ? createImageBitmap(b) : null);
-            },
-            renderSubLayers: (props: Record<string, unknown>) => {
-              const tp = props.tile as { bbox: { west: number; south: number; east: number; north: number } };
-              const { west, south, east, north } = tp.bbox;
-              return new BitmapLayer({
-                ...props, data: undefined,
-                image: props.data as string,
-                bounds: [west, south, east, north],
-              });
-            },
-          }),
-        );
+        for (let i = 0; i < latStrips.length; i++) {
+          const [south, north] = latStrips[i];
+          result.push(
+            new BitmapLayer({
+              id: `${surf.key}-strip-${i}`,
+              image: `${API_BASE}/globe/surface/strip/${surf.layer}/${i}.png`,
+              bounds: [-180, south, 180, north] as [number, number, number, number],
+              opacity: surf.opacity,
+            }),
+          );
+        }
         break; // Only one surface at a time
       }
     }

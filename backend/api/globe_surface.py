@@ -10,6 +10,7 @@ on the deck.gl globe with bounds=[-180, -90, 180, 90].
 from __future__ import annotations
 
 import io
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
@@ -19,6 +20,44 @@ from backend.connectors.open_meteo_aq import OpenMeteoAqConnector
 from backend.connectors.open_meteo_weather import OpenMeteoWeatherConnector
 from backend.utils import surface_cache
 from backend.utils.surface_renderer import render_gridded_surface_png
+
+
+# ---------------------------------------------------------------------------
+# Helpers — strip-based rendering for GlobeView
+# ---------------------------------------------------------------------------
+
+# 6 latitude strips, each 30° tall. Small enough that BitmapLayer sphere
+# distortion is negligible at globe zoom levels 0-5.
+STRIPS = [
+    (-90, -60), (-60, -30), (-30, 0), (0, 30), (30, 60), (60, 90),
+]
+
+
+def _crop_strips(cache_key: str) -> None:
+    """Crop a full cached PNG into 6 latitude strips and cache each.
+
+    The full PNG is equirectangular (1800×900): y=0 at lat=90, y=899 at lat=-90.
+    Each strip is 150px tall (30° of latitude).
+    """
+    full_png = surface_cache.get(cache_key, ttl_seconds=86400)
+    if not full_png:
+        return
+
+    from PIL import Image
+    img = Image.open(io.BytesIO(full_png))
+    w, h = img.size  # 1800×900
+
+    for south, north in STRIPS:
+        # y=0 is lat=90, y=h is lat=-90
+        py_top = int((90 - north) / 180 * h)
+        py_bot = int((90 - south) / 180 * h)
+        py_top = max(0, min(h, py_top))
+        py_bot = max(0, min(h, py_bot))
+
+        strip = img.crop((0, py_top, w, py_bot))
+        buf = io.BytesIO()
+        strip.save(buf, format="PNG")
+        surface_cache.put(f"{cache_key}_s{south}", buf.getvalue())
 
 router = APIRouter()
 
@@ -93,8 +132,9 @@ async def sst_surface_png() -> Response:
         vmax=32.0,
     )
 
-    # Cache
+    # Cache full PNG + crop into 6 strips for GlobeView
     surface_cache.put(SST_CACHE_KEY, png_bytes)
+    _crop_strips(SST_CACHE_KEY)
 
     return Response(
         content=png_bytes,
@@ -157,6 +197,7 @@ async def pm25_surface_png() -> Response:
     )
 
     surface_cache.put(PM25_CACHE_KEY, png_bytes)
+    _crop_strips(PM25_CACHE_KEY)
 
     return Response(
         content=png_bytes,
@@ -214,6 +255,7 @@ async def no2_surface_png() -> Response:
     )
 
     surface_cache.put(NO2_CACHE_KEY, png_bytes)
+    _crop_strips(NO2_CACHE_KEY)
 
     return Response(
         content=png_bytes,
@@ -271,6 +313,7 @@ async def temperature_surface_png() -> Response:
     )
 
     surface_cache.put(TEMP_CACHE_KEY, png_bytes)
+    _crop_strips(TEMP_CACHE_KEY)
 
     return Response(
         content=png_bytes,
@@ -328,6 +371,7 @@ async def precipitation_surface_png() -> Response:
     )
 
     surface_cache.put(PRECIP_CACHE_KEY, png_bytes)
+    _crop_strips(PRECIP_CACHE_KEY)
 
     return Response(
         content=png_bytes,
@@ -340,7 +384,35 @@ async def precipitation_surface_png() -> Response:
 
 
 # ---------------------------------------------------------------------------
-# Tile endpoint — crops cached full PNG into small tiles for GlobeView
+# Strip endpoint — serves individual latitude strips for GlobeView
+# ---------------------------------------------------------------------------
+
+
+@router.get("/strip/{layer}/{strip_idx}.png")
+async def surface_strip(layer: str, strip_idx: int) -> Response:
+    """Serve a cached latitude strip PNG.
+
+    strip_idx: 0-5 mapping to STRIPS[idx] = (south, north).
+    Frontend creates 6 BitmapLayers, one per strip, each covering 30° lat.
+    """
+    cache_key = _LAYER_CACHE.get(layer)
+    if not cache_key or strip_idx < 0 or strip_idx >= len(STRIPS):
+        return Response(content=b"", media_type="image/png", status_code=404)
+
+    south = STRIPS[strip_idx][0]
+    strip_png = surface_cache.get(f"{cache_key}_s{south}", ttl_seconds=43200)
+    if not strip_png:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    return Response(
+        content=strip_png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=21600"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tile endpoint (legacy) — crops cached full PNG into small tiles for GlobeView
 # ---------------------------------------------------------------------------
 
 # Map layer names to their cache keys

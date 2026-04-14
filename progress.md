@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-15 (Self-Rendering Pipeline: 5 연속 표면 + UI 정리)
+**최종 업데이트:** 2026-04-15 (Strip rendering fix + data-architecture.md)
 
 ---
 
@@ -107,6 +107,14 @@
 - Order: Air Quality → Temperature → Ocean Temp → Precipitation → NO₂ → Wildfires → Earthquakes → CO₂
 - Removed: Storms (empty when no active cyclones), Floods (GIBS unstable), Ocean Crisis (redundant with SST)
 - Each surface has dedicated legend with appropriate colormap
+
+### Strip Rendering Fix (2026-04-15) ✅
+- Single BitmapLayer → 6 latitude-strip BitmapLayers (30° each)
+- Backend: `_crop_strips()` crops full PNG into 6 strips after rendering
+- New endpoint: `GET /api/globe/surface/strip/{layer}/{0-5}.png`
+- Eliminates diamond/polygon artifacts on GlobeView sphere projection
+- Renderer adaptive threshold: `max_weight * 0.05` (was hardcoded 0.01)
+- `docs/data-architecture.md` — comprehensive data spec for all layers
 
 ---
 
