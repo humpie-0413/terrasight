@@ -21,9 +21,9 @@ const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ActiveCategory =
-  | 'air-quality' | 'wildfires' | 'ocean-crisis'
-  | 'earthquakes' | 'co2-ghg' | 'storms' | 'floods'
-  | 'sst'
+  | 'air-quality' | 'temperature' | 'sst' | 'precipitation' | 'no2'
+  | 'wildfires' | 'earthquakes' | 'co2-ghg'
+  | 'ocean-crisis' | 'storms'
   | null;
 
 export type ViewMode = 'globe' | 'map';
@@ -116,61 +116,63 @@ interface CategoryDef {
 }
 
 const CATEGORIES: CategoryDef[] = [
+  // ── Continuous Surfaces (self-rendered PNGs) ────────────────────────
   {
     key: 'air-quality', icon: '🌬️', name: 'Air Quality',
     question: 'How is the air today?',
-    activeColor: '#a855f7', tag: TrustTag.NearRealTime, cadence: 'Daily (1-day lag)',
-    source: 'NASA MODIS Terra AOD', sourceUrl: 'https://worldview.earthdata.nasa.gov/',
-    activates: ['gibs-aod'],
+    activeColor: '#a855f7', tag: TrustTag.Derived, cadence: 'Hourly (CAMS model)',
+    source: 'Open-Meteo / CAMS Global PM2.5', sourceUrl: 'https://open-meteo.com/en/docs/air-quality-api',
+    activates: ['pm25-surface'],
   },
+  {
+    key: 'temperature', icon: '🌡️', name: 'Temperature',
+    question: 'How warm is it globally?',
+    activeColor: '#ef4444', tag: TrustTag.Derived, cadence: 'Hourly (GFS model)',
+    source: 'Open-Meteo / GFS 2m Temperature', sourceUrl: 'https://open-meteo.com/en/docs',
+    activates: ['temp-surface'],
+  },
+  {
+    key: 'sst', icon: '🌊', name: 'Ocean Temp',
+    question: 'How warm are the oceans?',
+    activeColor: '#f97316', tag: TrustTag.Observed, cadence: 'Daily (1-day lag)',
+    source: 'NOAA OISST v2.1', sourceUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.html',
+    activates: ['sst-surface'],
+  },
+  {
+    key: 'precipitation', icon: '🌧️', name: 'Precipitation',
+    question: 'Where is it raining?',
+    activeColor: '#3b82f6', tag: TrustTag.Derived, cadence: 'Hourly (GFS model)',
+    source: 'Open-Meteo / GFS Precipitation', sourceUrl: 'https://open-meteo.com/en/docs',
+    activates: ['precip-surface'],
+  },
+  {
+    key: 'no2', icon: '🏭', name: 'NO₂ Pollution',
+    question: 'Where is NO₂ concentrated?',
+    activeColor: '#d97706', tag: TrustTag.Derived, cadence: 'Hourly (CAMS model)',
+    source: 'Open-Meteo / CAMS Global NO₂', sourceUrl: 'https://open-meteo.com/en/docs/air-quality-api',
+    activates: ['no2-surface'],
+  },
+  // ── Event Layers (point data) ──────────────────────────────────────
   {
     key: 'wildfires', icon: '🔥', name: 'Wildfires',
     question: 'Where are fires burning?',
     activeColor: '#dc2626', tag: TrustTag.NearRealTime, cadence: 'NRT ~3h',
     source: 'NASA FIRMS', sourceUrl: 'https://firms.modaps.eosdis.nasa.gov/',
-    activates: ['fires', 'gibs-aod'],
-  },
-  {
-    key: 'ocean-crisis', icon: '🌊', name: 'Ocean Crisis',
-    question: 'How stressed are the oceans?',
-    activeColor: '#0284c7', tag: TrustTag.Derived, cadence: 'Daily',
-    source: 'NOAA OISST + CRW (integrated)', sourceUrl: 'https://coralreefwatch.noaa.gov/',
-    activates: ['ocean-integrated'],
-  },
-  {
-    key: 'sst', icon: '🌡️', name: 'Sea Surface Temp',
-    question: 'How warm are the oceans?',
-    activeColor: '#f97316', tag: TrustTag.Observed, cadence: 'Daily (1-day lag)',
-    source: 'NOAA OISST v2.1 (self-rendered)', sourceUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.html',
-    activates: ['sst-surface'],
+    activates: ['fires'],
   },
   {
     key: 'earthquakes', icon: '🌍', name: 'Earthquakes',
     question: 'Where did earthquakes hit?',
-    activeColor: '#ef4444', tag: TrustTag.Observed, cadence: 'NRT ~5 min',
+    activeColor: '#b91c1c', tag: TrustTag.Observed, cadence: 'NRT ~5 min',
     source: 'USGS', sourceUrl: 'https://earthquake.usgs.gov/',
     activates: ['earthquakes'],
   },
   {
-    key: 'co2-ghg', icon: '🌡️', name: 'CO₂ & GHG',
+    key: 'co2-ghg', icon: '💨', name: 'CO₂ & GHG',
     question: 'Where did OCO-2 measure CO₂ today?',
     activeColor: '#22c55e', tag: TrustTag.Observed, cadence: 'Daily (nadir swath ~3-5% coverage)',
     source: 'NASA OCO-2', sourceUrl: 'https://ocov2.jpl.nasa.gov/',
     activates: ['gibs-oco2'],
-  },
-  {
-    key: 'storms', icon: '🌀', name: 'Storms',
-    question: 'Where are tropical cyclones?',
-    activeColor: '#ec4899', tag: TrustTag.NearRealTime, cadence: 'NRT ~6h',
-    source: 'NOAA IBTrACS', sourceUrl: 'https://www.nrlmry.navy.mil/atcf_web/atlas/ibtracks/',
-    activates: ['storms'],
-  },
-  {
-    key: 'floods', icon: '🌧️', name: 'Floods',
-    question: 'Where is flooding detected?',
-    activeColor: '#0ea5e9', tag: TrustTag.NearRealTime, cadence: '3-Day',
-    source: 'NASA MODIS Terra', sourceUrl: 'https://worldview.earthdata.nasa.gov/',
-    activates: ['gibs-flood'],
   },
 ];
 
@@ -370,6 +372,34 @@ function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
       <div style={legendTitleStyle}>Sea Surface Temperature (°C)</div>
       <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>-2</span><span>8</span><span>18</span><span>26</span><span>32</span></div>
+    </div>
+  );
+  if (activeCategory === 'air-quality') return (
+    <div style={legendStyle}>
+      <div style={legendTitleStyle}>PM2.5 (µg/m³)</div>
+      <div style={{ background: 'linear-gradient(to right, rgb(0,128,0), rgb(255,255,0), rgb(255,126,0), rgb(255,0,0), rgb(143,63,151), rgb(126,0,35))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>0</span><span>12</span><span>35</span><span>55</span><span>75+</span></div>
+    </div>
+  );
+  if (activeCategory === 'temperature') return (
+    <div style={legendStyle}>
+      <div style={legendTitleStyle}>2m Temperature (°C)</div>
+      <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(69,117,180), rgb(116,173,209), rgb(171,217,233), rgb(253,174,97), rgb(244,109,67), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>-40</span><span>-20</span><span>0</span><span>20</span><span>50</span></div>
+    </div>
+  );
+  if (activeCategory === 'precipitation') return (
+    <div style={legendStyle}>
+      <div style={legendTitleStyle}>Precipitation (mm)</div>
+      <div style={{ background: 'linear-gradient(to right, rgba(198,219,239,0.3), rgb(158,202,225), rgb(107,174,214), rgb(49,130,189), rgb(8,81,156))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>0</span><span>5</span><span>10</span><span>20+</span></div>
+    </div>
+  );
+  if (activeCategory === 'no2') return (
+    <div style={legendStyle}>
+      <div style={legendTitleStyle}>NO₂ (µg/m³)</div>
+      <div style={{ background: 'linear-gradient(to right, rgb(255,255,178), rgb(254,204,92), rgb(253,141,60), rgb(240,59,32), rgb(189,0,38))', height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}><span>0</span><span>20</span><span>40</span><span>60</span><span>80+</span></div>
     </div>
   );
   return null;
@@ -692,6 +722,54 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           image: `${API_BASE}/globe/surface/sst.png`,
           bounds: [-180, -90, 180, 90] as [number, number, number, number],
           opacity: 0.85,
+        }),
+      );
+    }
+
+    // 8. PM2.5 — self-rendered continuous surface from Open-Meteo/CAMS
+    if (activeLayers.has('pm25-surface')) {
+      result.push(
+        new BitmapLayer({
+          id: 'pm25-surface',
+          image: `${API_BASE}/globe/surface/pm25.png`,
+          bounds: [-180, -90, 180, 90] as [number, number, number, number],
+          opacity: 0.8,
+        }),
+      );
+    }
+
+    // 9. Temperature — self-rendered from Open-Meteo/GFS
+    if (activeLayers.has('temp-surface')) {
+      result.push(
+        new BitmapLayer({
+          id: 'temp-surface',
+          image: `${API_BASE}/globe/surface/temperature.png`,
+          bounds: [-180, -90, 180, 90] as [number, number, number, number],
+          opacity: 0.8,
+        }),
+      );
+    }
+
+    // 10. Precipitation — self-rendered from Open-Meteo/GFS
+    if (activeLayers.has('precip-surface')) {
+      result.push(
+        new BitmapLayer({
+          id: 'precip-surface',
+          image: `${API_BASE}/globe/surface/precipitation.png`,
+          bounds: [-180, -90, 180, 90] as [number, number, number, number],
+          opacity: 0.75,
+        }),
+      );
+    }
+
+    // 11. NO₂ — self-rendered from Open-Meteo/CAMS
+    if (activeLayers.has('no2-surface')) {
+      result.push(
+        new BitmapLayer({
+          id: 'no2-surface',
+          image: `${API_BASE}/globe/surface/no2.png`,
+          bounds: [-180, -90, 180, 90] as [number, number, number, number],
+          opacity: 0.8,
         }),
       );
     }

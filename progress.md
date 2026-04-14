@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-15 (Self-Rendering Pipeline Prototype: SST 완료)
+**최종 업데이트:** 2026-04-15 (Self-Rendering Pipeline: 5 연속 표면 + UI 정리)
 
 ---
 
@@ -26,7 +26,7 @@
 | Local Reports 블록 | **14개** (6→10→12→**14**: +Hazards & Disasters, +Coastal Conditions) |
 | Frontend components / pages | **~36개** |
 | Local Reports metros | **50개** ✅ (17개 해안 metro 플래그) |
-| Globe 카테고리 | **8개** (7 기존 + SST self-rendered surface) |
+| Globe 카테고리 | **8개** (5 연속 표면 + 2 이벤트 + CO₂) |
 | Climate Trends 카드 | **6개** (CO₂ · Temp · Sea Ice · CH₄ · Sea Level · **Drought**) |
 | Born-in 인터랙티브 | ✅ **완성** (연도 입력 → 3지표 비교) |
 | SEO 랭킹 페이지 | **6개** (+4 Phase E: TRI · GHG · Superfund · Drinking Water) |
@@ -87,15 +87,26 @@
 
 ## Self-Rendering Pipeline Prototype (2026-04-15)
 
-### SST (Sea Surface Temperature) ✅
-- New `render_gridded_surface_png()` in `surface_renderer.py` — handles pre-gridded data
-  (NaN-aware, diverging colormap, land=transparent, weighted Gaussian gap-fill)
-- New `surface_cache.py` — file-system PNG cache with TTL (/tmp/terrasight_cache/)
-- New router `globe_surface.py` → `GET /api/globe/surface/sst.png`
-- OISST stride=2 (~65K ocean cells) → 3600×1800 RGBA PNG, RdYlBu_r colormap, 6h cache
-- New Globe category "Sea Surface Temp" (8th pill) — BitmapLayer, observed, daily
-- Pipeline pattern: fetch → grid → smooth → colormap → PNG → cache → BitmapLayer
-- Memory footprint ~80 MB peak at stride=2 (within Render 512 MB free tier)
+### 5 Continuous Surface Layers ✅
+- **SST** — NOAA OISST stride=4 → 1800×900 PNG, RdYlBu_r, 6h cache, 225MB peak
+- **PM2.5** — Open-Meteo CAMS Global 5° grid → RdYlGn_r, 1h cache
+- **Temperature** — Open-Meteo GFS 2m temp 5° grid → RdYlBu_r, 1h cache
+- **Precipitation** — Open-Meteo GFS precip 5° grid → Blues, 1h cache
+- **NO₂** — Open-Meteo CAMS NO₂ 5° grid → YlOrRd, 1h cache
+
+### Infrastructure ✅
+- `render_gridded_surface_png()` — NaN-aware, diverging colormap, weighted Gaussian gap-fill
+- `surface_cache.py` — file-system PNG cache with TTL (/tmp/terrasight_cache/)
+- `open_meteo_aq.py` — CAMS Global PM2.5/NO₂ connector (5° grid, 3 POST batches)
+- `open_meteo_weather.py` — GFS temperature/precipitation connector (same pattern)
+- `globe_surface.py` — 5 PNG endpoints at `/api/globe/surface/{layer}.png`
+- Pipeline: fetch → grid → smooth → colormap → PNG → cache → BitmapLayer
+
+### Globe UI Cleanup ✅
+- 8 categories: 5 continuous surfaces + 2 events + CO₂
+- Order: Air Quality → Temperature → Ocean Temp → Precipitation → NO₂ → Wildfires → Earthquakes → CO₂
+- Removed: Storms (empty when no active cyclones), Floods (GIBS unstable), Ocean Crisis (redundant with SST)
+- Each surface has dedicated legend with appropriate colormap
 
 ---
 

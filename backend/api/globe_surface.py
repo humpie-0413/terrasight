@@ -13,6 +13,8 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 
 from backend.connectors.oisst import OisstConnector
+from backend.connectors.open_meteo_aq import OpenMeteoAqConnector
+from backend.connectors.open_meteo_weather import OpenMeteoWeatherConnector
 from backend.utils import surface_cache
 from backend.utils.surface_renderer import render_gridded_surface_png
 
@@ -20,6 +22,18 @@ router = APIRouter()
 
 SST_CACHE_KEY = "globe_surface_sst"
 SST_CACHE_TTL = 21600  # 6 hours
+
+PM25_CACHE_KEY = "globe_surface_pm25"
+PM25_CACHE_TTL = 3600  # 1 hour
+
+NO2_CACHE_KEY = "globe_surface_no2"
+NO2_CACHE_TTL = 3600  # 1 hour
+
+TEMP_CACHE_KEY = "globe_surface_temperature"
+TEMP_CACHE_TTL = 3600  # 1 hour
+
+PRECIP_CACHE_KEY = "globe_surface_precipitation"
+PRECIP_CACHE_TTL = 3600  # 1 hour
 
 
 @router.get("/sst.png")
@@ -85,6 +99,238 @@ async def sst_surface_png() -> Response:
         media_type="image/png",
         headers={
             "Cache-Control": f"public, max-age={SST_CACHE_TTL}",
+            "X-Surface-Cache": "MISS",
+        },
+    )
+
+
+@router.get("/pm25.png")
+async def pm25_surface_png() -> Response:
+    """Global PM2.5 concentration as a continuous surface PNG.
+
+    Fetches current PM2.5 from Open-Meteo (CAMS Global) on a 5-degree grid
+    (~2,600 points via 3 POST requests), renders with AQI-inspired colormap.
+    Cached for 1 hour.
+
+    Returns equirectangular RGBA PNG (1800x900).
+    Colormap: RdYlGn_r (green=clean, red=polluted), range 0-75 ug/m3.
+    """
+    cached = surface_cache.get(PM25_CACHE_KEY, ttl_seconds=PM25_CACHE_TTL)
+    if cached:
+        return Response(
+            content=cached,
+            media_type="image/png",
+            headers={
+                "Cache-Control": f"public, max-age={PM25_CACHE_TTL}",
+                "X-Surface-Cache": "HIT",
+            },
+        )
+
+    connector = OpenMeteoAqConnector()
+    try:
+        raw = await connector.fetch(variable="pm2_5")
+        result = connector.normalize(raw, variable="pm2_5")
+    except Exception:
+        return Response(
+            content=b"",
+            media_type="image/png",
+            status_code=502,
+            headers={"X-Surface-Error": "Open-Meteo AQ fetch failed"},
+        )
+
+    if not result.values:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    points = [(p.lat, p.lon, p.pm25) for p in result.values]
+
+    png_bytes = render_gridded_surface_png(
+        points,
+        width=1800,
+        height=900,
+        colormap="RdYlGn_r",
+        sigma=4.0,
+        vmin=0.0,
+        vmax=75.0,
+    )
+
+    surface_cache.put(PM25_CACHE_KEY, png_bytes)
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": f"public, max-age={PM25_CACHE_TTL}",
+            "X-Surface-Cache": "MISS",
+        },
+    )
+
+
+@router.get("/no2.png")
+async def no2_surface_png() -> Response:
+    """Global NO₂ concentration as a continuous surface PNG.
+
+    Open-Meteo CAMS Global nitrogen_dioxide on 5-degree grid.
+    Colormap: YlOrRd (yellow=low, red=high), range 0-80 ug/m3.
+    """
+    cached = surface_cache.get(NO2_CACHE_KEY, ttl_seconds=NO2_CACHE_TTL)
+    if cached:
+        return Response(
+            content=cached,
+            media_type="image/png",
+            headers={
+                "Cache-Control": f"public, max-age={NO2_CACHE_TTL}",
+                "X-Surface-Cache": "HIT",
+            },
+        )
+
+    connector = OpenMeteoAqConnector()
+    try:
+        raw = await connector.fetch(variable="nitrogen_dioxide")
+        result = connector.normalize(raw, variable="nitrogen_dioxide")
+    except Exception:
+        return Response(
+            content=b"",
+            media_type="image/png",
+            status_code=502,
+            headers={"X-Surface-Error": "Open-Meteo AQ fetch failed"},
+        )
+
+    if not result.values:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    points = [(p.lat, p.lon, p.pm25) for p in result.values]
+
+    png_bytes = render_gridded_surface_png(
+        points,
+        width=1800,
+        height=900,
+        colormap="YlOrRd",
+        sigma=4.0,
+        vmin=0.0,
+        vmax=80.0,
+    )
+
+    surface_cache.put(NO2_CACHE_KEY, png_bytes)
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": f"public, max-age={NO2_CACHE_TTL}",
+            "X-Surface-Cache": "MISS",
+        },
+    )
+
+
+@router.get("/temperature.png")
+async def temperature_surface_png() -> Response:
+    """Global 2m temperature as a continuous surface PNG.
+
+    Open-Meteo GFS temperature_2m on 5-degree grid.
+    Colormap: RdYlBu_r (blue=cold, red=hot), range -40C to 50C.
+    """
+    cached = surface_cache.get(TEMP_CACHE_KEY, ttl_seconds=TEMP_CACHE_TTL)
+    if cached:
+        return Response(
+            content=cached,
+            media_type="image/png",
+            headers={
+                "Cache-Control": f"public, max-age={TEMP_CACHE_TTL}",
+                "X-Surface-Cache": "HIT",
+            },
+        )
+
+    connector = OpenMeteoWeatherConnector()
+    try:
+        raw = await connector.fetch(variable="temperature_2m")
+        result = connector.normalize(raw, variable="temperature_2m")
+    except Exception:
+        return Response(
+            content=b"",
+            media_type="image/png",
+            status_code=502,
+            headers={"X-Surface-Error": "Open-Meteo Weather fetch failed"},
+        )
+
+    if not result.values:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    points = [(p.lat, p.lon, p.value) for p in result.values]
+
+    png_bytes = render_gridded_surface_png(
+        points,
+        width=1800,
+        height=900,
+        colormap="RdYlBu_r",
+        sigma=4.0,
+        vmin=-40.0,
+        vmax=50.0,
+    )
+
+    surface_cache.put(TEMP_CACHE_KEY, png_bytes)
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": f"public, max-age={TEMP_CACHE_TTL}",
+            "X-Surface-Cache": "MISS",
+        },
+    )
+
+
+@router.get("/precipitation.png")
+async def precipitation_surface_png() -> Response:
+    """Global precipitation as a continuous surface PNG.
+
+    Open-Meteo GFS precipitation on 5-degree grid.
+    Colormap: Blues (white=0, dark blue=heavy), range 0-20 mm.
+    """
+    cached = surface_cache.get(PRECIP_CACHE_KEY, ttl_seconds=PRECIP_CACHE_TTL)
+    if cached:
+        return Response(
+            content=cached,
+            media_type="image/png",
+            headers={
+                "Cache-Control": f"public, max-age={PRECIP_CACHE_TTL}",
+                "X-Surface-Cache": "HIT",
+            },
+        )
+
+    connector = OpenMeteoWeatherConnector()
+    try:
+        raw = await connector.fetch(variable="precipitation")
+        result = connector.normalize(raw, variable="precipitation")
+    except Exception:
+        return Response(
+            content=b"",
+            media_type="image/png",
+            status_code=502,
+            headers={"X-Surface-Error": "Open-Meteo Weather fetch failed"},
+        )
+
+    if not result.values:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    points = [(p.lat, p.lon, p.value) for p in result.values]
+
+    png_bytes = render_gridded_surface_png(
+        points,
+        width=1800,
+        height=900,
+        colormap="Blues",
+        sigma=3.0,
+        vmin=0.0,
+        vmax=20.0,
+    )
+
+    surface_cache.put(PRECIP_CACHE_KEY, png_bytes)
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Cache-Control": f"public, max-age={PRECIP_CACHE_TTL}",
             "X-Surface-Cache": "MISS",
         },
     )
