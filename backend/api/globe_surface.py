@@ -24,13 +24,13 @@ SST_CACHE_TTL = 21600  # 6 hours
 
 @router.get("/sst.png")
 async def sst_surface_png() -> Response:
-    """Full-resolution OISST sea surface temperature as a continuous PNG.
+    """OISST sea surface temperature as a continuous PNG.
 
-    Fetches the native 0.25 deg OISST grid (stride=2, ~65K ocean cells),
+    Fetches the 0.25 deg OISST grid (stride=4, ~43K ocean cells),
     renders via render_gridded_surface_png(), caches for 6 hours.
-    Uses stride=2 (0.5 deg effective) to keep memory under 512 MB on Render.
+    Uses stride=4 (1 deg effective) to stay under 512 MB on Render free tier.
 
-    Returns equirectangular RGBA PNG (3600x1800).
+    Returns equirectangular RGBA PNG (1800x900).
     Colormap: RdYlBu_r (blue=cold, red=hot), range -2C to 32C.
     """
     # Check cache first
@@ -45,11 +45,12 @@ async def sst_surface_png() -> Response:
             },
         )
 
-    # Fetch full grid from ERDDAP
-    # stride=2 -> 0.5 deg effective resolution -> ~65K ocean points
+    # Fetch grid from ERDDAP
+    # stride=4 -> 1 deg effective resolution -> ~43K ocean points
+    # (stride=2 peaks at 852 MB — exceeds Render 512 MB free tier)
     connector = OisstConnector()
     try:
-        raw = await connector.fetch(stride=2)
+        raw = await connector.fetch(stride=4)
         result = connector.normalize(raw)
     except Exception:
         return Response(
@@ -65,13 +66,13 @@ async def sst_surface_png() -> Response:
     # Build (lat, lon, sst_c) tuples
     points = [(p.lat, p.lon, p.sst_c) for p in result.values]
 
-    # Render to PNG
+    # Render to PNG — 1800x900 keeps peak memory ~200 MB
     png_bytes = render_gridded_surface_png(
         points,
-        width=3600,
-        height=1800,
+        width=1800,
+        height=900,
         colormap="RdYlBu_r",
-        sigma=1.5,
+        sigma=2.0,
         vmin=-2.0,
         vmax=32.0,
     )
