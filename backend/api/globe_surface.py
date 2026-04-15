@@ -388,12 +388,16 @@ async def precipitation_surface_png() -> Response:
 # ---------------------------------------------------------------------------
 
 
+# Map layer names to their full-PNG endpoint handlers (for auto-render)
+_LAYER_HANDLERS: dict[str, Any] = {}  # populated after endpoint defs
+
+
 @router.get("/strip/{layer}/{strip_idx}.png")
 async def surface_strip(layer: str, strip_idx: int) -> Response:
     """Serve a cached latitude strip PNG.
 
     strip_idx: 0-5 mapping to STRIPS[idx] = (south, north).
-    Frontend creates 6 BitmapLayers, one per strip, each covering 30° lat.
+    If strips are not cached, triggers full-PNG render first.
     """
     cache_key = _LAYER_CACHE.get(layer)
     if not cache_key or strip_idx < 0 or strip_idx >= len(STRIPS):
@@ -401,6 +405,15 @@ async def surface_strip(layer: str, strip_idx: int) -> Response:
 
     south = STRIPS[strip_idx][0]
     strip_png = surface_cache.get(f"{cache_key}_s{south}", ttl_seconds=43200)
+
+    if not strip_png:
+        # Strips not cached — trigger full PNG render which also crops strips
+        handler = _LAYER_HANDLERS.get(layer)
+        if handler:
+            await handler()  # renders full PNG + calls _crop_strips()
+        # Try again after render
+        strip_png = surface_cache.get(f"{cache_key}_s{south}", ttl_seconds=43200)
+
     if not strip_png:
         return Response(content=b"", media_type="image/png", status_code=204)
 
@@ -409,6 +422,16 @@ async def surface_strip(layer: str, strip_idx: int) -> Response:
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=21600"},
     )
+
+
+# Register layer handlers (must be after all endpoint functions are defined)
+_LAYER_HANDLERS.update({
+    "sst": sst_surface_png,
+    "pm25": pm25_surface_png,
+    "no2": no2_surface_png,
+    "temperature": temperature_surface_png,
+    "precipitation": precipitation_surface_png,
+})
 
 
 # ---------------------------------------------------------------------------
