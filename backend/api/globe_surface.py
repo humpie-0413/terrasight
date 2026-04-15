@@ -17,6 +17,7 @@ from fastapi.responses import Response
 
 from backend.connectors.oisst import OisstConnector
 from backend.connectors.open_meteo_aq import OpenMeteoAqConnector
+from backend.connectors.open_meteo_marine import OpenMeteoMarineConnector
 from backend.connectors.open_meteo_weather import OpenMeteoWeatherConnector
 from backend.utils import surface_cache
 from backend.utils.surface_renderer import render_gridded_surface_png
@@ -75,6 +76,9 @@ TEMP_CACHE_TTL = 21600  # 6 hours
 
 PRECIP_CACHE_KEY = "globe_surface_precipitation"
 PRECIP_CACHE_TTL = 21600  # 6 hours
+
+OCEAN_CURRENTS_CACHE_KEY = "globe_ocean_currents"
+OCEAN_CURRENTS_CACHE_TTL = 21600  # 6 hours
 
 
 @router.get("/sst.png")
@@ -381,6 +385,44 @@ async def precipitation_surface_png() -> Response:
             "X-Surface-Cache": "MISS",
         },
     )
+
+
+@router.get("/ocean-currents.json")
+async def ocean_currents() -> dict:
+    """Global ocean current velocity and direction grid.
+
+    Fetches current ocean_current_velocity (km/h) and ocean_current_direction
+    (degrees, 0=north) from Open-Meteo Marine API on a 5-degree ocean grid.
+    Returns a JSON array of points suitable for particle/arrow rendering.
+    Cached for 6 hours.
+    """
+    import json
+
+    cached = surface_cache.get(OCEAN_CURRENTS_CACHE_KEY, ttl_seconds=OCEAN_CURRENTS_CACHE_TTL)
+    if cached:
+        return json.loads(cached)
+
+    connector = OpenMeteoMarineConnector()
+    try:
+        raw = await connector.fetch()
+        result = connector.normalize(raw)
+    except Exception:
+        return {"status": "error", "count": 0, "points": []}
+
+    if not result.values:
+        return {"status": "ok", "count": 0, "points": []}
+
+    response = {
+        "status": "ok",
+        "count": len(result.values),
+        "points": [
+            {"lat": p.lat, "lon": p.lon, "v": p.velocity_kmh, "d": p.direction_deg}
+            for p in result.values
+        ],
+    }
+
+    surface_cache.put(OCEAN_CURRENTS_CACHE_KEY, json.dumps(response).encode())
+    return response
 
 
 # ---------------------------------------------------------------------------

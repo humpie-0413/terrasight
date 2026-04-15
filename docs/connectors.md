@@ -262,6 +262,7 @@ Landmines:
 |---|---|---|---|---|---|
 | `ibtracs.py` | NOAA IBTrACS v04r01 | NCEI CSV (ACTIVE + LAST3YEARS) | None | observed | NRT ~6h (active) |
 | `climate_trace.py` | Climate TRACE | `api.climatetrace.org/v6/countries/emissions` | None | estimated | annual |
+| `open_meteo_marine.py` | Open-Meteo Marine | `marine-api.open-meteo.com/v1/marine` | None | forecast | hourly |
 
 Landmines:
 - **IBTrACS**: Filename is `ibtracs.last3years...` (lowercase) — `LAST3YR` → 404
@@ -286,7 +287,8 @@ Landmines:
 | Global Forest Watch | `GFW_API_KEY` | https://www.globalforestwatch.org/ (free, 1yr expiry) |
 
 ECHO, NSIDC, NOAA GML/CtaG/Normals, USGS, WQP, NASA GIBS, IBTrACS, Climate TRACE,
-NOAA Sea Level, NOAA Coral Reef Watch, JRC Drought all require **no key**.
+NOAA Sea Level, NOAA Coral Reef Watch, JRC Drought, Open-Meteo (Weather/AQ/Marine)
+all require **no key**.
 
 ---
 

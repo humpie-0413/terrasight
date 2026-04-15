@@ -62,6 +62,9 @@ interface FiresResponse { count: number; configured: boolean; fires: FireHotspot
 interface Earthquake { lat: number; lon: number; depth_km: number; magnitude: number; place: string; time_utc: string; event_url: string; tsunami: boolean; }
 interface EarthquakeResponse { count: number; configured: boolean; status: string; earthquakes: Earthquake[]; }
 
+interface OceanCurrentPoint { lat: number; lon: number; v: number; d: number; }
+interface OceanCurrentsResponse { status: string; count: number; points: OceanCurrentPoint[]; }
+
 // ─── GIBS date helper ─────────────────────────────────────────────────────────
 
 function getGibsDate(): string {
@@ -102,11 +105,11 @@ const CATEGORIES: CategoryDef[] = [
     activates: ['temp-surface'],
   },
   {
-    key: 'sst', icon: '🌊', name: 'Ocean Temp',
-    question: 'How warm are the oceans?',
-    activeColor: '#f97316', tag: TrustTag.Observed, cadence: 'Daily (2-day lag)',
-    source: 'NASA GHRSST MUR L4 (via GIBS)', sourceUrl: 'https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1',
-    activates: ['sst-surface'],
+    key: 'sst', icon: '🌊', name: 'Ocean',
+    question: 'What\'s happening in the oceans?',
+    activeColor: '#0ea5e9', tag: TrustTag.Observed, cadence: 'Daily',
+    source: 'NASA GHRSST + Sea Ice + Ocean Currents', sourceUrl: 'https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1',
+    activates: ['sst-surface', 'sea-ice', 'ocean-currents'],
   },
   {
     key: 'precipitation', icon: '🌧️', name: 'Precipitation',
@@ -247,9 +250,10 @@ function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
   );
   if (activeCategory === 'sst') return (
     <div style={legendStyle}>
-      <div style={legendTitleStyle}>Sea Surface Temperature (°C)</div>
+      <div style={legendTitleStyle}>Ocean — SST + Sea Ice + Currents</div>
       <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>-2</span><span>8</span><span>18</span><span>26</span><span>32</span></div>
+      <div style={legendLabelsStyle}><span>-2°C</span><span>8</span><span>18</span><span>26</span><span>32°C</span></div>
+      <div style={{ marginTop: 6, fontSize: '9px', color: '#64748b' }}>Particles: ocean current flow direction</div>
     </div>
   );
   if (activeCategory === 'air-quality') return (
@@ -333,19 +337,26 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
 
   // Track which layers are currently added
   const surfaceLayerRef = useRef<ImageryLayer | null>(null);
+  const seaIceLayerRef = useRef<ImageryLayer | null>(null);
   const gibsLayerRef = useRef<ImageryLayer | null>(null);
   const pointDataSourceRef = useRef<CustomDataSource | null>(null);
+  const particleCanvasRef = useRef<HTMLCanvasElement>(null);
+  const particleAnimRef = useRef<number>(0);
 
   // ── Lazy data fetches ────────────────────────────────────────────────────
 
   const needsFires = activeCategory === 'wildfires';
   const needsQuakes = activeCategory === 'earthquakes';
+  const needsOceanCurrents = activeCategory === 'sst';
 
   const { data: firesData, loading: firesLoading } = useApi<FiresResponse>(
     '/earth-now/fires', needsFires,
   );
   const { data: earthquakeData, loading: quakesLoading } = useApi<EarthquakeResponse>(
     '/hazards/earthquakes?min_magnitude=4&limit=500&days=7', needsQuakes,
+  );
+  const { data: currentsData } = useApi<OceanCurrentsResponse>(
+    '/globe/surface/ocean-currents.json', needsOceanCurrents,
   );
 
   // ── Cesium Viewer initialization ─────────────────────────────────────────
@@ -491,22 +502,32 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     const viewer = viewerRef.current;
     if (!viewer) return;
 
-    // 1. Remove previous surface overlay
+    // 1. Remove previous overlays
     if (surfaceLayerRef.current) {
       viewer.imageryLayers.remove(surfaceLayerRef.current);
       surfaceLayerRef.current = null;
     }
-
-    // 2. Remove previous GIBS overlay
+    if (seaIceLayerRef.current) {
+      viewer.imageryLayers.remove(seaIceLayerRef.current);
+      seaIceLayerRef.current = null;
+    }
     if (gibsLayerRef.current) {
       viewer.imageryLayers.remove(gibsLayerRef.current);
       gibsLayerRef.current = null;
     }
-
-    // 3. Remove previous point data
     if (pointDataSourceRef.current) {
       viewer.dataSources.remove(pointDataSourceRef.current);
       pointDataSourceRef.current = null;
+    }
+    // Stop particle animation
+    if (particleAnimRef.current) {
+      cancelAnimationFrame(particleAnimRef.current);
+      particleAnimRef.current = 0;
+    }
+    const pCanvas = particleCanvasRef.current;
+    if (pCanvas) {
+      const pCtx = pCanvas.getContext('2d');
+      if (pCtx) pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
     }
 
     // 4. Add self-rendered surface PNG (PM2.5, Temperature, Precipitation, NO₂)
@@ -527,10 +548,30 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5. Add GIBS SST via WMS GetMap — single full-globe image, native land mask
-    // WMS approach: request one 4096x2048 image covering the entire globe.
-    // CesiumJS SingleTileImageryProvider drapes it correctly on the sphere.
-    // This avoids all WMTS tile-matrix-label issues.
+    // 5a. Add Sea Ice FIRST (below SST) — fills polar gaps
+    if (activeLayers.has('sea-ice')) {
+      try {
+        const date = getGibsSstDate();
+        const iceUrl =
+          'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+          '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
+          '&LAYERS=GHRSST_L4_MUR_Sea_Ice_Concentration' +
+          `&TIME=${date}` +
+          '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
+          '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
+        const provider = new SingleTileImageryProvider({
+          url: iceUrl,
+          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+        });
+        const imgLayer = new ImageryLayer(provider, { alpha: 0.8 });
+        viewer.imageryLayers.add(imgLayer);
+        seaIceLayerRef.current = imgLayer;
+      } catch {
+        // GIBS may not be available
+      }
+    }
+
+    // 5b. Add GIBS SST on top of Sea Ice — native land mask
     if (activeLayers.has('sst-surface')) {
       try {
         const date = getGibsSstDate();
@@ -632,6 +673,157 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     }
   }, [activeLayers, firesData, earthquakeData]);
 
+  // ── Ocean current particle animation ─────────────────────────────────
+
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const canvas = particleCanvasRef.current;
+    if (!viewer || !canvas || !activeLayers.has('ocean-currents') || !currentsData?.points?.length) {
+      return;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Resize canvas to container
+    const container = containerRef.current;
+    if (container) {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+
+    // Build lookup grid from current data (5° grid → fast lookup)
+    const pts = currentsData.points;
+    const gridMap = new Map<string, OceanCurrentPoint>();
+    for (const p of pts) {
+      const key = `${Math.round(p.lat / 5) * 5},${Math.round(p.lon / 5) * 5}`;
+      gridMap.set(key, p);
+    }
+
+    function lookupCurrent(lat: number, lon: number): [number, number] {
+      const snapLat = Math.round(lat / 5) * 5;
+      const snapLon = Math.round(lon / 5) * 5;
+      const p = gridMap.get(`${snapLat},${snapLon}`);
+      if (!p || p.v < 0.01) return [0, 0];
+      // Convert velocity (km/h) + direction (degrees) to u,v (pixels/frame)
+      const speed = p.v * 0.15; // Scale factor for visual effect
+      const rad = (p.d * Math.PI) / 180;
+      return [speed * Math.sin(rad), -speed * Math.cos(rad)]; // screen coords: y inverted
+    }
+
+    // Initialize particles
+    const NUM_PARTICLES = 4000;
+    const MAX_AGE = 90;
+    interface Particle { lon: number; lat: number; age: number; prevX: number; prevY: number; }
+    const particles: Particle[] = [];
+
+    function randomOceanPoint(): { lon: number; lat: number } {
+      // Random point, biased toward ocean areas
+      const lat = (Math.random() - 0.5) * 160; // -80 to 80
+      const lon = (Math.random() - 0.5) * 360; // -180 to 180
+      return { lon, lat };
+    }
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      const { lon, lat } = randomOceanPoint();
+      particles.push({ lon, lat, age: Math.floor(Math.random() * MAX_AGE), prevX: 0, prevY: 0 });
+    }
+
+    let running = true;
+
+    function animate() {
+      if (!running || !viewer || !ctx || !canvas) return;
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Fade trail effect
+      ctx.fillStyle = 'rgba(2, 4, 8, 0.06)';
+      ctx.fillRect(0, 0, w, h);
+
+      for (const p of particles) {
+        // Get screen position
+        const worldPos = Cartesian3.fromDegrees(p.lon, p.lat);
+        const screenPos = viewer.scene.cartesianToCanvasCoordinates(worldPos);
+
+        if (!screenPos || screenPos.x < 0 || screenPos.x > w || screenPos.y < 0 || screenPos.y > h) {
+          // Off-screen or behind globe — reset
+          p.age = MAX_AGE;
+        }
+
+        // Check if point is on visible side of globe
+        const cameraPos = viewer.camera.positionWC;
+        const dot = Cartesian3.dot(
+          Cartesian3.normalize(worldPos, new Cartesian3()),
+          Cartesian3.normalize(cameraPos, new Cartesian3()),
+        );
+        if (dot < 0.05) {
+          // Behind the globe
+          p.age = MAX_AGE;
+        }
+
+        if (p.age >= MAX_AGE) {
+          // Reset particle
+          const np = randomOceanPoint();
+          p.lon = np.lon;
+          p.lat = np.lat;
+          p.age = 0;
+          p.prevX = screenPos?.x ?? 0;
+          p.prevY = screenPos?.y ?? 0;
+          particleAnimRef.current = requestAnimationFrame(animate);
+          continue;
+        }
+
+        // Move particle
+        const [du, dv] = lookupCurrent(p.lat, p.lon);
+        p.lon += du * 0.3;
+        p.lat += dv * 0.3;
+
+        // Wrap longitude
+        if (p.lon > 180) p.lon -= 360;
+        if (p.lon < -180) p.lon += 360;
+        if (p.lat > 80 || p.lat < -80) p.age = MAX_AGE;
+
+        const curX = screenPos?.x ?? 0;
+        const curY = screenPos?.y ?? 0;
+
+        // Draw trail line
+        if (p.age > 0 && screenPos) {
+          const alpha = Math.max(0.1, 1 - p.age / MAX_AGE) * 0.6;
+          const speed = Math.sqrt(du * du + dv * dv);
+          // Color by speed: slow=cyan, fast=yellow
+          const r = Math.min(255, Math.floor(speed * 80));
+          const g = Math.min(255, 200 + Math.floor(speed * 20));
+          const b = Math.max(0, 255 - Math.floor(speed * 60));
+
+          ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(p.prevX, p.prevY);
+          ctx.lineTo(curX, curY);
+          ctx.stroke();
+        }
+
+        p.prevX = curX;
+        p.prevY = curY;
+        p.age++;
+      }
+
+      particleAnimRef.current = requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    return () => {
+      running = false;
+      if (particleAnimRef.current) {
+        cancelAnimationFrame(particleAnimRef.current);
+        particleAnimRef.current = 0;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+  }, [activeLayers, currentsData]);
+
   // ── Status ───────────────────────────────────────────────────────────────
 
   const activeCatDef = activeCategory ? CATEGORY_LOOKUP.get(activeCategory) ?? null : null;
@@ -649,6 +841,16 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
   return (
     <div ref={containerRef} style={containerStyle}>
       <div ref={cesiumContainerRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
+
+      {/* Ocean current particle overlay */}
+      <canvas
+        ref={particleCanvasRef}
+        style={{
+          position: 'absolute', inset: 0, zIndex: 2,
+          pointerEvents: 'none',
+          display: activeLayers.has('ocean-currents') ? 'block' : 'none',
+        }}
+      />
 
       {/* Vignette overlay */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', boxShadow: 'inset 0 0 120px 40px rgba(2,4,8,0.4)' }} />

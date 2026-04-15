@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-15 (Globe engine: deck.gl → CesiumJS)
+**최종 업데이트:** 2026-04-16 (Ocean 종합 업그레이드: SST + Sea Ice + 해류 파티클)
 
 ---
 
@@ -19,7 +19,7 @@
 | 항목 | 수치 |
 |------|------|
 | Git commits | **48+** (`48f0482` Phase D.1, Phase E commit pending push) |
-| Backend connectors | **40개** (28 기존 + 5 D.1 + 1 RCRA + 6 D.2) |
+| Backend connectors | **41개** (28 기존 + 5 D.1 + 1 RCRA + 6 D.2 + 1 Marine) |
 | API endpoints | **43개** (+6 D.2: earthquakes, alerts, drought, tides, declarations, pfas) |
 | Atlas 라이브 데이터셋 | **23개** (+6 D.2: earthquake, NWS, USDM, CO-OPS, OpenFEMA, PFAS) |
 | Atlas 카테고리 | **8개** — Waste & Materials, Soil/Land 공백 해소 ✅ |
@@ -136,6 +136,20 @@
 - **Bundle impact:** GlobeCesium 5.76 KB gzipped (deck.gl was 7.31 KB + 232 KB vendor)
 - SST switched to GIBS GHRSST MUR L4 (1km, native land mask — no bleed into continents)
   Previously self-rendered PNG had smoothing that bled ocean values into land
+
+### Ocean Comprehensive Upgrade (2026-04-16) ✅
+- **"Ocean Temp" → "Ocean"** — unified category with 3 simultaneous layers
+- **Sea Ice layer** — GIBS GHRSST_L4_MUR_Sea_Ice_Concentration below SST
+  fills polar gaps (combined coverage: SST warm ocean + sea ice polar)
+- **Ocean current particle animation** — earth.nullschool style
+  - Open-Meteo Marine API: global 5° grid, velocity + direction
+  - 4000 particles with trail effect (fade on canvas)
+  - Color by speed: cyan=slow → yellow=fast
+  - `cartesianToCanvasCoordinates` for globe projection
+  - Only renders particles on visible hemisphere (dot product check)
+  - `open_meteo_marine.py` connector + `GET /api/globe/surface/ocean-currents.json`
+- **WMS BBOX fix** — was -90,-180,90,180 (swapped), fixed to -180,-90,180,90
+  Root cause of SST stretching/tearing in all previous attempts
 
 ---
 
@@ -1242,6 +1256,23 @@ Ocean stress formula: `clamp((sst_anomaly / 5.0) * 0.4 + (dhw / 8.0) * 0.6, 0, 1
 **번들:**
 - GlobeDeck: 6.76 → **6.54 KB** gz (-0.22 KB, lazy fetch로 코드 축소)
 - deckgl-vendor: 232.43 KB (변동 없음)
+
+---
+
+### 2026-04-16 — Open-Meteo Marine connector (ocean currents)
+
+**완료:**
+- `backend/connectors/open_meteo_marine.py` — new connector fetching
+  `ocean_current_velocity` (km/h) and `ocean_current_direction` (deg) on a
+  5° ocean grid (-80..+80 lat). Same POST-batch pattern as weather/AQ.
+- `backend/api/globe_surface.py` — new `/ocean-currents.json` endpoint
+  returning JSON points (lat, lon, velocity, direction). 6-hour cache.
+- Connector count: 40 → **41**.
+
+**다음 단계:**
+- Frontend: render ocean current arrows/particles on the globe using the
+  JSON endpoint.
+- Consider adding `ocean_currents` as a new globe category.
 
 ---
 

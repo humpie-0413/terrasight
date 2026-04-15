@@ -141,6 +141,8 @@ Run these in order.
 | OpenFEMA `state` field requires 2-letter abbreviation | `connectors/openfema.py` | Full state names (e.g. `Texas`) return 0 results; use `TX` |
 | CO-OPS mdapi stations with lat=0/lng=0 | `connectors/coops.py` | Filter out bogus coordinates; some stations are decommissioned |
 | CO-OPS datagetter `v` field is string | `connectors/coops.py` | Water level value returned as string `"1.234"`, not float; empty string = missing data |
+| Open-Meteo Marine land points return null | `connectors/open_meteo_marine.py` | Grid covers all lon/lat; land points have null velocity/direction — must filter |
+| Open-Meteo Marine direction is "going to" | `connectors/open_meteo_marine.py` | Oceanographic convention (not meteorological "coming from"); frontend should not flip |
 
 Any new landmine discovered during implementation must be added
 **to this table and to the relevant connector docstring** before the
