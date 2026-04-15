@@ -11,7 +11,6 @@ import {
   Ion,
   ImageryLayer,
   SingleTileImageryProvider,
-  WebMapTileServiceImageryProvider,
   CustomDataSource,
   Entity,
   Color,
@@ -21,7 +20,6 @@ import {
   ScreenSpaceEventType,
   defined,
   Rectangle,
-  GeographicTilingScheme,
   NearFarScalar,
   HeightReference,
 } from 'cesium';
@@ -529,19 +527,23 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5. Add GIBS SST (GHRSST MUR) — native land mask, ocean only
+    // 5. Add GIBS SST via WMS GetMap — single full-globe image, native land mask
+    // WMS approach: request one 4096x2048 image covering the entire globe.
+    // CesiumJS SingleTileImageryProvider drapes it correctly on the sphere.
+    // This avoids all WMTS tile-matrix-label issues.
     if (activeLayers.has('sst-surface')) {
       try {
         const date = getGibsSstDate();
-        const provider = new WebMapTileServiceImageryProvider({
-          url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
-          layer: 'GHRSST_L4_MUR_Sea_Surface_Temperature',
-          style: 'default',
-          tileMatrixSetID: '1km',
-          format: 'image/png',
-          maximumLevel: 7,
-          tilingScheme: new GeographicTilingScheme(),
-          dimensions: { Time: date },
+        const wmsUrl =
+          'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+          '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
+          '&LAYERS=GHRSST_L4_MUR_Sea_Surface_Temperature' +
+          `&TIME=${date}` +
+          '&BBOX=-90,-180,90,180&WIDTH=4096&HEIGHT=2048' +
+          '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
+        const provider = new SingleTileImageryProvider({
+          url: wmsUrl,
+          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
         });
         const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
         viewer.imageryLayers.add(imgLayer);
@@ -551,19 +553,20 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 6. Add GIBS CO₂ overlay
+    // 6. Add GIBS CO₂ overlay via WMS
     if (activeLayers.has('gibs-oco2')) {
       try {
         const date = getGibsDate();
-        const provider = new WebMapTileServiceImageryProvider({
-          url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
-          layer: 'OCO2_L2_CO2_Total_Column_Day',
-          style: 'default',
-          tileMatrixSetID: '2km',
-          format: 'image/png',
-          maximumLevel: 5,
-          tilingScheme: new GeographicTilingScheme(),
-          dimensions: { Time: date },
+        const wmsUrl =
+          'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+          '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
+          '&LAYERS=OCO2_L2_CO2_Total_Column_Day' +
+          `&TIME=${date}` +
+          '&BBOX=-90,-180,90,180&WIDTH=4096&HEIGHT=2048' +
+          '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
+        const provider = new SingleTileImageryProvider({
+          url: wmsUrl,
+          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
         });
         const imgLayer = new ImageryLayer(provider, { alpha: 0.6 });
         viewer.imageryLayers.add(imgLayer);
