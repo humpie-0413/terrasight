@@ -1,22 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import cesium from 'vite-plugin-cesium';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cesium()],
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'deckgl-vendor': [
-            '@deck.gl/core',
-            '@deck.gl/layers',
-            '@deck.gl/geo-layers',
-            '@deck.gl/aggregation-layers',
-          ],
-        },
-      },
-    },
+    chunkSizeWarningLimit: 4000, // Cesium is large
   },
   server: {
     port: 5173,

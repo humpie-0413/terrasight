@@ -1,6 +1,6 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-15 (Strip rendering fix + data-architecture.md)
+**최종 업데이트:** 2026-04-15 (Globe engine: deck.gl → CesiumJS)
 
 ---
 
@@ -33,7 +33,7 @@
 | SEO 가이드 페이지 | **4개** |
 | 번들 사이즈 (main chunk) | **56.64 KB gzipped** ✅ |
 | 코드 스플리팅 | deck.gl vendor **232.44 KB** (lazy) + GlobeDeck 6.78 KB + LocalReport 6.57 KB + 11 route chunks |
-| Globe 라이브러리 | **deck.gl v9.2.11** (react-globe.gl → deck.gl 마이그레이션 완료, three.js 제거) |
+| Globe 라이브러리 | **CesiumJS** (deck.gl → CesiumJS 마이그레이션 완료, 타일 찢어짐 해결) |
 | 테마 | **다크 테마** (글래스모피즘 + 별 파티클 글로브 배경) |
 | 배포 스택 | Cloudflare Pages + Render (Docker) |
 
@@ -119,6 +119,21 @@
 - **Verified on Render:** All 6 SST strips return 200 OK (33-149 KB each)
 - All 5 BitmapLayers: `_imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT` added
   (fixes GlobeView sphere tessellation — prevents triangle/diamond artifacts)
+
+### Globe Engine Migration: deck.gl → CesiumJS (2026-04-15) ✅
+- **Reason:** deck.gl GlobeView BitmapLayer had persistent triangle/diamond tearing
+  on sphere projection — multiple fix attempts failed (strips, LNGLAT coordinate system)
+- CesiumJS renders tiles natively on a globe — no tearing by design
+- New `GlobeCesium.tsx` replaces `GlobeDeck.tsx` (deleted)
+- Surface PNGs: `SingleTileImageryProvider` (no strips needed — Cesium handles projection)
+- Point data: `CustomDataSource` with `Entity` points for fires/earthquakes
+- GIBS CO₂: `UrlTemplateImageryProvider` with `GeographicTilingScheme`
+- Atmosphere: native `skyAtmosphere` + fog (replaces CSS radial-gradient hack)
+- 3D/2D toggle: `morphTo3D()` / `morphTo2D()` with 1s animation
+- Auto-rotation: `camera.rotateRight(0.001)` with 8s idle threshold
+- Hover tooltips: `ScreenSpaceEventHandler` + Entity properties
+- deck.gl + luma.gl fully removed from dependencies
+- **Bundle impact:** GlobeCesium 5.72 KB gzipped (deck.gl was 7.31 KB + 232 KB vendor)
 
 ---
 

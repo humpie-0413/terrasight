@@ -1,8 +1,8 @@
 import { lazy, Suspense, useRef, useState } from 'react';
-import type { ActiveCategory, GlobeHandle } from '../components/earth-now/GlobeDeck';
+import type { ActiveCategory, GlobeHandle } from '../components/earth-now/GlobeCesium';
 import StoryPanel from '../components/earth-now/StoryPanel';
 
-const GlobeDeck = lazy(() => import('../components/earth-now/GlobeDeck'));
+const GlobeDeck = lazy(() => import('../components/earth-now/GlobeCesium'));
 
 export default function EarthNow() {
   const [activeCategory, setActiveCategory] = useState<ActiveCategory>('air-quality');
