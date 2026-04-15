@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Deck, MapView, _GlobeView as GlobeView } from '@deck.gl/core';
+import { COORDINATE_SYSTEM, Deck, MapView, _GlobeView as GlobeView } from '@deck.gl/core';
 import { BitmapLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
@@ -536,6 +536,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
             ...props, data: undefined,
             image: props.data as string,
             bounds: [west, south, east, north],
+            _imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT,
           });
         },
       }),
@@ -566,6 +567,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
               ...props, data: undefined,
               image: props.data as string,
               bounds: [west, south, east, north],
+              _imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT,
             });
           },
         }),
@@ -597,6 +599,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
             image: `${API_BASE}/earth-now/integrated/fires/density-png`,
             bounds: [-180, -90, 180, 90] as [number, number, number, number],
             opacity: 0.7,
+            _imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT,
           }),
         );
         // Scatter overlay for hover interaction (top fires by FRP)
@@ -691,6 +694,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
           image: `${API_BASE}/earth-now/integrated/ocean/surface-png`,
           bounds: [-180, -90, 180, 90] as [number, number, number, number],
           opacity: 0.65,
+          _imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT,
         }),
       );
       // Sparse scatter overlay for hover tooltips (from existing JSON grid)
@@ -736,6 +740,7 @@ const GlobeDeck = forwardRef<GlobeHandle, GlobeProps>(function GlobeDeck(
               image: `${API_BASE}/globe/surface/strip/${surf.layer}/${i}.png`,
               bounds: [-180, south, 180, north] as [number, number, number, number],
               opacity: surf.opacity,
+              _imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT,
             }),
           );
         }

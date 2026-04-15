@@ -117,6 +117,8 @@
 - Renderer adaptive threshold: `max_weight * 0.05` (was hardcoded 0.01)
 - `docs/data-architecture.md` — comprehensive data spec for all layers
 - **Verified on Render:** All 6 SST strips return 200 OK (33-149 KB each)
+- All 5 BitmapLayers: `_imageCoordinateSystem: COORDINATE_SYSTEM.LNGLAT` added
+  (fixes GlobeView sphere tessellation — prevents triangle/diamond artifacts)
 
 ---
 
