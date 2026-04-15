@@ -112,9 +112,11 @@
 - Single BitmapLayer → 6 latitude-strip BitmapLayers (30° each)
 - Backend: `_crop_strips()` crops full PNG into 6 strips after rendering
 - New endpoint: `GET /api/globe/surface/strip/{layer}/{0-5}.png`
+- Strip endpoint auto-triggers full render on cache miss (fixes cold-start)
 - Eliminates diamond/polygon artifacts on GlobeView sphere projection
 - Renderer adaptive threshold: `max_weight * 0.05` (was hardcoded 0.01)
 - `docs/data-architecture.md` — comprehensive data spec for all layers
+- **Verified on Render:** All 6 SST strips return 200 OK (33-149 KB each)
 
 ---
 
