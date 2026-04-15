@@ -133,7 +133,9 @@
 - Auto-rotation: `camera.rotateRight(0.001)` with 8s idle threshold
 - Hover tooltips: `ScreenSpaceEventHandler` + Entity properties
 - deck.gl + luma.gl fully removed from dependencies
-- **Bundle impact:** GlobeCesium 5.72 KB gzipped (deck.gl was 7.31 KB + 232 KB vendor)
+- **Bundle impact:** GlobeCesium 5.76 KB gzipped (deck.gl was 7.31 KB + 232 KB vendor)
+- SST switched to GIBS GHRSST MUR L4 (1km, native land mask — no bleed into continents)
+  Previously self-rendered PNG had smoothing that bled ocean values into land
 
 ---
 

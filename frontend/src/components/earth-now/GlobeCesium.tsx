@@ -106,8 +106,8 @@ const CATEGORIES: CategoryDef[] = [
   {
     key: 'sst', icon: '🌊', name: 'Ocean Temp',
     question: 'How warm are the oceans?',
-    activeColor: '#f97316', tag: TrustTag.Observed, cadence: 'Daily (1-day lag)',
-    source: 'NOAA OISST v2.1', sourceUrl: 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.html',
+    activeColor: '#f97316', tag: TrustTag.Observed, cadence: 'Daily (2-day lag)',
+    source: 'NASA GHRSST MUR L4 (via GIBS)', sourceUrl: 'https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1',
     activates: ['sst-surface'],
   },
   {
@@ -305,13 +305,20 @@ function Tooltip({ info }: { info: TooltipInfo | null }) {
 
 // ─── Surface PNG layer map ────────────────────────────────────────────────────
 
+// Self-rendered surface PNGs (backend → SingleTileImageryProvider)
 const SURFACE_LAYERS: Record<string, { url: string; alpha: number }> = {
-  'sst-surface': { url: `${API_BASE}/globe/surface/sst.png`, alpha: 0.85 },
   'pm25-surface': { url: `${API_BASE}/globe/surface/pm25.png`, alpha: 0.8 },
   'temp-surface': { url: `${API_BASE}/globe/surface/temperature.png`, alpha: 0.8 },
   'precip-surface': { url: `${API_BASE}/globe/surface/precipitation.png`, alpha: 0.75 },
   'no2-surface': { url: `${API_BASE}/globe/surface/no2.png`, alpha: 0.8 },
 };
+
+// GIBS WMTS layers — rendered with native land mask (no bleed)
+function getGibsSstDate(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 2); // GHRSST has ~2 day latency
+  return d.toISOString().slice(0, 10);
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -504,7 +511,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       pointDataSourceRef.current = null;
     }
 
-    // 4. Add surface PNG overlay (SST, PM2.5, Temperature, etc.)
+    // 4. Add self-rendered surface PNG (PM2.5, Temperature, Precipitation, NO₂)
     for (const [key, cfg] of Object.entries(SURFACE_LAYERS)) {
       if (activeLayers.has(key)) {
         try {
@@ -518,11 +525,29 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
         } catch {
           // Provider creation may fail if URL not ready
         }
-        break; // Only one surface at a time
+        break;
       }
     }
 
-    // 5. Add GIBS CO₂ overlay
+    // 5. Add GIBS SST (GHRSST MUR) — native land mask, no bleed into continents
+    if (activeLayers.has('sst-surface')) {
+      try {
+        const date = getGibsSstDate();
+        const provider = new UrlTemplateImageryProvider({
+          url: `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/${date}/1km/{z}/{reverseY}/{x}.png`,
+          tilingScheme: new GeographicTilingScheme(),
+          maximumLevel: 7,
+          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+        });
+        const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
+        viewer.imageryLayers.add(imgLayer);
+        surfaceLayerRef.current = imgLayer;
+      } catch {
+        // GIBS may not be available
+      }
+    }
+
+    // 6. Add GIBS CO₂ overlay
     if (activeLayers.has('gibs-oco2')) {
       try {
         const date = getGibsDate();
