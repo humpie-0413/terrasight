@@ -539,7 +539,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
           '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
           '&LAYERS=GHRSST_L4_MUR_Sea_Surface_Temperature' +
           `&TIME=${date}` +
-          '&BBOX=-90,-180,90,180&WIDTH=4096&HEIGHT=2048' +
+          '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
           '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
         const provider = new SingleTileImageryProvider({
           url: wmsUrl,
@@ -562,7 +562,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
           '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
           '&LAYERS=OCO2_L2_CO2_Total_Column_Day' +
           `&TIME=${date}` +
-          '&BBOX=-90,-180,90,180&WIDTH=4096&HEIGHT=2048' +
+          '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
           '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
         const provider = new SingleTileImageryProvider({
           url: wmsUrl,
