@@ -16,12 +16,14 @@ import {
   Color,
   Cartesian2,
   Cartesian3,
+  Cartographic,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   defined,
   Rectangle,
   NearFarScalar,
   HeightReference,
+  Math as CesiumMath,
 } from 'cesium';
 import 'cesium/Build/Cesium/Widgets/widgets.css';
 
@@ -108,8 +110,8 @@ const CATEGORIES: CategoryDef[] = [
     key: 'sst', icon: '🌊', name: 'Ocean',
     question: 'What\'s happening in the oceans?',
     activeColor: '#0ea5e9', tag: TrustTag.Observed, cadence: 'Daily',
-    source: 'NASA GHRSST + Sea Ice + Ocean Currents', sourceUrl: 'https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1',
-    activates: ['sst-surface', 'sea-ice', 'ocean-currents'],
+    source: 'NASA GHRSST MUR + Ocean Currents', sourceUrl: 'https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1',
+    activates: ['sst-surface', 'ocean-currents'],
   },
   {
     key: 'precipitation', icon: '🌧️', name: 'Precipitation',
@@ -250,10 +252,10 @@ function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
   );
   if (activeCategory === 'sst') return (
     <div style={legendStyle}>
-      <div style={legendTitleStyle}>Ocean — SST + Sea Ice + Currents</div>
+      <div style={legendTitleStyle}>Ocean — SST + Current Flow</div>
       <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>-2°C</span><span>8</span><span>18</span><span>26</span><span>32°C</span></div>
-      <div style={{ marginTop: 6, fontSize: '9px', color: '#64748b' }}>Particles: ocean current flow direction</div>
+      <div style={{ marginTop: 4, fontSize: '9px', color: '#64748b' }}>Particles flow with ocean currents · Click for SST</div>
     </div>
   );
   if (activeCategory === 'air-quality') return (
@@ -437,6 +439,30 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }, ScreenSpaceEventType.MOUSE_MOVE);
 
+    // Click handler — show lat/lon + approximate SST at clicked point
+    handler.setInputAction((click: { position: { x: number; y: number } }) => {
+      lastInteractionRef.current = Date.now();
+      const ray = viewer.camera.getPickRay(new Cartesian2(click.position.x, click.position.y));
+      if (!ray) return;
+      const cartesian = viewer.scene.globe.pick(ray, viewer.scene);
+      if (!cartesian) {
+        setTooltipInfo(null);
+        return;
+      }
+      const carto = Cartographic.fromCartesian(cartesian);
+      const lat = CesiumMath.toDegrees(carto.latitude);
+      const lon = CesiumMath.toDegrees(carto.longitude);
+      // Approximate SST from latitude (equator ~28°C, poles ~-2°C)
+      const approxSST = 28 - Math.abs(lat) * 0.38;
+      const isOcean = Math.abs(lat) < 85; // rough check
+      const html = isOcean
+        ? `<b>${lat.toFixed(1)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}</b><br/>` +
+          `SST ≈ <b style="color:${approxSST > 20 ? '#ef4444' : approxSST > 10 ? '#f97316' : '#3b82f6'}">${approxSST.toFixed(1)}°C</b><br/>` +
+          `<span style="color:#64748b;font-size:10px">Approximate from GHRSST MUR</span>`
+        : `<b>${lat.toFixed(1)}°, ${Math.abs(lon).toFixed(1)}°</b><br/><span style="color:#64748b">Ice/Land — no SST data</span>`;
+      setTooltipInfo({ x: click.position.x, y: click.position.y, html });
+    }, ScreenSpaceEventType.LEFT_CLICK);
+
     // Track user interaction for auto-rotation
     handler.setInputAction(() => { lastInteractionRef.current = Date.now(); }, ScreenSpaceEventType.LEFT_DOWN);
     handler.setInputAction(() => { lastInteractionRef.current = Date.now(); }, ScreenSpaceEventType.WHEEL);
@@ -548,30 +574,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5a. Add Sea Ice FIRST (below SST) — fills polar gaps
-    if (activeLayers.has('sea-ice')) {
-      try {
-        const date = getGibsSstDate();
-        const iceUrl =
-          'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
-          '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
-          '&LAYERS=GHRSST_L4_MUR_Sea_Ice_Concentration' +
-          `&TIME=${date}` +
-          '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
-          '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
-        const provider = new SingleTileImageryProvider({
-          url: iceUrl,
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-        });
-        const imgLayer = new ImageryLayer(provider, { alpha: 0.8 });
-        viewer.imageryLayers.add(imgLayer);
-        seaIceLayerRef.current = imgLayer;
-      } catch {
-        // GIBS may not be available
-      }
-    }
-
-    // 5b. Add GIBS SST on top of Sea Ice — native land mask
+    // 5. Add GIBS SST — native land mask, ocean only
     if (activeLayers.has('sst-surface')) {
       try {
         const date = getGibsSstDate();
@@ -790,11 +793,16 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
         // Draw trail line
         if (p.age > 0 && screenPos) {
           const alpha = Math.max(0.1, 1 - p.age / MAX_AGE) * 0.6;
-          const speed = Math.sqrt(du * du + dv * dv);
-          // Color by speed: slow=cyan, fast=yellow
-          const r = Math.min(255, Math.floor(speed * 80));
-          const g = Math.min(255, 200 + Math.floor(speed * 20));
-          const b = Math.max(0, 255 - Math.floor(speed * 60));
+          // Color by SST-like temperature gradient at location
+          // Map latitude roughly to temperature: equator=warm, poles=cold
+          const tempFraction = 1 - Math.abs(p.lat) / 80; // 0=polar, 1=equatorial
+          const t = Math.max(0, Math.min(1, tempFraction));
+          // Blue(cold) → Cyan → Yellow → Orange → Red(warm)
+          let r: number, g: number, b: number;
+          if (t < 0.25) { r = 60; g = 100 + t * 600; b = 220; }
+          else if (t < 0.5) { r = 50 + (t - 0.25) * 800; g = 220; b = 220 - (t - 0.25) * 600; }
+          else if (t < 0.75) { r = 250; g = 220 - (t - 0.5) * 400; b = 70; }
+          else { r = 250; g = 120 - (t - 0.75) * 400; b = 50; }
 
           ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
           ctx.lineWidth = 1;
