@@ -11,7 +11,7 @@ import {
   Ion,
   ImageryLayer,
   SingleTileImageryProvider,
-  UrlTemplateImageryProvider,
+  WebMapTileServiceImageryProvider,
   CustomDataSource,
   Entity,
   Color,
@@ -529,15 +529,19 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5. Add GIBS SST (GHRSST MUR) — native land mask, no bleed into continents
+    // 5. Add GIBS SST (GHRSST MUR) — native land mask, ocean only
     if (activeLayers.has('sst-surface')) {
       try {
         const date = getGibsSstDate();
-        const provider = new UrlTemplateImageryProvider({
-          url: `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/${date}/1km/{z}/{reverseY}/{x}.png`,
-          tilingScheme: new GeographicTilingScheme(),
+        const provider = new WebMapTileServiceImageryProvider({
+          url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
+          layer: 'GHRSST_L4_MUR_Sea_Surface_Temperature',
+          style: 'default',
+          tileMatrixSetID: '1km',
+          format: 'image/png',
           maximumLevel: 7,
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+          tilingScheme: new GeographicTilingScheme(),
+          dimensions: { Time: date },
         });
         const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
         viewer.imageryLayers.add(imgLayer);
@@ -551,11 +555,15 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     if (activeLayers.has('gibs-oco2')) {
       try {
         const date = getGibsDate();
-        const provider = new UrlTemplateImageryProvider({
-          url: `https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/OCO2_L2_CO2_Total_Column_Day/default/${date}/2km/{z}/{reverseY}/{x}.png`,
-          tilingScheme: new GeographicTilingScheme(),
+        const provider = new WebMapTileServiceImageryProvider({
+          url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
+          layer: 'OCO2_L2_CO2_Total_Column_Day',
+          style: 'default',
+          tileMatrixSetID: '2km',
+          format: 'image/png',
           maximumLevel: 5,
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+          tilingScheme: new GeographicTilingScheme(),
+          dimensions: { Time: date },
         });
         const imgLayer = new ImageryLayer(provider, { alpha: 0.6 });
         viewer.imageryLayers.add(imgLayer);
