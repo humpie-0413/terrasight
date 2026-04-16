@@ -164,8 +164,98 @@ def render_gridded_surface_png(
     # Convert to uint8 PNG
     img_uint8 = (rgba * 255).astype(np.uint8)
 
-    from PIL import Image
-    img = Image.fromarray(img_uint8, "RGBA")
+    from PIL import Image as PILImage
+    img = PILImage.fromarray(img_uint8, "RGBA")
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
+
+
+def render_advected_sst_frames(
+    sst_points: Sequence[tuple[float, float, float]],
+    flow_points: Sequence[tuple[float, float, float, float]],
+    num_frames: int = 8,
+    width: int = 1800,
+    height: int = 900,
+    colormap: str = "RdYlBu_r",
+    vmin: float = -2.0,
+    vmax: float = 32.0,
+) -> list[bytes]:
+    """Render SST advected by ocean currents into multiple PNG frames.
+
+    Semi-Lagrangian advection: for each frame, shift the SST grid
+    by the flow field. Creates the visual effect of SST moving with currents.
+    """
+    from scipy.ndimage import gaussian_filter, map_coordinates
+
+    lat_scale = height / 180.0
+    lon_scale = width / 360.0
+
+    # Build SST grid
+    sst_grid = np.full((height, width), np.nan, dtype=np.float64)
+    has_data = np.zeros((height, width), dtype=np.bool_)
+    for lat, lon, val in sst_points:
+        y = max(0, min(height - 1, int((90.0 - lat) * lat_scale)))
+        x = max(0, min(width - 1, int((lon + 180.0) * lon_scale)))
+        sst_grid[y, x] = val
+        has_data[y, x] = True
+
+    # Smooth SST to fill gaps
+    gf = np.where(has_data, sst_grid, 0.0)
+    wt = has_data.astype(np.float64)
+    sg = gaussian_filter(gf, sigma=2.0)
+    sw = gaussian_filter(wt, sigma=2.0)
+    mw = float(sw.max()) if sw.max() > 0 else 1.0
+    ocean = sw > mw * 0.05
+    sst_smooth = np.where(ocean, sg / sw, np.nan)
+
+    # Build flow field (pixels/frame)
+    u_px = np.zeros((height, width), dtype=np.float64)
+    v_px = np.zeros((height, width), dtype=np.float64)
+    for lat, lon, vel, dirn in flow_points:
+        y = max(0, min(height - 1, int((90.0 - lat) * lat_scale)))
+        x = max(0, min(width - 1, int((lon + 180.0) * lon_scale)))
+        spd = vel * 0.009 * 0.5  # degrees per frame-step
+        rad = dirn * np.pi / 180
+        u_px[y, x] = spd * np.sin(rad) * lon_scale
+        v_px[y, x] = -spd * np.cos(rad) * lat_scale
+
+    u_px = gaussian_filter(u_px, sigma=8.0)
+    v_px = gaussian_filter(v_px, sigma=8.0)
+
+    # Default circulation where no flow data
+    for row in range(height):
+        lat = 90.0 - row / lat_scale
+        a = abs(lat)
+        dflt = -0.3 if a < 30 else (0.2 if a < 60 else -0.1)
+        mask = (u_px[row, :] == 0) & ocean[row, :]
+        u_px[row, mask] = dflt
+
+    # Generate frames
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.cm as cm
+    from PIL import Image as PILImage
+
+    cmap = cm.get_cmap(colormap)
+    yy, xx = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+    frames: list[bytes] = []
+    cur = sst_smooth.copy()
+    sst_fill = np.where(ocean, cur, 0.0)
+
+    for _ in range(num_frames):
+        src_y = np.clip(yy - v_px, 0, height - 1)
+        src_x = (xx - u_px) % width
+        advected = map_coordinates(sst_fill, [src_y, src_x], order=1, mode='wrap')
+        cur = np.where(ocean, advected, np.nan)
+        sst_fill = np.where(ocean, cur, 0.0)
+
+        norm = np.clip((cur - vmin) / (vmax - vmin), 0.0, 1.0)
+        rgba = cmap(norm)
+        rgba[..., 3] = np.where(ocean, 0.9, 0.0)
+        img = PILImage.fromarray((rgba * 255).astype(np.uint8), "RGBA")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        frames.append(buf.getvalue())
+
+    return frames

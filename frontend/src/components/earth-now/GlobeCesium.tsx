@@ -75,15 +75,6 @@ function getGibsDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
-function gibsSstWmsUrl(date: string): string {
-  return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
-    '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
-    '&LAYERS=GHRSST_L4_MUR_Sea_Surface_Temperature' +
-    `&TIME=${date}` +
-    '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
-    '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
-}
-
 /** Async helper: create SingleTileImageryProvider + add to viewer */
 async function addSingleTileLayer(
   viewer: Viewer,
@@ -376,11 +367,21 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       const carto = Cartographic.fromCartesian(cart);
       const lat = CesiumMath.toDegrees(carto.latitude);
       const lon = CesiumMath.toDegrees(carto.longitude);
-      const sst = 28 - Math.abs(lat) * 0.38;
-      const html = Math.abs(lat) < 85
-        ? `<b>${lat.toFixed(1)}°${lat>=0?'N':'S'}, ${Math.abs(lon).toFixed(1)}°${lon>=0?'E':'W'}</b><br/>SST ≈ <b style="color:${sst>20?'#ef4444':sst>10?'#f97316':'#3b82f6'}">${sst.toFixed(1)}°C</b>`
-        : `<b>${lat.toFixed(1)}°, ${Math.abs(lon).toFixed(1)}°</b><br/><span style="color:#64748b">No SST data</span>`;
-      setTooltipInfo({ x: c.position.x, y: c.position.y, html, pinned: true });
+      const coordStr = `${Math.abs(lat).toFixed(1)}°${lat>=0?'N':'S'}, ${Math.abs(lon).toFixed(1)}°${lon>=0?'E':'W'}`;
+      // Show loading tooltip immediately
+      setTooltipInfo({ x: c.position.x, y: c.position.y, html: `<b>${coordStr}</b><br/><span style="color:#64748b">Loading SST…</span>`, pinned: true });
+      // Fetch real SST from backend OISST
+      fetch(`${API_BASE}/globe/surface/sst-at-point?lat=${lat.toFixed(2)}&lon=${lon.toFixed(2)}`)
+        .then(r => r.json())
+        .then(data => {
+          const html = data.sst_c != null
+            ? `<b>${coordStr}</b><br/>SST: <b style="color:${data.sst_c>25?'#ef4444':data.sst_c>15?'#f97316':data.sst_c>5?'#3b82f6':'#6366f1'}">${data.sst_c}°C</b><br/><span style="color:#64748b;font-size:10px">NOAA OISST v2.1</span>`
+            : `<b>${coordStr}</b><br/><span style="color:#64748b">Land or ice — no SST</span>`;
+          setTooltipInfo({ x: c.position.x, y: c.position.y, html, pinned: true });
+        })
+        .catch(() => {
+          setTooltipInfo({ x: c.position.x, y: c.position.y, html: `<b>${coordStr}</b><br/><span style="color:#64748b">SST unavailable</span>`, pinned: true });
+        });
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     handler.setInputAction(() => { lastInteractionRef.current = Date.now(); }, ScreenSpaceEventType.LEFT_DOWN);
@@ -430,29 +431,29 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // SST 7-day animation
+    // SST advection animation — SST data moves with ocean currents
+    // Backend renders 8 frames of SST advected by flow field
     if (activeLayers.has('sst-surface')) {
-      const dates: string[] = [];
-      for (let i = 2; i <= 8; i++) { const d = new Date(); d.setDate(d.getDate() - i); dates.push(d.toISOString().slice(0, 10)); }
+      const NUM_FRAMES = 8;
 
-      // Load first date
+      // Load first frame immediately
       (async () => {
-        const layer = await addSingleTileLayer(viewer, gibsSstWmsUrl(dates[0]), 0.85);
+        const layer = await addSingleTileLayer(viewer, `${API_BASE}/globe/surface/sst-advected/0.png`, 0.85);
         if (layer) surfaceLayerRef.current = layer;
       })();
 
-      // Cycle dates
+      // Cycle through advection frames every 1.5 seconds
       let idx = 0;
       sstTimerRef.current = window.setInterval(() => {
         const v = viewerRef.current;
         if (!v) return;
-        idx = (idx + 1) % dates.length;
+        idx = (idx + 1) % NUM_FRAMES;
         (async () => {
           if (surfaceLayerRef.current) v.imageryLayers.remove(surfaceLayerRef.current);
-          const layer = await addSingleTileLayer(v, gibsSstWmsUrl(dates[idx]), 0.85);
+          const layer = await addSingleTileLayer(v, `${API_BASE}/globe/surface/sst-advected/${idx}.png`, 0.85);
           if (layer) surfaceLayerRef.current = layer;
         })();
-      }, 2500);
+      }, 1500);
     }
 
     // GIBS CO₂

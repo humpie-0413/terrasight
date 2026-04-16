@@ -20,7 +20,7 @@ from backend.connectors.open_meteo_aq import OpenMeteoAqConnector
 from backend.connectors.open_meteo_marine import OpenMeteoMarineConnector
 from backend.connectors.open_meteo_weather import OpenMeteoWeatherConnector
 from backend.utils import surface_cache
-from backend.utils.surface_renderer import render_gridded_surface_png
+from backend.utils.surface_renderer import render_gridded_surface_png, render_advected_sst_frames
 
 
 # ---------------------------------------------------------------------------
@@ -385,6 +385,99 @@ async def precipitation_surface_png() -> Response:
             "X-Surface-Cache": "MISS",
         },
     )
+
+
+@router.get("/sst-at-point")
+async def sst_at_point(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+) -> dict[str, Any]:
+    """Return actual SST value at a given lat/lon from OISST ERDDAP.
+
+    Uses a single-point ERDDAP griddap query with nearest-neighbor
+    interpolation. Returns the SST in °C or null if land/ice.
+    """
+    import httpx
+
+    # Convert -180..180 lon to 0..360 for ERDDAP
+    lon360 = lon if lon >= 0 else lon + 360.0
+
+    url = (
+        "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.csv"
+        f"?sst%5B(last)%5D%5B(0.0)%5D%5B({lat})%5D%5B({lon360})%5D"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            lines = resp.text.strip().split("\n")
+            # Row 0: header, Row 1: units, Row 2: data
+            if len(lines) >= 3:
+                parts = lines[2].split(",")
+                sst_str = parts[-1].strip() if len(parts) >= 5 else "NaN"
+                if sst_str == "NaN":
+                    return {"lat": lat, "lon": lon, "sst_c": None, "status": "land_or_ice"}
+                return {"lat": lat, "lon": lon, "sst_c": round(float(sst_str), 2), "status": "ok"}
+    except Exception:
+        pass
+    return {"lat": lat, "lon": lon, "sst_c": None, "status": "error"}
+
+
+SST_ADV_CACHE_KEY = "sst_advection_frame_"
+SST_ADV_FRAMES = 8
+
+
+@router.get("/sst-advected/{frame_idx}.png")
+async def sst_advected_frame(frame_idx: int) -> Response:
+    """Serve one frame of the SST advection animation.
+
+    8 frames total (frame_idx 0-7). Each frame shows SST shifted by
+    ocean currents using semi-Lagrangian advection. Cached for 6 hours.
+    If frames not cached, triggers generation of all 8 frames.
+    """
+    if frame_idx < 0 or frame_idx >= SST_ADV_FRAMES:
+        return Response(content=b"", media_type="image/png", status_code=404)
+
+    # Check cache
+    cached = surface_cache.get(f"{SST_ADV_CACHE_KEY}{frame_idx}", ttl_seconds=21600)
+    if cached:
+        return Response(content=cached, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=21600"})
+
+    # Generate all frames
+    import asyncio
+    sst_connector = OisstConnector()
+    marine_connector = OpenMeteoMarineConnector()
+
+    try:
+        sst_raw, marine_raw = await asyncio.gather(
+            sst_connector.fetch(stride=4),
+            marine_connector.fetch(),
+        )
+        sst_result = sst_connector.normalize(sst_raw)
+        marine_result = marine_connector.normalize(marine_raw)
+    except Exception:
+        return Response(content=b"", media_type="image/png", status_code=502)
+
+    sst_pts = [(p.lat, p.lon, p.sst_c) for p in sst_result.values]
+    flow_pts = [(p.lat, p.lon, p.velocity_kmh, p.direction_deg)
+                for p in marine_result.values]
+
+    if not sst_pts:
+        return Response(content=b"", media_type="image/png", status_code=204)
+
+    frames = render_advected_sst_frames(
+        sst_pts, flow_pts,
+        num_frames=SST_ADV_FRAMES,
+        width=1800, height=900,
+    )
+
+    # Cache all frames
+    for i, f in enumerate(frames):
+        surface_cache.put(f"{SST_ADV_CACHE_KEY}{i}", f)
+
+    return Response(content=frames[frame_idx], media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=21600"})
 
 
 @router.get("/ocean-currents.json")
