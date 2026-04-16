@@ -252,10 +252,10 @@ function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
   );
   if (activeCategory === 'sst') return (
     <div style={legendStyle}>
-      <div style={legendTitleStyle}>Ocean — SST + Current Flow</div>
+      <div style={legendTitleStyle}>Ocean — SST 7-Day Animation</div>
       <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
       <div style={legendLabelsStyle}><span>-2°C</span><span>8</span><span>18</span><span>26</span><span>32°C</span></div>
-      <div style={{ marginTop: 4, fontSize: '9px', color: '#64748b' }}>Particles flow with ocean currents · Click for SST</div>
+      <div style={{ marginTop: 4, fontSize: '9px', color: '#64748b' }}>SST cycles 7 days · Particles: ocean currents · Click for temp</div>
     </div>
   );
   if (activeCategory === 'air-quality') return (
@@ -331,12 +331,7 @@ const SURFACE_LAYERS: Record<string, { url: string; alpha: number }> = {
   'no2-surface': { url: `${API_BASE}/globe/surface/no2.png`, alpha: 0.8 },
 };
 
-// GIBS WMTS layers — rendered with native land mask (no bleed)
-function getGibsSstDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 2); // GHRSST has ~2 day latency
-  return d.toISOString().slice(0, 10);
-}
+// GIBS date helpers removed — SST animation generates dates inline
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -353,11 +348,12 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
 
   // Track which layers are currently added
   const surfaceLayerRef = useRef<ImageryLayer | null>(null);
-  const seaIceLayerRef = useRef<ImageryLayer | null>(null);
+  const polarFillRef = useRef<ImageryLayer | null>(null);
   const gibsLayerRef = useRef<ImageryLayer | null>(null);
   const pointDataSourceRef = useRef<CustomDataSource | null>(null);
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
   const particleAnimRef = useRef<number>(0);
+  const sstAnimRef = useRef<number>(0); // SST date cycling interval
 
   // ── Lazy data fetches ────────────────────────────────────────────────────
 
@@ -547,9 +543,9 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       viewer.imageryLayers.remove(surfaceLayerRef.current);
       surfaceLayerRef.current = null;
     }
-    if (seaIceLayerRef.current) {
-      viewer.imageryLayers.remove(seaIceLayerRef.current);
-      seaIceLayerRef.current = null;
+    if (polarFillRef.current) {
+      viewer.imageryLayers.remove(polarFillRef.current);
+      polarFillRef.current = null;
     }
     if (gibsLayerRef.current) {
       viewer.imageryLayers.remove(gibsLayerRef.current);
@@ -559,10 +555,14 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       viewer.dataSources.remove(pointDataSourceRef.current);
       pointDataSourceRef.current = null;
     }
-    // Stop particle animation
+    // Stop animations
     if (particleAnimRef.current) {
       cancelAnimationFrame(particleAnimRef.current);
       particleAnimRef.current = 0;
+    }
+    if (sstAnimRef.current) {
+      clearInterval(sstAnimRef.current);
+      sstAnimRef.current = 0;
     }
     const pCanvas = particleCanvasRef.current;
     if (pCanvas) {
@@ -588,27 +588,70 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5. Add GIBS MUR SST — native land mask, ocean only
+    // 5a. Add backend OISST polar fill (below GIBS MUR)
+    // OISST covers up to 80°N/S, filling MUR's polar gaps
     if (activeLayers.has('sst-surface')) {
       try {
-        const date = getGibsSstDate();
-        const wmsUrl =
-          'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+        const polarProvider = new SingleTileImageryProvider({
+          url: `${API_BASE}/globe/surface/sst.png`,
+          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+        });
+        const polarLayer = new ImageryLayer(polarProvider, { alpha: 0.7 });
+        viewer.imageryLayers.add(polarLayer);
+        polarFillRef.current = polarLayer;
+      } catch { /* backend may be cold */ }
+    }
+
+    // 5b. Add GIBS MUR SST with 7-day animation cycle
+    // Preload 7 dates, swap every 2 seconds for "living ocean" effect
+    if (activeLayers.has('sst-surface')) {
+      const dates: string[] = [];
+      for (let i = 2; i <= 8; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().slice(0, 10));
+      }
+
+      function makeSstUrl(date: string): string {
+        return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
           '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
           '&LAYERS=GHRSST_L4_MUR_Sea_Surface_Temperature' +
           `&TIME=${date}` +
           '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
           '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
+      }
+
+      // Start with the most recent date
+      try {
         const provider = new SingleTileImageryProvider({
-          url: wmsUrl,
+          url: makeSstUrl(dates[0]),
           rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
         });
         const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
         viewer.imageryLayers.add(imgLayer);
         surfaceLayerRef.current = imgLayer;
-      } catch {
-        // GIBS may not be available
-      }
+      } catch { /* GIBS may not be available */ }
+
+      // Cycle through dates every 2 seconds
+      let dateIdx = 0;
+      sstAnimRef.current = window.setInterval(() => {
+        if (!viewerRef.current) return;
+        dateIdx = (dateIdx + 1) % dates.length;
+        try {
+          // Remove old SST layer
+          if (surfaceLayerRef.current) {
+            viewerRef.current.imageryLayers.remove(surfaceLayerRef.current);
+          }
+          // Add new date
+          const provider = new SingleTileImageryProvider({
+            url: makeSstUrl(dates[dateIdx]),
+            rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+          });
+          const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
+          viewerRef.current.imageryLayers.add(imgLayer);
+          surfaceLayerRef.current = imgLayer;
+        } catch { /* skip frame on error */ }
+      }, 2000);
     }
 
     // 6. Add GIBS CO₂ overlay via WMS
