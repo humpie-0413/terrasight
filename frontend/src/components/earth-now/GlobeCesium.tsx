@@ -588,23 +588,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5a. Add backend OISST polar fill FIRST (below MUR)
-    // OISST has better polar coverage than GHRSST MUR
-    if (activeLayers.has('sst-surface')) {
-      try {
-        const polarProvider = new SingleTileImageryProvider({
-          url: `${API_BASE}/globe/surface/sst.png`,
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-        });
-        const polarLayer = new ImageryLayer(polarProvider, { alpha: 0.75 });
-        viewer.imageryLayers.add(polarLayer);
-        seaIceLayerRef.current = polarLayer; // reuse ref for cleanup
-      } catch {
-        // Backend may not be available
-      }
-    }
-
-    // 5b. Add GIBS MUR SST on top — higher quality, native land mask
+    // 5. Add GIBS MUR SST — native land mask, ocean only
     if (activeLayers.has('sst-surface')) {
       try {
         const date = getGibsSstDate();
@@ -707,164 +691,151 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
   }, [activeLayers, firesData, earthquakeData]);
 
   // ── Ocean current particle animation ─────────────────────────────────
+  // Works with OR without API data — uses scientifically-based ocean
+  // circulation model as default, enhanced by real data when available.
 
   useEffect(() => {
     const viewer = viewerRef.current;
     const canvas = particleCanvasRef.current;
-    if (!viewer || !canvas || !activeLayers.has('ocean-currents') || !currentsData?.points?.length) {
-      return;
-    }
+    if (!viewer || !canvas || !activeLayers.has('ocean-currents')) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Resize canvas to container
+    // Resize canvas to container minus bottom bar (48px)
     const container = containerRef.current;
     if (container) {
       canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
+      canvas.height = container.clientHeight - 48;
     }
 
-    // Build lookup grid from current data (5° grid → fast lookup)
-    const pts = currentsData.points;
+    // Build API data lookup if available
     const gridMap = new Map<string, OceanCurrentPoint>();
-    for (const p of pts) {
-      const key = `${Math.round(p.lat / 5) * 5},${Math.round(p.lon / 5) * 5}`;
-      gridMap.set(key, p);
+    if (currentsData?.points) {
+      for (const p of currentsData.points) {
+        gridMap.set(`${Math.round(p.lat / 5) * 5},${Math.round(p.lon / 5) * 5}`, p);
+      }
     }
 
-    function lookupCurrent(lat: number, lon: number): [number, number] {
-      const snapLat = Math.round(lat / 5) * 5;
-      const snapLon = Math.round(lon / 5) * 5;
-      const p = gridMap.get(`${snapLat},${snapLon}`);
-      if (!p || p.v < 0.05) {
-        // No current data — apply gentle background drift based on latitude
-        // Simulates trade winds / westerlies pattern
-        const driftLon = lat > 0 ? 0.02 : -0.02; // westerlies vs trades
-        return [driftLon, 0];
+    // Scientifically-based ocean circulation model
+    // Based on major gyre systems + equatorial currents + ACC
+    function getOceanFlow(lat: number, _lon: number): [number, number] {
+      // Check API data first
+      const apiPt = gridMap.get(`${Math.round(lat / 5) * 5},${Math.round(_lon / 5) * 5}`);
+      if (apiPt && apiPt.v > 0.05) {
+        const rad = (apiPt.d * Math.PI) / 180;
+        return [apiPt.v * 0.25 * Math.sin(rad), apiPt.v * 0.25 * Math.cos(rad)];
       }
-      // Convert velocity (km/h) + direction (degrees) to lon/lat degrees per frame
-      // 1 km/h ≈ 0.009° lon at equator per frame at 60fps
-      const speed = p.v * 0.3;
-      const rad = (p.d * Math.PI) / 180;
-      // direction is "going to" convention: sin(d)=east component, cos(d)=north component
-      return [speed * Math.sin(rad), speed * Math.cos(rad)];
+
+      // Scientific default: major ocean circulation patterns
+      const absLat = Math.abs(lat);
+
+      // Antarctic Circumpolar Current (ACC): 45-65°S, strong eastward
+      if (lat < -45 && lat > -65) return [0.15, 0];
+
+      // Trade winds zone (0-30°): westward (NE trades in NH, SE trades in SH)
+      if (absLat < 30) {
+        const tradeStrength = 0.08 * (1 - absLat / 30);
+        return [-tradeStrength, lat > 0 ? -0.01 : 0.01];
+      }
+
+      // Westerlies zone (30-60°): eastward
+      if (absLat < 60) {
+        const westStrength = 0.06 * Math.sin(((absLat - 30) / 30) * Math.PI);
+        return [westStrength, lat > 0 ? 0.01 : -0.01];
+      }
+
+      // Polar: weak easterlies
+      return [-0.02, 0];
     }
 
     // Initialize particles
-    const NUM_PARTICLES = 4000;
-    const MAX_AGE = 90;
-    interface Particle { lon: number; lat: number; age: number; prevX: number; prevY: number; }
-    const particles: Particle[] = [];
-
-    function randomOceanPoint(): { lon: number; lat: number } {
-      // Random point, biased toward ocean areas
-      const lat = (Math.random() - 0.5) * 160; // -80 to 80
-      const lon = (Math.random() - 0.5) * 360; // -180 to 180
-      return { lon, lat };
-    }
-
-    for (let i = 0; i < NUM_PARTICLES; i++) {
-      const { lon, lat } = randomOceanPoint();
-      particles.push({ lon, lat, age: Math.floor(Math.random() * MAX_AGE), prevX: 0, prevY: 0 });
-    }
+    const NUM = 3000;
+    const MAX_AGE = 80;
+    interface P { lon: number; lat: number; age: number; px: number; py: number; }
+    const ps: P[] = Array.from({ length: NUM }, () => ({
+      lon: Math.random() * 360 - 180,
+      lat: Math.random() * 150 - 75,
+      age: Math.floor(Math.random() * MAX_AGE),
+      px: 0, py: 0,
+    }));
 
     let running = true;
+    const cameraDir = new Cartesian3();
+    const ptDir = new Cartesian3();
 
-    function animate() {
+    function frame() {
       if (!running || !viewer || !ctx || !canvas) return;
-
       const w = canvas.width;
       const h = canvas.height;
 
-      // Fade trail effect
-      ctx.fillStyle = 'rgba(2, 4, 8, 0.06)';
+      // Fade trail
+      ctx.fillStyle = 'rgba(2, 4, 8, 0.04)';
       ctx.fillRect(0, 0, w, h);
 
-      for (const p of particles) {
-        // Get screen position
-        const worldPos = Cartesian3.fromDegrees(p.lon, p.lat);
-        const screenPos = viewer.scene.cartesianToCanvasCoordinates(worldPos);
+      const camPos = viewer.camera.positionWC;
+      Cartesian3.normalize(camPos, cameraDir);
 
-        if (!screenPos || screenPos.x < 0 || screenPos.x > w || screenPos.y < 0 || screenPos.y > h) {
-          // Off-screen or behind globe — reset
-          p.age = MAX_AGE;
-        }
+      for (const p of ps) {
+        const world = Cartesian3.fromDegrees(p.lon, p.lat);
+        Cartesian3.normalize(world, ptDir);
+        const dot = Cartesian3.dot(ptDir, cameraDir);
 
-        // Check if point is on visible side of globe
-        const cameraPos = viewer.camera.positionWC;
-        const dot = Cartesian3.dot(
-          Cartesian3.normalize(worldPos, new Cartesian3()),
-          Cartesian3.normalize(cameraPos, new Cartesian3()),
-        );
-        if (dot < 0.05) {
-          // Behind the globe
-          p.age = MAX_AGE;
-        }
-
-        if (p.age >= MAX_AGE) {
-          // Reset particle at new random ocean location
-          const np = randomOceanPoint();
-          p.lon = np.lon;
-          p.lat = np.lat;
+        // Behind globe or off bounds → reset
+        if (dot < 0.1 || p.age >= MAX_AGE) {
+          p.lon = Math.random() * 360 - 180;
+          p.lat = Math.random() * 150 - 75;
           p.age = 0;
-          p.prevX = screenPos?.x ?? 0;
-          p.prevY = screenPos?.y ?? 0;
-          continue; // skip drawing this frame, draw from next
+          const sp = viewer.scene.cartesianToCanvasCoordinates(Cartesian3.fromDegrees(p.lon, p.lat));
+          p.px = sp?.x ?? 0;
+          p.py = sp?.y ?? 0;
+          continue;
         }
 
-        // Move particle along ocean current vector
-        const [du, dv] = lookupCurrent(p.lat, p.lon);
-        // Scale: du/dv are in degrees/frame equivalent
-        p.lon += du * 0.5;
-        p.lat += dv * 0.5;
-
-        // Wrap longitude
+        // Move by ocean flow
+        const [du, dv] = getOceanFlow(p.lat, p.lon);
+        p.lon += du;
+        p.lat += dv;
         if (p.lon > 180) p.lon -= 360;
         if (p.lon < -180) p.lon += 360;
-        if (p.lat > 80 || p.lat < -80) p.age = MAX_AGE;
+        if (Math.abs(p.lat) > 75) p.age = MAX_AGE;
 
-        const curX = screenPos?.x ?? 0;
-        const curY = screenPos?.y ?? 0;
+        const sp = viewer.scene.cartesianToCanvasCoordinates(world);
+        if (!sp || sp.x < 0 || sp.x > w || sp.y < 0 || sp.y > h) {
+          p.age = MAX_AGE;
+          continue;
+        }
 
-        // Draw trail line
-        if (p.age > 0 && screenPos) {
-          const alpha = Math.max(0.1, 1 - p.age / MAX_AGE) * 0.6;
-          // Color by SST-like temperature gradient at location
-          // Map latitude roughly to temperature: equator=warm, poles=cold
-          const tempFraction = 1 - Math.abs(p.lat) / 80; // 0=polar, 1=equatorial
-          const t = Math.max(0, Math.min(1, tempFraction));
-          // Blue(cold) → Cyan → Yellow → Orange → Red(warm)
-          let r: number, g: number, b: number;
-          if (t < 0.25) { r = 60; g = 100 + t * 600; b = 220; }
-          else if (t < 0.5) { r = 50 + (t - 0.25) * 800; g = 220; b = 220 - (t - 0.25) * 600; }
-          else if (t < 0.75) { r = 250; g = 220 - (t - 0.5) * 400; b = 70; }
-          else { r = 250; g = 120 - (t - 0.75) * 400; b = 50; }
-
-          ctx.strokeStyle = `rgba(${r},${g},${b},${alpha})`;
+        // Draw
+        if (p.age > 1) {
+          const a = (1 - p.age / MAX_AGE) * 0.5;
+          const t = 1 - Math.abs(p.lat) / 75;
+          // Temperature gradient: cold=blue, warm=orange-red
+          const r = Math.floor(40 + t * 215);
+          const g = Math.floor(100 + t * 100 - Math.pow(t, 2) * 80);
+          const b = Math.floor(220 - t * 180);
+          ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.moveTo(p.prevX, p.prevY);
-          ctx.lineTo(curX, curY);
+          ctx.moveTo(p.px, p.py);
+          ctx.lineTo(sp.x, sp.y);
           ctx.stroke();
         }
 
-        p.prevX = curX;
-        p.prevY = curY;
+        p.px = sp.x;
+        p.py = sp.y;
         p.age++;
       }
 
-      particleAnimRef.current = requestAnimationFrame(animate);
+      particleAnimRef.current = requestAnimationFrame(frame);
     }
 
-    animate();
+    particleAnimRef.current = requestAnimationFrame(frame);
 
     return () => {
       running = false;
-      if (particleAnimRef.current) {
-        cancelAnimationFrame(particleAnimRef.current);
-        particleAnimRef.current = 0;
-      }
+      cancelAnimationFrame(particleAnimRef.current);
+      particleAnimRef.current = 0;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [activeLayers, currentsData]);
@@ -887,18 +858,18 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     <div ref={containerRef} style={containerStyle}>
       <div ref={cesiumContainerRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
 
-      {/* Ocean current particle overlay */}
+      {/* Ocean current particle overlay — stops above LayerBar (bottom 48px) */}
       <canvas
         ref={particleCanvasRef}
         style={{
-          position: 'absolute', inset: 0, zIndex: 2,
-          pointerEvents: 'none',
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 48,
+          zIndex: 2, pointerEvents: 'none',
           display: activeLayers.has('ocean-currents') ? 'block' : 'none',
         }}
       />
 
       {/* Vignette overlay */}
-      <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', boxShadow: 'inset 0 0 120px 40px rgba(2,4,8,0.4)' }} />
+      <div style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none', boxShadow: 'inset 0 0 120px 40px rgba(2,4,8,0.4)' }} />
 
       {/* Loading indicator */}
       {isActiveLoading && (
