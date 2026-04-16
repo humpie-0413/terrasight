@@ -67,7 +67,7 @@ interface EarthquakeResponse { count: number; configured: boolean; status: strin
 interface OceanCurrentPoint { lat: number; lon: number; v: number; d: number; }
 interface OceanCurrentsResponse { status: string; count: number; points: OceanCurrentPoint[]; }
 
-// ─── GIBS date helper ─────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getGibsDate(): string {
   const d = new Date();
@@ -75,23 +75,42 @@ function getGibsDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
+function gibsSstWmsUrl(date: string): string {
+  return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+    '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
+    '&LAYERS=GHRSST_L4_MUR_Sea_Surface_Temperature' +
+    `&TIME=${date}` +
+    '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
+    '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
+}
+
+/** Async helper: create SingleTileImageryProvider + add to viewer */
+async function addSingleTileLayer(
+  viewer: Viewer,
+  url: string,
+  alpha: number,
+): Promise<ImageryLayer | null> {
+  try {
+    const provider = await SingleTileImageryProvider.fromUrl(url, {
+      rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+    });
+    const layer = new ImageryLayer(provider, { alpha });
+    viewer.imageryLayers.add(layer);
+    return layer;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Categories ───────────────────────────────────────────────────────────────
 
 interface CategoryDef {
-  key: string;
-  icon: string;
-  name: string;
-  question: string;
-  activeColor: string;
-  tag: TrustTag;
-  cadence: string;
-  source: string;
-  sourceUrl: string;
-  activates: string[];
+  key: string; icon: string; name: string; question: string;
+  activeColor: string; tag: TrustTag; cadence: string;
+  source: string; sourceUrl: string; activates: string[];
 }
 
 const CATEGORIES: CategoryDef[] = [
-  // ── Continuous Surfaces (self-rendered PNGs) ────────────────────────
   {
     key: 'air-quality', icon: '🌬️', name: 'Air Quality',
     question: 'How is the air today?',
@@ -127,7 +146,6 @@ const CATEGORIES: CategoryDef[] = [
     source: 'Open-Meteo / CAMS Global NO₂', sourceUrl: 'https://open-meteo.com/en/docs/air-quality-api',
     activates: ['no2-surface'],
   },
-  // ── Event Layers (point data) ──────────────────────────────────────
   {
     key: 'wildfires', icon: '🔥', name: 'Wildfires',
     question: 'Where are fires burning?',
@@ -151,9 +169,7 @@ const CATEGORIES: CategoryDef[] = [
   },
 ];
 
-const CATEGORY_LOOKUP = new Map<string, CategoryDef>(
-  CATEGORIES.map((c) => [c.key, c]),
-);
+const CATEGORY_LOOKUP = new Map(CATEGORIES.map((c) => [c.key, c]));
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -170,45 +186,33 @@ function earthquakeColor(mag: number): Color {
   if (mag < 5) return Color.fromCssColorString('#eab308').withAlpha(0.8);
   if (mag < 6) return Color.fromCssColorString('#f97316').withAlpha(0.85);
   if (mag < 7) return Color.fromCssColorString('#ef4444').withAlpha(0.9);
-  return Color.fromCssColorString('#991b1b').withAlpha(1.0);
+  return Color.fromCssColorString('#991b1b');
 }
 
-// ─── LayerBar ─────────────────────────────────────────────────────────────────
+// ─── UI Components (LayerBar, Legend, Tooltip) ────────────────────────────────
 
-function LayerBar({
-  activeCategory, onCategoryChange, viewMode, onViewModeChange,
-}: {
-  activeCategory: ActiveCategory;
-  onCategoryChange: (key: ActiveCategory) => void;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
+function LayerBar({ activeCategory, onCategoryChange, viewMode, onViewModeChange }: {
+  activeCategory: ActiveCategory; onCategoryChange: (k: ActiveCategory) => void;
+  viewMode: ViewMode; onViewModeChange: (m: ViewMode) => void;
 }) {
   return (
     <div style={layerBarStyle}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '3px', overflowX: 'auto', paddingBottom: 2 }}>
-        <button type="button"
-          onClick={() => onViewModeChange(viewMode === 'globe' ? 'map' : 'globe')}
-          style={{
-            padding: '6px 10px', background: 'rgba(59,130,246,0.12)',
-            border: '1px solid rgba(59,130,246,0.2)', borderRadius: '6px',
-            color: '#94a3b8', fontSize: '12px', cursor: 'pointer',
-            fontFamily: 'system-ui, sans-serif', flexShrink: 0,
-          }}>
+        <button type="button" onClick={() => onViewModeChange(viewMode === 'globe' ? 'map' : 'globe')}
+          style={{ padding: '6px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)',
+            borderRadius: '6px', color: '#94a3b8', fontSize: '12px', cursor: 'pointer', fontFamily: 'system-ui', flexShrink: 0 }}>
           {viewMode === 'globe' ? '3D' : '2D'}
         </button>
-
         <div style={{ width: 1, height: 20, background: 'rgba(51,65,85,0.4)', margin: '0 4px', flexShrink: 0 }} />
-
         {CATEGORIES.map((cat) => {
           const active = activeCategory === cat.key;
           return (
             <button key={cat.key} type="button"
               onClick={() => onCategoryChange(active ? null : cat.key as ActiveCategory)}
               style={{
-                display: 'flex', alignItems: 'center', gap: '4px',
-                padding: '5px 12px', fontSize: '11px', fontWeight: active ? 700 : 500,
-                border: '1px solid', borderRadius: '16px',
-                cursor: 'pointer', fontFamily: 'system-ui, sans-serif',
+                display: 'flex', alignItems: 'center', gap: '4px', padding: '5px 12px',
+                fontSize: '11px', fontWeight: active ? 700 : 500, border: '1px solid',
+                borderRadius: '16px', cursor: 'pointer', fontFamily: 'system-ui',
                 whiteSpace: 'nowrap', flexShrink: 0,
                 background: active ? cat.activeColor : 'rgba(30,41,59,0.5)',
                 color: active ? '#fff' : '#94a3b8',
@@ -226,70 +230,41 @@ function LayerBar({
   );
 }
 
-// ─── Legend ────────────────────────────────────────────────────────────────────
-
 function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
-  if (activeCategory === 'wildfires') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>Fire Radiative Power (MW)</div>
-      <div style={{ background: 'linear-gradient(to right, rgb(255,230,120), rgb(255,200,60), rgb(255,160,20), rgb(245,100,10), rgb(220,50,10), rgb(180,20,20))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>0</span><span>50</span><span>200</span><span>500+</span></div>
-    </div>
-  );
-  if (activeCategory === 'earthquakes') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>Earthquake Magnitude</div>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        {[{ label: 'M4', color: '#eab308', size: 8 }, { label: 'M5', color: '#f97316', size: 10 },
-          { label: 'M6', color: '#ef4444', size: 13 }, { label: 'M7+', color: '#991b1b', size: 16 }].map((e) => (
-          <span key={e.label} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-            <span style={{ width: e.size, height: e.size, borderRadius: '50%', background: e.color, display: 'inline-block' }} />
-            <span style={{ fontSize: '10px', color: '#94a3b8' }}>{e.label}</span>
-          </span>
-        ))}
+  const legends: Record<string, { title: string; gradient: string; labels: string[]; note?: string }> = {
+    wildfires: { title: 'Fire Radiative Power (MW)', gradient: 'linear-gradient(to right, rgb(255,230,120), rgb(255,160,20), rgb(220,50,10), rgb(180,20,20))', labels: ['0','50','200','500+'] },
+    sst: { title: 'Ocean — SST 7-Day + Current Flow', gradient: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', labels: ['-2°C','8','18','26','32°C'], note: 'SST cycles 7 days · Particles: currents · Click for temp' },
+    'air-quality': { title: 'PM2.5 (µg/m³)', gradient: 'linear-gradient(to right, rgb(0,128,0), rgb(255,255,0), rgb(255,126,0), rgb(255,0,0), rgb(126,0,35))', labels: ['0','12','35','55','75+'] },
+    temperature: { title: '2m Temperature (°C)', gradient: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(171,217,233), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', labels: ['-40','-20','0','20','50'] },
+    precipitation: { title: 'Precipitation (mm)', gradient: 'linear-gradient(to right, rgba(198,219,239,0.3), rgb(107,174,214), rgb(49,130,189), rgb(8,81,156))', labels: ['0','5','10','20+'] },
+    no2: { title: 'NO₂ (µg/m³)', gradient: 'linear-gradient(to right, rgb(255,255,178), rgb(253,141,60), rgb(240,59,32), rgb(189,0,38))', labels: ['0','20','40','80+'] },
+  };
+  const cfg = activeCategory ? legends[activeCategory] : null;
+  if (!cfg) {
+    if (activeCategory === 'earthquakes') return (
+      <div style={legendStyle}>
+        <div style={legendTitleStyle}>Earthquake Magnitude</div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {[{l:'M4',c:'#eab308',s:8},{l:'M5',c:'#f97316',s:10},{l:'M6',c:'#ef4444',s:13},{l:'M7+',c:'#991b1b',s:16}].map(e=>(
+            <span key={e.l} style={{display:'inline-flex',alignItems:'center',gap:'3px'}}>
+              <span style={{width:e.s,height:e.s,borderRadius:'50%',background:e.c,display:'inline-block'}}/>
+              <span style={{fontSize:'10px',color:'#94a3b8'}}>{e.l}</span>
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
-  );
-  if (activeCategory === 'sst') return (
+    );
+    return null;
+  }
+  return (
     <div style={legendStyle}>
-      <div style={legendTitleStyle}>Ocean — SST 7-Day Animation</div>
-      <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(116,173,209), rgb(253,174,97), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>-2°C</span><span>8</span><span>18</span><span>26</span><span>32°C</span></div>
-      <div style={{ marginTop: 4, fontSize: '9px', color: '#64748b' }}>SST cycles 7 days · Particles: ocean currents · Click for temp</div>
+      <div style={legendTitleStyle}>{cfg.title}</div>
+      <div style={{ background: cfg.gradient, height: 10, borderRadius: 3 }} />
+      <div style={legendLabelsStyle}>{cfg.labels.map((l,i)=><span key={i}>{l}</span>)}</div>
+      {cfg.note && <div style={{ marginTop: 4, fontSize: '9px', color: '#64748b' }}>{cfg.note}</div>}
     </div>
   );
-  if (activeCategory === 'air-quality') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>PM2.5 (µg/m³)</div>
-      <div style={{ background: 'linear-gradient(to right, rgb(0,128,0), rgb(255,255,0), rgb(255,126,0), rgb(255,0,0), rgb(143,63,151), rgb(126,0,35))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>0</span><span>12</span><span>35</span><span>55</span><span>75+</span></div>
-    </div>
-  );
-  if (activeCategory === 'temperature') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>2m Temperature (°C)</div>
-      <div style={{ background: 'linear-gradient(to right, rgb(49,54,149), rgb(69,117,180), rgb(116,173,209), rgb(171,217,233), rgb(253,174,97), rgb(244,109,67), rgb(215,48,39), rgb(165,0,38))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>-40</span><span>-20</span><span>0</span><span>20</span><span>50</span></div>
-    </div>
-  );
-  if (activeCategory === 'precipitation') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>Precipitation (mm)</div>
-      <div style={{ background: 'linear-gradient(to right, rgba(198,219,239,0.3), rgb(158,202,225), rgb(107,174,214), rgb(49,130,189), rgb(8,81,156))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>0</span><span>5</span><span>10</span><span>20+</span></div>
-    </div>
-  );
-  if (activeCategory === 'no2') return (
-    <div style={legendStyle}>
-      <div style={legendTitleStyle}>NO₂ (µg/m³)</div>
-      <div style={{ background: 'linear-gradient(to right, rgb(255,255,178), rgb(254,204,92), rgb(253,141,60), rgb(240,59,32), rgb(189,0,38))', height: 10, borderRadius: 3 }} />
-      <div style={legendLabelsStyle}><span>0</span><span>20</span><span>40</span><span>60</span><span>80+</span></div>
-    </div>
-  );
-  return null;
 }
-
-// ─── Tooltip ──────────────────────────────────────────────────────────────────
 
 interface TooltipInfo { x: number; y: number; html: string; pinned?: boolean; }
 
@@ -301,29 +276,21 @@ function Tooltip({ info, onClose }: { info: TooltipInfo | null; onClose: () => v
       pointerEvents: info.pinned ? 'auto' : 'none',
       background: 'rgba(12,18,32,0.94)', color: '#f1f5f9', padding: '10px 14px',
       border: '1px solid rgba(71,85,105,0.35)', borderRadius: '10px',
-      fontSize: '12px', lineHeight: '1.5', fontFamily: 'system-ui, sans-serif',
+      fontSize: '12px', lineHeight: '1.5', fontFamily: 'system-ui',
       maxWidth: 300, zIndex: 25, backdropFilter: 'blur(14px)',
       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
     }}>
-      {info.pinned && (
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            position: 'absolute', top: 4, right: 6,
-            background: 'none', border: 'none', color: '#64748b',
-            cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '2px',
-          }}
-        >✕</button>
-      )}
+      {info.pinned && <button type="button" onClick={onClose} style={{
+        position:'absolute',top:4,right:6,background:'none',border:'none',
+        color:'#64748b',cursor:'pointer',fontSize:'14px',padding:'2px'
+      }}>✕</button>}
       <div dangerouslySetInnerHTML={{ __html: info.html }} />
     </div>
   );
 }
 
-// ─── Surface PNG layer map ────────────────────────────────────────────────────
+// ─── Surface PNG map ──────────────────────────────────────────────────────────
 
-// Self-rendered surface PNGs (backend → SingleTileImageryProvider)
 const SURFACE_LAYERS: Record<string, { url: string; alpha: number }> = {
   'pm25-surface': { url: `${API_BASE}/globe/surface/pm25.png`, alpha: 0.8 },
   'temp-surface': { url: `${API_BASE}/globe/surface/temperature.png`, alpha: 0.8 },
@@ -331,67 +298,46 @@ const SURFACE_LAYERS: Record<string, { url: string; alpha: number }> = {
   'no2-surface': { url: `${API_BASE}/globe/surface/no2.png`, alpha: 0.8 },
 };
 
-// GIBS date helpers removed — SST animation generates dates inline
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
-  { activeCategory, onCategoryChange },
-  ref,
+  { activeCategory, onCategoryChange }, ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const cesiumContainerRef = useRef<HTMLDivElement>(null);
+  const cesiumRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('globe');
   const [tooltipInfo, setTooltipInfo] = useState<TooltipInfo | null>(null);
   const lastInteractionRef = useRef(0);
 
-  // Track which layers are currently added
+  // Layer refs
   const surfaceLayerRef = useRef<ImageryLayer | null>(null);
   const gibsLayerRef = useRef<ImageryLayer | null>(null);
-  const pointDataSourceRef = useRef<CustomDataSource | null>(null);
+  const pointDsRef = useRef<CustomDataSource | null>(null);
+  const sstTimerRef = useRef<number>(0);
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
-  const sstAnimRef = useRef<number>(0); // SST date cycling interval
 
-  // ── Lazy data fetches ────────────────────────────────────────────────────
-
+  // Data fetches
   const needsFires = activeCategory === 'wildfires';
   const needsQuakes = activeCategory === 'earthquakes';
-  const needsOceanCurrents = activeCategory === 'sst';
+  const needsCurrents = activeCategory === 'sst';
+  const { data: firesData, loading: firesLoading } = useApi<FiresResponse>('/earth-now/fires', needsFires);
+  const { data: quakeData, loading: quakesLoading } = useApi<EarthquakeResponse>('/hazards/earthquakes?min_magnitude=4&limit=500&days=7', needsQuakes);
+  const { data: currentsData } = useApi<OceanCurrentsResponse>('/globe/surface/ocean-currents.json', needsCurrents);
 
-  const { data: firesData, loading: firesLoading } = useApi<FiresResponse>(
-    '/earth-now/fires', needsFires,
-  );
-  const { data: earthquakeData, loading: quakesLoading } = useApi<EarthquakeResponse>(
-    '/hazards/earthquakes?min_magnitude=4&limit=500&days=7', needsQuakes,
-  );
-  const { data: currentsData } = useApi<OceanCurrentsResponse>(
-    '/globe/surface/ocean-currents.json', needsOceanCurrents,
-  );
-
-  // ── Cesium Viewer initialization ─────────────────────────────────────────
+  // ── Viewer init ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!cesiumContainerRef.current || viewerRef.current) return;
-
+    if (!cesiumRef.current || viewerRef.current) return;
     Ion.defaultAccessToken = CESIUM_TOKEN;
 
-    const viewer = new Viewer(cesiumContainerRef.current, {
-      animation: false,
-      timeline: false,
-      homeButton: false,
-      geocoder: false,
-      navigationHelpButton: false,
-      baseLayerPicker: false,
-      fullscreenButton: false,
-      vrButton: false,
-      selectionIndicator: false,
-      infoBox: false,
-      sceneModePicker: false,
-      creditContainer: document.createElement('div'), // hide credits overlay
+    const viewer = new Viewer(cesiumRef.current, {
+      animation: false, timeline: false, homeButton: false, geocoder: false,
+      navigationHelpButton: false, baseLayerPicker: false, fullscreenButton: false,
+      vrButton: false, selectionIndicator: false, infoBox: false, sceneModePicker: false,
+      creditContainer: document.createElement('div'),
     });
 
-    // Dark space atmosphere
     viewer.scene.backgroundColor = Color.fromCssColorString('#020408');
     viewer.scene.globe.enableLighting = false;
     if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true;
@@ -400,312 +346,157 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     if (viewer.scene.skyBox) (viewer.scene.skyBox as unknown as { show: boolean }).show = false;
     if (viewer.scene.sun) viewer.scene.sun.show = false;
     if (viewer.scene.moon) viewer.scene.moon.show = false;
-
-    // Dark space fog for atmosphere glow
     viewer.scene.globe.atmosphereLightIntensity = 20.0;
     viewer.scene.globe.atmosphereRayleighCoefficient = new Cartesian3(5.5e-6, 13.0e-6, 28.4e-6);
+    viewer.camera.setView({ destination: Cartesian3.fromDegrees(0, 20, 20000000) });
 
-    // Initial camera position
-    viewer.camera.setView({
-      destination: Cartesian3.fromDegrees(0, 20, 20000000),
-    });
-
-    // Hover handler for tooltips
+    // Hover
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((movement: { endPosition: { x: number; y: number } }) => {
+    handler.setInputAction((m: { endPosition: { x: number; y: number } }) => {
       lastInteractionRef.current = Date.now();
-      const pos = new Cartesian2(movement.endPosition.x, movement.endPosition.y);
-      const picked = viewer.scene.pick(pos);
+      const picked = viewer.scene.pick(new Cartesian2(m.endPosition.x, m.endPosition.y));
       if (defined(picked) && picked.id instanceof Entity && picked.id.properties) {
-        const props = picked.id.properties;
-        const type = props.type?.getValue() as string | undefined;
+        const p = picked.id.properties;
+        const t = p.type?.getValue() as string | undefined;
         let html = '';
-
-        if (type === 'fire') {
-          const frp = props.frp?.getValue();
-          const lat = props.lat?.getValue();
-          const lon = props.lon?.getValue();
-          const date = props.acq_date?.getValue();
-          const time = props.acq_time?.getValue();
-          html = `<b>Fire hotspot</b><br/>${date} ${time} UTC<br/>FRP: ${frp?.toFixed(1)} MW<br/>${lat?.toFixed(2)}°, ${lon?.toFixed(2)}°`;
-        } else if (type === 'earthquake') {
-          const mag = props.magnitude?.getValue();
-          const place = props.place?.getValue();
-          const depth = props.depth_km?.getValue();
-          const time_utc = props.time_utc?.getValue();
-          const tsunami = props.tsunami?.getValue();
-          html = `<b>M${mag?.toFixed(1)}</b> — ${place}<br/>Depth: ${depth?.toFixed(1)} km<br/>${time_utc} UTC${tsunami ? '<br/><span style="color:#ef4444;font-weight:600">⚠ Tsunami</span>' : ''}`;
-        }
-
-        if (html) {
-          setTooltipInfo((prev) => prev?.pinned ? prev : { x: movement.endPosition.x, y: movement.endPosition.y, html });
-        } else {
-          setTooltipInfo((prev) => prev?.pinned ? prev : null);
-        }
-      } else {
-        setTooltipInfo((prev) => prev?.pinned ? prev : null);
-      }
+        if (t === 'fire') html = `<b>Fire</b><br/>FRP: ${p.frp?.getValue()?.toFixed(1)} MW<br/>${p.lat?.getValue()?.toFixed(2)}°, ${p.lon?.getValue()?.toFixed(2)}°`;
+        else if (t === 'earthquake') html = `<b>M${p.magnitude?.getValue()?.toFixed(1)}</b> — ${p.place?.getValue()}<br/>Depth: ${p.depth_km?.getValue()?.toFixed(1)} km`;
+        if (html) setTooltipInfo(prev => prev?.pinned ? prev : { x: m.endPosition.x, y: m.endPosition.y, html });
+        else setTooltipInfo(prev => prev?.pinned ? prev : null);
+      } else setTooltipInfo(prev => prev?.pinned ? prev : null);
     }, ScreenSpaceEventType.MOUSE_MOVE);
 
-    // Click handler — show lat/lon + approximate SST at clicked point
-    handler.setInputAction((click: { position: { x: number; y: number } }) => {
+    // Click for SST
+    handler.setInputAction((c: { position: { x: number; y: number } }) => {
       lastInteractionRef.current = Date.now();
-      const ray = viewer.camera.getPickRay(new Cartesian2(click.position.x, click.position.y));
+      const ray = viewer.camera.getPickRay(new Cartesian2(c.position.x, c.position.y));
       if (!ray) return;
-      const cartesian = viewer.scene.globe.pick(ray, viewer.scene);
-      if (!cartesian) {
-        setTooltipInfo(null); // clicked empty space → dismiss
-        return;
-      }
-      const carto = Cartographic.fromCartesian(cartesian);
+      const cart = viewer.scene.globe.pick(ray, viewer.scene);
+      if (!cart) { setTooltipInfo(null); return; }
+      const carto = Cartographic.fromCartesian(cart);
       const lat = CesiumMath.toDegrees(carto.latitude);
       const lon = CesiumMath.toDegrees(carto.longitude);
-      // Approximate SST from latitude (equator ~28°C, poles ~-2°C)
-      const approxSST = 28 - Math.abs(lat) * 0.38;
-      const isOcean = Math.abs(lat) < 85; // rough check
-      const html = isOcean
-        ? `<b>${lat.toFixed(1)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(1)}°${lon >= 0 ? 'E' : 'W'}</b><br/>` +
-          `SST ≈ <b style="color:${approxSST > 20 ? '#ef4444' : approxSST > 10 ? '#f97316' : '#3b82f6'}">${approxSST.toFixed(1)}°C</b><br/>` +
-          `<span style="color:#64748b;font-size:10px">Approximate from GHRSST MUR</span>`
-        : `<b>${lat.toFixed(1)}°, ${Math.abs(lon).toFixed(1)}°</b><br/><span style="color:#64748b">Ice/Land — no SST data</span>`;
-      setTooltipInfo({ x: click.position.x, y: click.position.y, html, pinned: true });
+      const sst = 28 - Math.abs(lat) * 0.38;
+      const html = Math.abs(lat) < 85
+        ? `<b>${lat.toFixed(1)}°${lat>=0?'N':'S'}, ${Math.abs(lon).toFixed(1)}°${lon>=0?'E':'W'}</b><br/>SST ≈ <b style="color:${sst>20?'#ef4444':sst>10?'#f97316':'#3b82f6'}">${sst.toFixed(1)}°C</b>`
+        : `<b>${lat.toFixed(1)}°, ${Math.abs(lon).toFixed(1)}°</b><br/><span style="color:#64748b">No SST data</span>`;
+      setTooltipInfo({ x: c.position.x, y: c.position.y, html, pinned: true });
     }, ScreenSpaceEventType.LEFT_CLICK);
 
-    // Track user interaction for auto-rotation
     handler.setInputAction(() => { lastInteractionRef.current = Date.now(); }, ScreenSpaceEventType.LEFT_DOWN);
     handler.setInputAction(() => { lastInteractionRef.current = Date.now(); }, ScreenSpaceEventType.WHEEL);
-
     viewerRef.current = viewer;
-
-    return () => {
-      handler.destroy();
-      viewer.destroy();
-      viewerRef.current = null;
-    };
+    return () => { handler.destroy(); viewer.destroy(); viewerRef.current = null; };
   }, []);
 
-  // ── flyTo imperative handle ──────────────────────────────────────────────
-
   useImperativeHandle(ref, () => ({
-    flyTo: (lat: number, lng: number, altitude = 1.8) => {
-      viewerRef.current?.camera.flyTo({
-        destination: Cartesian3.fromDegrees(lng, lat, altitude * 6371000),
-        duration: 1.5,
-      });
-    },
+    flyTo: (lat, lng, alt = 1.8) => viewerRef.current?.camera.flyTo({ destination: Cartesian3.fromDegrees(lng, lat, alt * 6371000), duration: 1.5 }),
   }), []);
 
-  // ── Auto-rotation ────────────────────────────────────────────────────────
-
+  // Auto-rotate
   useEffect(() => {
     if (viewMode !== 'globe') return;
-    let rafId: number;
-    const rotate = () => {
-      const viewer = viewerRef.current;
-      if (viewer && Date.now() - lastInteractionRef.current > 8000) {
-        viewer.scene.camera.rotateRight(0.001);
-      }
-      rafId = requestAnimationFrame(rotate);
-    };
-    rafId = requestAnimationFrame(rotate);
-    return () => cancelAnimationFrame(rafId);
+    let id: number;
+    const r = () => { if (viewerRef.current && Date.now() - lastInteractionRef.current > 8000) viewerRef.current.scene.camera.rotateRight(0.001); id = requestAnimationFrame(r); };
+    id = requestAnimationFrame(r);
+    return () => cancelAnimationFrame(id);
   }, [viewMode]);
 
-  // ── View mode switching ──────────────────────────────────────────────────
+  // View mode
+  useEffect(() => { const v = viewerRef.current; if (!v) return; viewMode === 'globe' ? v.scene.morphTo3D(1) : v.scene.morphTo2D(1); }, [viewMode]);
 
-  useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-    if (viewMode === 'globe') {
-      viewer.scene.morphTo3D(1.0);
-    } else {
-      viewer.scene.morphTo2D(1.0);
-    }
-  }, [viewMode]);
+  const activeLayers = useMemo(() => new Set(CATEGORIES.find(c => c.key === activeCategory)?.activates ?? []), [activeCategory]);
 
-  // ── Active layers from category ──────────────────────────────────────────
-
-  const activeLayers = useMemo(() => {
-    const cat = CATEGORIES.find((c) => c.key === activeCategory);
-    return new Set(cat?.activates ?? []);
-  }, [activeCategory]);
-
-  // ── Layer management — update Cesium layers when category changes ────────
+  // ── Layer management ─────────────────────────────────────────────────────
 
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
 
-    // 1. Remove previous overlays
-    if (surfaceLayerRef.current) {
-      viewer.imageryLayers.remove(surfaceLayerRef.current);
-      surfaceLayerRef.current = null;
-    }
-    if (gibsLayerRef.current) {
-      viewer.imageryLayers.remove(gibsLayerRef.current);
-      gibsLayerRef.current = null;
-    }
-    if (pointDataSourceRef.current) {
-      viewer.dataSources.remove(pointDataSourceRef.current);
-      pointDataSourceRef.current = null;
-    }
-    // Stop SST date cycling (particle cleanup is in its own effect)
-    if (sstAnimRef.current) {
-      clearInterval(sstAnimRef.current);
-      sstAnimRef.current = 0;
-    }
+    // Cleanup
+    if (surfaceLayerRef.current) { viewer.imageryLayers.remove(surfaceLayerRef.current); surfaceLayerRef.current = null; }
+    if (gibsLayerRef.current) { viewer.imageryLayers.remove(gibsLayerRef.current); gibsLayerRef.current = null; }
+    if (pointDsRef.current) { viewer.dataSources.remove(pointDsRef.current); pointDsRef.current = null; }
+    if (sstTimerRef.current) { clearInterval(sstTimerRef.current); sstTimerRef.current = 0; }
 
-    // 4. Add self-rendered surface PNG (PM2.5, Temperature, Precipitation, NO₂)
+    // Self-rendered surfaces (PM2.5, Temp, Precip, NO₂)
     for (const [key, cfg] of Object.entries(SURFACE_LAYERS)) {
       if (activeLayers.has(key)) {
-        try {
-          const provider = new SingleTileImageryProvider({
-            url: cfg.url,
-            rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-          });
-          const imgLayer = new ImageryLayer(provider, { alpha: cfg.alpha });
-          viewer.imageryLayers.add(imgLayer);
-          surfaceLayerRef.current = imgLayer;
-        } catch {
-          // Provider creation may fail if URL not ready
-        }
+        (async () => {
+          const layer = await addSingleTileLayer(viewer, cfg.url, cfg.alpha);
+          if (layer) surfaceLayerRef.current = layer;
+        })();
         break;
       }
     }
 
-    // 5. Add GIBS MUR SST with 7-day animation cycle
-    // No OISST polar fill — it bleeds into land due to Gaussian smoothing.
-    // MUR covers 55% (ice-free ocean). Polar ice = satellite base imagery.
+    // SST 7-day animation
     if (activeLayers.has('sst-surface')) {
       const dates: string[] = [];
-      for (let i = 2; i <= 8; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dates.push(d.toISOString().slice(0, 10));
-      }
+      for (let i = 2; i <= 8; i++) { const d = new Date(); d.setDate(d.getDate() - i); dates.push(d.toISOString().slice(0, 10)); }
 
-      function makeSstUrl(date: string): string {
-        return 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
-          '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
-          '&LAYERS=GHRSST_L4_MUR_Sea_Surface_Temperature' +
-          `&TIME=${date}` +
-          '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
-          '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
-      }
+      // Load first date
+      (async () => {
+        const layer = await addSingleTileLayer(viewer, gibsSstWmsUrl(dates[0]), 0.85);
+        if (layer) surfaceLayerRef.current = layer;
+      })();
 
-      // Start with the most recent date
-      try {
-        const provider = new SingleTileImageryProvider({
-          url: makeSstUrl(dates[0]),
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-        });
-        const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
-        viewer.imageryLayers.add(imgLayer);
-        surfaceLayerRef.current = imgLayer;
-      } catch { /* GIBS may not be available */ }
-
-      // Cycle through dates every 2.5 seconds
-      let dateIdx = 0;
-      sstAnimRef.current = window.setInterval(() => {
-        if (!viewerRef.current) return;
-        dateIdx = (dateIdx + 1) % dates.length;
-        try {
-          if (surfaceLayerRef.current) {
-            viewerRef.current.imageryLayers.remove(surfaceLayerRef.current);
-          }
-          const provider = new SingleTileImageryProvider({
-            url: makeSstUrl(dates[dateIdx]),
-            rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-          });
-          const imgLayer = new ImageryLayer(provider, { alpha: 0.85 });
-          viewerRef.current.imageryLayers.add(imgLayer);
-          surfaceLayerRef.current = imgLayer;
-        } catch { /* skip frame on error */ }
+      // Cycle dates
+      let idx = 0;
+      sstTimerRef.current = window.setInterval(() => {
+        const v = viewerRef.current;
+        if (!v) return;
+        idx = (idx + 1) % dates.length;
+        (async () => {
+          if (surfaceLayerRef.current) v.imageryLayers.remove(surfaceLayerRef.current);
+          const layer = await addSingleTileLayer(v, gibsSstWmsUrl(dates[idx]), 0.85);
+          if (layer) surfaceLayerRef.current = layer;
+        })();
       }, 2500);
     }
 
-    // 6. Add GIBS CO₂ overlay via WMS
+    // GIBS CO₂
     if (activeLayers.has('gibs-oco2')) {
-      try {
-        const date = getGibsDate();
-        const wmsUrl =
-          'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
-          '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1' +
-          '&LAYERS=OCO2_L2_CO2_Total_Column_Day' +
-          `&TIME=${date}` +
-          '&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048' +
-          '&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=';
-        const provider = new SingleTileImageryProvider({
-          url: wmsUrl,
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-        });
-        const imgLayer = new ImageryLayer(provider, { alpha: 0.6 });
-        viewer.imageryLayers.add(imgLayer);
-        gibsLayerRef.current = imgLayer;
-      } catch {
-        // GIBS may not be available
-      }
+      const d = getGibsDate();
+      const url = 'https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi' +
+        '?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=OCO2_L2_CO2_Total_Column_Day' +
+        `&TIME=${d}&BBOX=-180,-90,180,90&WIDTH=4096&HEIGHT=2048&SRS=EPSG:4326&FORMAT=image/png&TRANSPARENT=TRUE&STYLES=`;
+      (async () => {
+        const layer = await addSingleTileLayer(viewer, url, 0.6);
+        if (layer) gibsLayerRef.current = layer;
+      })();
     }
 
-    // 6. Add fire points
+    // Fires
     if (activeLayers.has('fires') && firesData?.fires) {
       const ds = new CustomDataSource('fires');
       for (const f of firesData.fires) {
         ds.entities.add({
           position: Cartesian3.fromDegrees(f.lon, f.lat),
-          point: {
-            pixelSize: Math.max(3, Math.min(12, 3 + Math.log10(Math.max(f.frp, 1)) * 3)),
-            color: fireColor(f.frp),
-            outlineWidth: 0,
-            heightReference: HeightReference.CLAMP_TO_GROUND,
-            scaleByDistance: new NearFarScalar(1.5e6, 1.0, 1.5e7, 0.4),
-          },
-          properties: {
-            type: 'fire',
-            frp: f.frp,
-            lat: f.lat,
-            lon: f.lon,
-            acq_date: f.acq_date,
-            acq_time: f.acq_time,
-          },
+          point: { pixelSize: Math.max(3, Math.min(12, 3 + Math.log10(Math.max(f.frp, 1)) * 3)), color: fireColor(f.frp), outlineWidth: 0, heightReference: HeightReference.CLAMP_TO_GROUND, scaleByDistance: new NearFarScalar(1.5e6, 1, 1.5e7, 0.4) },
+          properties: { type: 'fire', frp: f.frp, lat: f.lat, lon: f.lon, acq_date: f.acq_date, acq_time: f.acq_time },
         });
       }
       viewer.dataSources.add(ds);
-      pointDataSourceRef.current = ds;
+      pointDsRef.current = ds;
     }
 
-    // 7. Add earthquake points
-    if (activeLayers.has('earthquakes') && earthquakeData?.earthquakes) {
-      const ds = new CustomDataSource('earthquakes');
-      for (const e of earthquakeData.earthquakes) {
+    // Earthquakes
+    if (activeLayers.has('earthquakes') && quakeData?.earthquakes) {
+      const ds = new CustomDataSource('quakes');
+      for (const e of quakeData.earthquakes) {
         ds.entities.add({
           position: Cartesian3.fromDegrees(e.lon, e.lat),
-          point: {
-            pixelSize: Math.max(4, 4 + (e.magnitude - 4) * 4),
-            color: earthquakeColor(e.magnitude),
-            outlineColor: Color.WHITE.withAlpha(0.4),
-            outlineWidth: 1,
-            heightReference: HeightReference.CLAMP_TO_GROUND,
-            scaleByDistance: new NearFarScalar(1.5e6, 1.0, 1.5e7, 0.4),
-          },
-          properties: {
-            type: 'earthquake',
-            magnitude: e.magnitude,
-            place: e.place,
-            depth_km: e.depth_km,
-            time_utc: e.time_utc,
-            tsunami: e.tsunami,
-          },
+          point: { pixelSize: Math.max(4, 4 + (e.magnitude - 4) * 4), color: earthquakeColor(e.magnitude), outlineColor: Color.WHITE.withAlpha(0.4), outlineWidth: 1, heightReference: HeightReference.CLAMP_TO_GROUND, scaleByDistance: new NearFarScalar(1.5e6, 1, 1.5e7, 0.4) },
+          properties: { type: 'earthquake', magnitude: e.magnitude, place: e.place, depth_km: e.depth_km, time_utc: e.time_utc, tsunami: e.tsunami },
         });
       }
       viewer.dataSources.add(ds);
-      pointDataSourceRef.current = ds;
+      pointDsRef.current = ds;
     }
-  }, [activeLayers, firesData, earthquakeData]);
+  }, [activeLayers, firesData, quakeData]);
 
-  // ── Ocean current particle animation ─────────────────────────────────
-  // Uses Cesium postRender event — guarantees sync with globe rendering.
-  // Works without API data using scientifically-based circulation model.
+  // ── Particle animation (postRender) ──────────────────────────────────────
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -716,177 +507,107 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     if (!ctx) return;
 
     const container = containerRef.current;
-    if (container) {
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight - 48;
-    }
+    if (container) { canvas.width = container.clientWidth; canvas.height = container.clientHeight - 48; }
 
     // API data lookup
-    const gridMap = new Map<string, OceanCurrentPoint>();
-    if (currentsData?.points) {
-      for (const p of currentsData.points) {
-        gridMap.set(`${Math.round(p.lat / 5) * 5},${Math.round(p.lon / 5) * 5}`, p);
-      }
-    }
+    const grid = new Map<string, OceanCurrentPoint>();
+    if (currentsData?.points) for (const p of currentsData.points) grid.set(`${Math.round(p.lat/5)*5},${Math.round(p.lon/5)*5}`, p);
 
-    // Scientific ocean circulation + API enhancement
     function flow(lat: number, lon: number): [number, number] {
-      const api = gridMap.get(`${Math.round(lat / 5) * 5},${Math.round(lon / 5) * 5}`);
-      if (api && api.v > 0.05) {
-        const rad = (api.d * Math.PI) / 180;
-        return [api.v * 0.2 * Math.sin(rad), api.v * 0.2 * Math.cos(rad)];
-      }
+      const api = grid.get(`${Math.round(lat/5)*5},${Math.round(lon/5)*5}`);
+      if (api && api.v > 0.05) { const r = api.d * Math.PI / 180; return [api.v * 0.2 * Math.sin(r), api.v * 0.2 * Math.cos(r)]; }
       const a = Math.abs(lat);
-      if (lat < -45 && lat > -65) return [0.12, 0]; // ACC
-      if (a < 30) return [-0.06 * (1 - a / 30), lat > 0 ? -0.008 : 0.008]; // trades
-      if (a < 60) return [0.05 * Math.sin(((a - 30) / 30) * Math.PI), lat > 0 ? 0.008 : -0.008]; // westerlies
-      return [-0.015, 0]; // polar easterlies
+      if (lat < -45 && lat > -65) return [0.12, 0];
+      if (a < 30) return [-0.06 * (1 - a/30), lat > 0 ? -0.008 : 0.008];
+      if (a < 60) return [0.05 * Math.sin((a-30)/30*Math.PI), lat > 0 ? 0.008 : -0.008];
+      return [-0.015, 0];
     }
 
-    // Particles
-    const N = 2500;
-    const MAXAGE = 70;
-    const TRAIL = 6;
-    interface Pt { lon: number; lat: number; age: number; trail: {x: number; y: number}[]; }
-    const pts: Pt[] = [];
-    for (let i = 0; i < N; i++) {
-      pts.push({ lon: Math.random() * 360 - 180, lat: Math.random() * 140 - 70, age: Math.floor(Math.random() * MAXAGE), trail: [] });
-    }
+    const N = 2500, MAX = 70, TL = 6;
+    interface Pt { lon: number; lat: number; age: number; tr: {x:number;y:number}[]; }
+    const pts: Pt[] = Array.from({length:N}, () => ({ lon: Math.random()*360-180, lat: Math.random()*140-70, age: Math.floor(Math.random()*MAX), tr:[] }));
+    const cn = new Cartesian3(), pn = new Cartesian3();
 
-    const camN = new Cartesian3();
-    const ptN = new Cartesian3();
-
-    // Use Cesium postRender for guaranteed sync
-    const v = viewer; // capture non-null ref for closure
-    function onPostRender() {
-      if (!ctx || !canvas) return;
-      const w = canvas.width;
-      const h = canvas.height;
+    const v = viewer; // non-null capture
+    function tick() {
+      if (!ctx || !canvas || !v) return;
+      const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
-
-      Cartesian3.normalize(v.camera.positionWC, camN);
+      Cartesian3.normalize(v.camera.positionWC, cn);
 
       for (const p of pts) {
         const wc = Cartesian3.fromDegrees(p.lon, p.lat);
-        Cartesian3.normalize(wc, ptN);
-
-        if (Cartesian3.dot(ptN, camN) < 0.15 || p.age >= MAXAGE) {
-          p.lon = Math.random() * 360 - 180;
-          p.lat = Math.random() * 140 - 70;
-          p.age = 0;
-          p.trail = [];
-          continue;
-        }
+        Cartesian3.normalize(wc, pn);
+        if (Cartesian3.dot(pn, cn) < 0.15 || p.age >= MAX) { p.lon=Math.random()*360-180; p.lat=Math.random()*140-70; p.age=0; p.tr=[]; continue; }
 
         const [du, dv] = flow(p.lat, p.lon);
-        p.lon += du;
-        p.lat += dv;
-        if (p.lon > 180) p.lon -= 360;
-        if (p.lon < -180) p.lon += 360;
-        if (Math.abs(p.lat) > 70) { p.age = MAXAGE; continue; }
+        p.lon += du; p.lat += dv;
+        if (p.lon > 180) p.lon -= 360; if (p.lon < -180) p.lon += 360;
+        if (Math.abs(p.lat) > 70) { p.age = MAX; continue; }
 
         const sc = v.scene.cartesianToCanvasCoordinates(wc);
-        if (!sc || sc.x < 0 || sc.x > w || sc.y < 0 || sc.y > h) { p.age = MAXAGE; continue; }
+        if (!sc || sc.x<0 || sc.x>w || sc.y<0 || sc.y>h) { p.age=MAX; continue; }
 
-        p.trail.push({ x: sc.x, y: sc.y });
-        if (p.trail.length > TRAIL) p.trail.shift();
+        p.tr.push({x:sc.x, y:sc.y}); if (p.tr.length > TL) p.tr.shift();
 
-        if (p.trail.length > 1) {
-          const t = 1 - Math.abs(p.lat) / 70;
-          const cr = Math.floor(60 + t * 195);
-          const cg = Math.floor(120 + t * 80);
-          const cb = Math.floor(210 - t * 170);
-          for (let s = 1; s < p.trail.length; s++) {
-            const a = (s / p.trail.length) * 0.55 * (1 - p.age / MAXAGE);
-            ctx.strokeStyle = `rgba(${cr},${cg},${cb},${a})`;
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(p.trail[s - 1].x, p.trail[s - 1].y);
-            ctx.lineTo(p.trail[s].x, p.trail[s].y);
-            ctx.stroke();
+        if (p.tr.length > 1) {
+          const t = 1 - Math.abs(p.lat)/70;
+          const cr = 60+t*195|0, cg = 120+t*80|0, cb = 210-t*170|0;
+          for (let s = 1; s < p.tr.length; s++) {
+            const a = (s/p.tr.length) * 0.55 * (1 - p.age/MAX);
+            ctx.strokeStyle = `rgba(${cr},${cg},${cb},${a})`; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.moveTo(p.tr[s-1].x, p.tr[s-1].y); ctx.lineTo(p.tr[s].x, p.tr[s].y); ctx.stroke();
           }
         }
         p.age++;
       }
     }
 
-    v.scene.postRender.addEventListener(onPostRender);
-
-    return () => {
-      v.scene.postRender.removeEventListener(onPostRender);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
+    v.scene.postRender.addEventListener(tick);
+    return () => { v.scene.postRender.removeEventListener(tick); ctx.clearRect(0,0,canvas.width,canvas.height); };
   }, [activeLayers, currentsData]);
-
-  // ── Status ───────────────────────────────────────────────────────────────
-
-  const activeCatDef = activeCategory ? CATEGORY_LOOKUP.get(activeCategory) ?? null : null;
-
-  const dataCount = useMemo(() => {
-    if (activeCategory === 'wildfires') return firesData?.fires?.length ?? 0;
-    if (activeCategory === 'earthquakes') return earthquakeData?.earthquakes?.length ?? 0;
-    return 0;
-  }, [activeCategory, firesData, earthquakeData]);
-
-  const isActiveLoading = (needsFires && firesLoading) || (needsQuakes && quakesLoading);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
+  const activeCatDef = activeCategory ? CATEGORY_LOOKUP.get(activeCategory) ?? null : null;
+  const dataCount = useMemo(() => {
+    if (activeCategory === 'wildfires') return firesData?.fires?.length ?? 0;
+    if (activeCategory === 'earthquakes') return quakeData?.earthquakes?.length ?? 0;
+    return 0;
+  }, [activeCategory, firesData, quakeData]);
+  const isLoading = (needsFires && firesLoading) || (needsQuakes && quakesLoading);
+
   return (
     <div ref={containerRef} style={containerStyle}>
-      <div ref={cesiumContainerRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
+      <div ref={cesiumRef} style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }} />
 
-      {/* Ocean current particle overlay — stops above LayerBar (bottom 48px) */}
-      <canvas
-        ref={particleCanvasRef}
-        style={{
-          position: 'absolute', top: 0, left: 0, right: 0, bottom: 48,
-          zIndex: 2, pointerEvents: 'none',
-          display: activeLayers.has('ocean-currents') ? 'block' : 'none',
-        }}
-      />
+      <canvas ref={particleCanvasRef} style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 48,
+        zIndex: 2, pointerEvents: 'none',
+        display: activeLayers.has('ocean-currents') ? 'block' : 'none',
+      }} />
 
-      {/* Vignette overlay */}
       <div style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none', boxShadow: 'inset 0 0 120px 40px rgba(2,4,8,0.4)' }} />
 
-      {/* Loading indicator */}
-      {isActiveLoading && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 5,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'none',
-        }}>
-          <div style={{ textAlign: 'center', animation: 'fadeInUp 0.3s ease-out' }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%',
-              border: '2px solid #1e293b', borderTopColor: activeCatDef?.activeColor ?? '#3b82f6',
-              animation: 'spin 0.8s linear infinite', margin: '0 auto 8px',
-            }} />
-            <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'system-ui, sans-serif' }}>
-              Loading {activeCatDef?.name ?? 'data'}…
-            </div>
+      {isLoading && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #1e293b', borderTopColor: activeCatDef?.activeColor ?? '#3b82f6', animation: 'spin 0.8s linear infinite', margin: '0 auto 8px' }} />
+            <div style={{ color: '#64748b', fontSize: '11px', fontFamily: 'system-ui' }}>Loading {activeCatDef?.name ?? 'data'}…</div>
           </div>
         </div>
       )}
 
       <Tooltip info={tooltipInfo} onClose={() => setTooltipInfo(null)} />
 
-      {/* Active category pill */}
       {activeCatDef && (
-        <div style={{
-          position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 10,
-          background: 'rgba(10,14,26,0.75)', backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(51,65,85,0.3)', borderRadius: '20px',
-          padding: '5px 16px', fontSize: '12px', color: '#cbd5e1',
-          fontFamily: 'system-ui, sans-serif',
-          display: 'flex', alignItems: 'center', gap: '8px',
-        }}>
+        <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
+          background: 'rgba(10,14,26,0.75)', backdropFilter: 'blur(12px)', border: '1px solid rgba(51,65,85,0.3)',
+          borderRadius: '20px', padding: '5px 16px', fontSize: '12px', color: '#cbd5e1', fontFamily: 'system-ui',
+          display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '14px' }}>{activeCatDef.icon}</span>
           <span style={{ fontWeight: 600 }}>{activeCatDef.name}</span>
-          {dataCount > 0 && (
-            <span style={{ color: '#64748b', fontSize: '11px' }}>{dataCount.toLocaleString()}</span>
-          )}
+          {dataCount > 0 && <span style={{ color: '#64748b', fontSize: '11px' }}>{dataCount.toLocaleString()}</span>}
           <span style={{ color: '#475569', fontSize: '10px' }}>{activeCatDef.question}</span>
         </div>
       )}
@@ -898,13 +619,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       )}
 
       <Legend activeCategory={activeCategory} />
-
-      <LayerBar
-        activeCategory={activeCategory}
-        onCategoryChange={onCategoryChange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-      />
+      <LayerBar activeCategory={activeCategory} onCategoryChange={onCategoryChange} viewMode={viewMode} onViewModeChange={setViewMode} />
     </div>
   );
 });
@@ -913,40 +628,9 @@ export default GlobeCesium;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const containerStyle: React.CSSProperties = {
-  position: 'relative', width: '100%', height: '100%',
-  background: '#020408',
-  overflow: 'hidden',
-};
-
-const metaOverlayStyle: React.CSSProperties = {
-  position: 'absolute', top: 12, left: 12, zIndex: 10,
-  background: 'rgba(10,14,26,0.5)', padding: '5px 10px',
-  borderRadius: '6px', backdropFilter: 'blur(8px)', pointerEvents: 'none',
-  border: '1px solid rgba(51,65,85,0.2)',
-};
-
-const layerBarStyle: React.CSSProperties = {
-  position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15,
-  background: 'rgba(10,14,26,0.85)', backdropFilter: 'blur(12px)',
-  borderTop: '1px solid rgba(51,65,85,0.3)',
-  padding: '8px 16px',
-};
-
-const legendStyle: React.CSSProperties = {
-  position: 'absolute', bottom: 60, left: 12, zIndex: 10,
-  background: 'rgba(10,14,26,0.82)', backdropFilter: 'blur(8px)',
-  border: '1px solid rgba(51,65,85,0.4)', borderRadius: '8px',
-  padding: '8px 12px', minWidth: 160, maxWidth: 260,
-};
-
-const legendTitleStyle: React.CSSProperties = {
-  fontSize: '11px', fontWeight: 600, color: '#cbd5e1',
-  marginBottom: 6, fontFamily: 'system-ui, sans-serif',
-};
-
-const legendLabelsStyle: React.CSSProperties = {
-  display: 'flex', justifyContent: 'space-between',
-  fontSize: '9px', color: '#64748b', marginTop: 2,
-  fontFamily: 'system-ui, sans-serif',
-};
+const containerStyle: React.CSSProperties = { position: 'relative', width: '100%', height: '100%', background: '#020408', overflow: 'hidden' };
+const metaOverlayStyle: React.CSSProperties = { position: 'absolute', top: 12, left: 12, zIndex: 10, background: 'rgba(10,14,26,0.5)', padding: '5px 10px', borderRadius: '6px', backdropFilter: 'blur(8px)', pointerEvents: 'none', border: '1px solid rgba(51,65,85,0.2)' };
+const layerBarStyle: React.CSSProperties = { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 15, background: 'rgba(10,14,26,0.85)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(51,65,85,0.3)', padding: '8px 16px' };
+const legendStyle: React.CSSProperties = { position: 'absolute', bottom: 60, left: 12, zIndex: 10, background: 'rgba(10,14,26,0.82)', backdropFilter: 'blur(8px)', border: '1px solid rgba(51,65,85,0.4)', borderRadius: '8px', padding: '8px 12px', minWidth: 160, maxWidth: 260 };
+const legendTitleStyle: React.CSSProperties = { fontSize: '11px', fontWeight: 600, color: '#cbd5e1', marginBottom: 6, fontFamily: 'system-ui' };
+const legendLabelsStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#64748b', marginTop: 2, fontFamily: 'system-ui' };
