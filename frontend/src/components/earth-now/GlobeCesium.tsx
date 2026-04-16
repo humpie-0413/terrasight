@@ -291,19 +291,33 @@ function Legend({ activeCategory }: { activeCategory: ActiveCategory }) {
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 
-interface TooltipInfo { x: number; y: number; html: string; }
+interface TooltipInfo { x: number; y: number; html: string; pinned?: boolean; }
 
-function Tooltip({ info }: { info: TooltipInfo | null }) {
+function Tooltip({ info, onClose }: { info: TooltipInfo | null; onClose: () => void }) {
   if (!info) return null;
   return (
     <div style={{
-      position: 'absolute', left: info.x + 14, top: info.y - 14, pointerEvents: 'none',
+      position: 'absolute', left: info.x + 14, top: info.y - 14,
+      pointerEvents: info.pinned ? 'auto' : 'none',
       background: 'rgba(12,18,32,0.94)', color: '#f1f5f9', padding: '10px 14px',
       border: '1px solid rgba(71,85,105,0.35)', borderRadius: '10px',
       fontSize: '12px', lineHeight: '1.5', fontFamily: 'system-ui, sans-serif',
       maxWidth: 300, zIndex: 25, backdropFilter: 'blur(14px)',
       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-    }} dangerouslySetInnerHTML={{ __html: info.html }} />
+    }}>
+      {info.pinned && (
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: 4, right: 6,
+            background: 'none', border: 'none', color: '#64748b',
+            cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: '2px',
+          }}
+        >✕</button>
+      )}
+      <div dangerouslySetInnerHTML={{ __html: info.html }} />
+    </div>
   );
 }
 
@@ -430,12 +444,12 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
         }
 
         if (html) {
-          setTooltipInfo({ x: movement.endPosition.x, y: movement.endPosition.y, html });
+          setTooltipInfo((prev) => prev?.pinned ? prev : { x: movement.endPosition.x, y: movement.endPosition.y, html });
         } else {
-          setTooltipInfo(null);
+          setTooltipInfo((prev) => prev?.pinned ? prev : null);
         }
       } else {
-        setTooltipInfo(null);
+        setTooltipInfo((prev) => prev?.pinned ? prev : null);
       }
     }, ScreenSpaceEventType.MOUSE_MOVE);
 
@@ -446,7 +460,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       if (!ray) return;
       const cartesian = viewer.scene.globe.pick(ray, viewer.scene);
       if (!cartesian) {
-        setTooltipInfo(null);
+        setTooltipInfo(null); // clicked empty space → dismiss
         return;
       }
       const carto = Cartographic.fromCartesian(cartesian);
@@ -460,7 +474,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
           `SST ≈ <b style="color:${approxSST > 20 ? '#ef4444' : approxSST > 10 ? '#f97316' : '#3b82f6'}">${approxSST.toFixed(1)}°C</b><br/>` +
           `<span style="color:#64748b;font-size:10px">Approximate from GHRSST MUR</span>`
         : `<b>${lat.toFixed(1)}°, ${Math.abs(lon).toFixed(1)}°</b><br/><span style="color:#64748b">Ice/Land — no SST data</span>`;
-      setTooltipInfo({ x: click.position.x, y: click.position.y, html });
+      setTooltipInfo({ x: click.position.x, y: click.position.y, html, pinned: true });
     }, ScreenSpaceEventType.LEFT_CLICK);
 
     // Track user interaction for auto-rotation
@@ -574,7 +588,23 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5. Add GIBS SST — native land mask, ocean only
+    // 5a. Add backend OISST polar fill FIRST (below MUR)
+    // OISST has better polar coverage than GHRSST MUR
+    if (activeLayers.has('sst-surface')) {
+      try {
+        const polarProvider = new SingleTileImageryProvider({
+          url: `${API_BASE}/globe/surface/sst.png`,
+          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
+        });
+        const polarLayer = new ImageryLayer(polarProvider, { alpha: 0.75 });
+        viewer.imageryLayers.add(polarLayer);
+        seaIceLayerRef.current = polarLayer; // reuse ref for cleanup
+      } catch {
+        // Backend may not be available
+      }
+    }
+
+    // 5b. Add GIBS MUR SST on top — higher quality, native land mask
     if (activeLayers.has('sst-surface')) {
       try {
         const date = getGibsSstDate();
@@ -707,11 +737,18 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       const snapLat = Math.round(lat / 5) * 5;
       const snapLon = Math.round(lon / 5) * 5;
       const p = gridMap.get(`${snapLat},${snapLon}`);
-      if (!p || p.v < 0.01) return [0, 0];
-      // Convert velocity (km/h) + direction (degrees) to u,v (pixels/frame)
-      const speed = p.v * 0.15; // Scale factor for visual effect
+      if (!p || p.v < 0.05) {
+        // No current data — apply gentle background drift based on latitude
+        // Simulates trade winds / westerlies pattern
+        const driftLon = lat > 0 ? 0.02 : -0.02; // westerlies vs trades
+        return [driftLon, 0];
+      }
+      // Convert velocity (km/h) + direction (degrees) to lon/lat degrees per frame
+      // 1 km/h ≈ 0.009° lon at equator per frame at 60fps
+      const speed = p.v * 0.3;
       const rad = (p.d * Math.PI) / 180;
-      return [speed * Math.sin(rad), -speed * Math.cos(rad)]; // screen coords: y inverted
+      // direction is "going to" convention: sin(d)=east component, cos(d)=north component
+      return [speed * Math.sin(rad), speed * Math.cos(rad)];
     }
 
     // Initialize particles
@@ -766,21 +803,21 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
         }
 
         if (p.age >= MAX_AGE) {
-          // Reset particle
+          // Reset particle at new random ocean location
           const np = randomOceanPoint();
           p.lon = np.lon;
           p.lat = np.lat;
           p.age = 0;
           p.prevX = screenPos?.x ?? 0;
           p.prevY = screenPos?.y ?? 0;
-          particleAnimRef.current = requestAnimationFrame(animate);
-          continue;
+          continue; // skip drawing this frame, draw from next
         }
 
-        // Move particle
+        // Move particle along ocean current vector
         const [du, dv] = lookupCurrent(p.lat, p.lon);
-        p.lon += du * 0.3;
-        p.lat += dv * 0.3;
+        // Scale: du/dv are in degrees/frame equivalent
+        p.lon += du * 0.5;
+        p.lat += dv * 0.5;
 
         // Wrap longitude
         if (p.lon > 180) p.lon -= 360;
@@ -883,7 +920,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
         </div>
       )}
 
-      <Tooltip info={tooltipInfo} />
+      <Tooltip info={tooltipInfo} onClose={() => setTooltipInfo(null)} />
 
       {/* Active category pill */}
       {activeCatDef && (
