@@ -348,11 +348,9 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
 
   // Track which layers are currently added
   const surfaceLayerRef = useRef<ImageryLayer | null>(null);
-  const polarFillRef = useRef<ImageryLayer | null>(null);
   const gibsLayerRef = useRef<ImageryLayer | null>(null);
   const pointDataSourceRef = useRef<CustomDataSource | null>(null);
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
-  const particleAnimRef = useRef<number>(0);
   const sstAnimRef = useRef<number>(0); // SST date cycling interval
 
   // ── Lazy data fetches ────────────────────────────────────────────────────
@@ -543,10 +541,6 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       viewer.imageryLayers.remove(surfaceLayerRef.current);
       surfaceLayerRef.current = null;
     }
-    if (polarFillRef.current) {
-      viewer.imageryLayers.remove(polarFillRef.current);
-      polarFillRef.current = null;
-    }
     if (gibsLayerRef.current) {
       viewer.imageryLayers.remove(gibsLayerRef.current);
       gibsLayerRef.current = null;
@@ -555,19 +549,10 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       viewer.dataSources.remove(pointDataSourceRef.current);
       pointDataSourceRef.current = null;
     }
-    // Stop animations
-    if (particleAnimRef.current) {
-      cancelAnimationFrame(particleAnimRef.current);
-      particleAnimRef.current = 0;
-    }
+    // Stop SST date cycling (particle cleanup is in its own effect)
     if (sstAnimRef.current) {
       clearInterval(sstAnimRef.current);
       sstAnimRef.current = 0;
-    }
-    const pCanvas = particleCanvasRef.current;
-    if (pCanvas) {
-      const pCtx = pCanvas.getContext('2d');
-      if (pCtx) pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
     }
 
     // 4. Add self-rendered surface PNG (PM2.5, Temperature, Precipitation, NO₂)
@@ -588,22 +573,9 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // 5a. Add backend OISST polar fill (below GIBS MUR)
-    // OISST covers up to 80°N/S, filling MUR's polar gaps
-    if (activeLayers.has('sst-surface')) {
-      try {
-        const polarProvider = new SingleTileImageryProvider({
-          url: `${API_BASE}/globe/surface/sst.png`,
-          rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-        });
-        const polarLayer = new ImageryLayer(polarProvider, { alpha: 0.7 });
-        viewer.imageryLayers.add(polarLayer);
-        polarFillRef.current = polarLayer;
-      } catch { /* backend may be cold */ }
-    }
-
-    // 5b. Add GIBS MUR SST with 7-day animation cycle
-    // Preload 7 dates, swap every 2 seconds for "living ocean" effect
+    // 5. Add GIBS MUR SST with 7-day animation cycle
+    // No OISST polar fill — it bleeds into land due to Gaussian smoothing.
+    // MUR covers 55% (ice-free ocean). Polar ice = satellite base imagery.
     if (activeLayers.has('sst-surface')) {
       const dates: string[] = [];
       for (let i = 2; i <= 8; i++) {
@@ -632,17 +604,15 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
         surfaceLayerRef.current = imgLayer;
       } catch { /* GIBS may not be available */ }
 
-      // Cycle through dates every 2 seconds
+      // Cycle through dates every 2.5 seconds
       let dateIdx = 0;
       sstAnimRef.current = window.setInterval(() => {
         if (!viewerRef.current) return;
         dateIdx = (dateIdx + 1) % dates.length;
         try {
-          // Remove old SST layer
           if (surfaceLayerRef.current) {
             viewerRef.current.imageryLayers.remove(surfaceLayerRef.current);
           }
-          // Add new date
           const provider = new SingleTileImageryProvider({
             url: makeSstUrl(dates[dateIdx]),
             rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
@@ -651,7 +621,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
           viewerRef.current.imageryLayers.add(imgLayer);
           surfaceLayerRef.current = imgLayer;
         } catch { /* skip frame on error */ }
-      }, 2000);
+      }, 2500);
     }
 
     // 6. Add GIBS CO₂ overlay via WMS
@@ -734,8 +704,8 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
   }, [activeLayers, firesData, earthquakeData]);
 
   // ── Ocean current particle animation ─────────────────────────────────
-  // Works with OR without API data — uses scientifically-based ocean
-  // circulation model as default, enhanced by real data when available.
+  // Uses Cesium postRender event — guarantees sync with globe rendering.
+  // Works without API data using scientifically-based circulation model.
 
   useEffect(() => {
     const viewer = viewerRef.current;
@@ -745,14 +715,13 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Resize canvas to container minus bottom bar (48px)
     const container = containerRef.current;
     if (container) {
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight - 48;
     }
 
-    // Build API data lookup if available
+    // API data lookup
     const gridMap = new Map<string, OceanCurrentPoint>();
     if (currentsData?.points) {
       for (const p of currentsData.points) {
@@ -760,127 +729,91 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       }
     }
 
-    // Scientifically-based ocean circulation model
-    // Based on major gyre systems + equatorial currents + ACC
-    function getOceanFlow(lat: number, _lon: number): [number, number] {
-      // Check API data first
-      const apiPt = gridMap.get(`${Math.round(lat / 5) * 5},${Math.round(_lon / 5) * 5}`);
-      if (apiPt && apiPt.v > 0.05) {
-        const rad = (apiPt.d * Math.PI) / 180;
-        return [apiPt.v * 0.25 * Math.sin(rad), apiPt.v * 0.25 * Math.cos(rad)];
+    // Scientific ocean circulation + API enhancement
+    function flow(lat: number, lon: number): [number, number] {
+      const api = gridMap.get(`${Math.round(lat / 5) * 5},${Math.round(lon / 5) * 5}`);
+      if (api && api.v > 0.05) {
+        const rad = (api.d * Math.PI) / 180;
+        return [api.v * 0.2 * Math.sin(rad), api.v * 0.2 * Math.cos(rad)];
       }
-
-      // Scientific default: major ocean circulation patterns
-      const absLat = Math.abs(lat);
-
-      // Antarctic Circumpolar Current (ACC): 45-65°S, strong eastward
-      if (lat < -45 && lat > -65) return [0.15, 0];
-
-      // Trade winds zone (0-30°): westward (NE trades in NH, SE trades in SH)
-      if (absLat < 30) {
-        const tradeStrength = 0.08 * (1 - absLat / 30);
-        return [-tradeStrength, lat > 0 ? -0.01 : 0.01];
-      }
-
-      // Westerlies zone (30-60°): eastward
-      if (absLat < 60) {
-        const westStrength = 0.06 * Math.sin(((absLat - 30) / 30) * Math.PI);
-        return [westStrength, lat > 0 ? 0.01 : -0.01];
-      }
-
-      // Polar: weak easterlies
-      return [-0.02, 0];
+      const a = Math.abs(lat);
+      if (lat < -45 && lat > -65) return [0.12, 0]; // ACC
+      if (a < 30) return [-0.06 * (1 - a / 30), lat > 0 ? -0.008 : 0.008]; // trades
+      if (a < 60) return [0.05 * Math.sin(((a - 30) / 30) * Math.PI), lat > 0 ? 0.008 : -0.008]; // westerlies
+      return [-0.015, 0]; // polar easterlies
     }
 
-    // Initialize particles
-    const NUM = 3000;
-    const MAX_AGE = 60;
-    const TRAIL_LEN = 5; // keep last N screen positions for trail
-    interface P { lon: number; lat: number; age: number; trail: Array<{x: number; y: number}>; }
-    const ps: P[] = Array.from({ length: NUM }, () => ({
-      lon: Math.random() * 360 - 180,
-      lat: Math.random() * 150 - 75,
-      age: Math.floor(Math.random() * MAX_AGE),
-      trail: [],
-    }));
+    // Particles
+    const N = 2500;
+    const MAXAGE = 70;
+    const TRAIL = 6;
+    interface Pt { lon: number; lat: number; age: number; trail: {x: number; y: number}[]; }
+    const pts: Pt[] = [];
+    for (let i = 0; i < N; i++) {
+      pts.push({ lon: Math.random() * 360 - 180, lat: Math.random() * 140 - 70, age: Math.floor(Math.random() * MAXAGE), trail: [] });
+    }
 
-    let running = true;
-    const cameraDir = new Cartesian3();
-    const ptDir = new Cartesian3();
+    const camN = new Cartesian3();
+    const ptN = new Cartesian3();
 
-    function frame() {
-      if (!running || !viewer || !ctx || !canvas) return;
+    // Use Cesium postRender for guaranteed sync
+    const v = viewer; // capture non-null ref for closure
+    function onPostRender() {
+      if (!ctx || !canvas) return;
       const w = canvas.width;
       const h = canvas.height;
-
-      // Clear canvas completely each frame — no opaque fill that would
-      // block the SST/GIBS imagery layers underneath
       ctx.clearRect(0, 0, w, h);
 
-      const camPos = viewer.camera.positionWC;
-      Cartesian3.normalize(camPos, cameraDir);
+      Cartesian3.normalize(v.camera.positionWC, camN);
 
-      for (const p of ps) {
-        const world = Cartesian3.fromDegrees(p.lon, p.lat);
-        Cartesian3.normalize(world, ptDir);
-        const dot = Cartesian3.dot(ptDir, cameraDir);
+      for (const p of pts) {
+        const wc = Cartesian3.fromDegrees(p.lon, p.lat);
+        Cartesian3.normalize(wc, ptN);
 
-        // Behind globe or off bounds → reset
-        if (dot < 0.1 || p.age >= MAX_AGE) {
+        if (Cartesian3.dot(ptN, camN) < 0.15 || p.age >= MAXAGE) {
           p.lon = Math.random() * 360 - 180;
-          p.lat = Math.random() * 150 - 75;
+          p.lat = Math.random() * 140 - 70;
           p.age = 0;
           p.trail = [];
           continue;
         }
 
-        // Move by ocean flow
-        const [du, dv] = getOceanFlow(p.lat, p.lon);
+        const [du, dv] = flow(p.lat, p.lon);
         p.lon += du;
         p.lat += dv;
         if (p.lon > 180) p.lon -= 360;
         if (p.lon < -180) p.lon += 360;
-        if (Math.abs(p.lat) > 75) p.age = MAX_AGE;
+        if (Math.abs(p.lat) > 70) { p.age = MAXAGE; continue; }
 
-        const sp = viewer.scene.cartesianToCanvasCoordinates(world);
-        if (!sp || sp.x < 0 || sp.x > w || sp.y < 0 || sp.y > h) {
-          p.age = MAX_AGE;
-          continue;
-        }
+        const sc = v.scene.cartesianToCanvasCoordinates(wc);
+        if (!sc || sc.x < 0 || sc.x > w || sc.y < 0 || sc.y > h) { p.age = MAXAGE; continue; }
 
-        // Store screen position in trail
-        p.trail.push({ x: sp.x, y: sp.y });
-        if (p.trail.length > TRAIL_LEN) p.trail.shift();
+        p.trail.push({ x: sc.x, y: sc.y });
+        if (p.trail.length > TRAIL) p.trail.shift();
 
-        // Draw trail segments with fading opacity
         if (p.trail.length > 1) {
-          const t = 1 - Math.abs(p.lat) / 75;
-          const r = Math.floor(40 + t * 215);
-          const g = Math.floor(100 + t * 100 - Math.pow(t, 2) * 80);
-          const b = Math.floor(220 - t * 180);
+          const t = 1 - Math.abs(p.lat) / 70;
+          const cr = Math.floor(60 + t * 195);
+          const cg = Math.floor(120 + t * 80);
+          const cb = Math.floor(210 - t * 170);
           for (let s = 1; s < p.trail.length; s++) {
-            const a = (s / p.trail.length) * 0.6 * (1 - p.age / MAX_AGE);
-            ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
-            ctx.lineWidth = 1;
+            const a = (s / p.trail.length) * 0.55 * (1 - p.age / MAXAGE);
+            ctx.strokeStyle = `rgba(${cr},${cg},${cb},${a})`;
+            ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.moveTo(p.trail[s - 1].x, p.trail[s - 1].y);
             ctx.lineTo(p.trail[s].x, p.trail[s].y);
             ctx.stroke();
           }
         }
-
         p.age++;
       }
-
-      particleAnimRef.current = requestAnimationFrame(frame);
     }
 
-    particleAnimRef.current = requestAnimationFrame(frame);
+    v.scene.postRender.addEventListener(onPostRender);
 
     return () => {
-      running = false;
-      cancelAnimationFrame(particleAnimRef.current);
-      particleAnimRef.current = 0;
+      v.scene.postRender.removeEventListener(onPostRender);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [activeLayers, currentsData]);
