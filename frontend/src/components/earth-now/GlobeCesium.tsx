@@ -751,13 +751,14 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
 
     // Initialize particles
     const NUM = 3000;
-    const MAX_AGE = 80;
-    interface P { lon: number; lat: number; age: number; px: number; py: number; }
+    const MAX_AGE = 60;
+    const TRAIL_LEN = 5; // keep last N screen positions for trail
+    interface P { lon: number; lat: number; age: number; trail: Array<{x: number; y: number}>; }
     const ps: P[] = Array.from({ length: NUM }, () => ({
       lon: Math.random() * 360 - 180,
       lat: Math.random() * 150 - 75,
       age: Math.floor(Math.random() * MAX_AGE),
-      px: 0, py: 0,
+      trail: [],
     }));
 
     let running = true;
@@ -769,9 +770,9 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
       const w = canvas.width;
       const h = canvas.height;
 
-      // Fade trail
-      ctx.fillStyle = 'rgba(2, 4, 8, 0.04)';
-      ctx.fillRect(0, 0, w, h);
+      // Clear canvas completely each frame — no opaque fill that would
+      // block the SST/GIBS imagery layers underneath
+      ctx.clearRect(0, 0, w, h);
 
       const camPos = viewer.camera.positionWC;
       Cartesian3.normalize(camPos, cameraDir);
@@ -786,9 +787,7 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
           p.lon = Math.random() * 360 - 180;
           p.lat = Math.random() * 150 - 75;
           p.age = 0;
-          const sp = viewer.scene.cartesianToCanvasCoordinates(Cartesian3.fromDegrees(p.lon, p.lat));
-          p.px = sp?.x ?? 0;
-          p.py = sp?.y ?? 0;
+          p.trail = [];
           continue;
         }
 
@@ -806,24 +805,27 @@ const GlobeCesium = forwardRef<GlobeHandle, GlobeProps>(function GlobeCesium(
           continue;
         }
 
-        // Draw
-        if (p.age > 1) {
-          const a = (1 - p.age / MAX_AGE) * 0.5;
+        // Store screen position in trail
+        p.trail.push({ x: sp.x, y: sp.y });
+        if (p.trail.length > TRAIL_LEN) p.trail.shift();
+
+        // Draw trail segments with fading opacity
+        if (p.trail.length > 1) {
           const t = 1 - Math.abs(p.lat) / 75;
-          // Temperature gradient: cold=blue, warm=orange-red
           const r = Math.floor(40 + t * 215);
           const g = Math.floor(100 + t * 100 - Math.pow(t, 2) * 80);
           const b = Math.floor(220 - t * 180);
-          ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(p.px, p.py);
-          ctx.lineTo(sp.x, sp.y);
-          ctx.stroke();
+          for (let s = 1; s < p.trail.length; s++) {
+            const a = (s / p.trail.length) * 0.6 * (1 - p.age / MAX_AGE);
+            ctx.strokeStyle = `rgba(${r},${g},${b},${a})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(p.trail[s - 1].x, p.trail[s - 1].y);
+            ctx.lineTo(p.trail[s].x, p.trail[s].y);
+            ctx.stroke();
+          }
         }
 
-        p.px = sp.x;
-        p.py = sp.y;
         p.age++;
       }
 
