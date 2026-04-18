@@ -1,0 +1,305 @@
+---
+/**
+ * /rankings — Rankings index page.
+ *
+ * Lists all 4 metric pages with short descriptions + citation counts.
+ * Pure Astro SSG, zero client directives. Reads
+ * `src/data/rankings/index.json` (mirrored from repo root).
+ *
+ * Internal links: each card links to `/rankings/{metric-slug}` where
+ * metric-slug is the hyphenated form (see `SLUG_MAP` below — must stay
+ * in lockstep with `components/reports/CityComparison.astro`).
+ *
+ * Ad slot: `rankings-header` at the top of the main content area.
+ * No runtime/lazy injection — Step 8 only reserves the static box.
+ */
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import { AdSlot } from '../../components/reports';
+import rankingsIndexRaw from '../../data/rankings/index.json';
+import type { RankingsIndex, RankingMetric } from '@terrasight/schemas';
+
+// Hyphenated URL slug map. Mirrors `CityComparison.astro::SLUG_MAP`.
+// Any change here MUST also land in CityComparison.astro.
+const SLUG_MAP: Record<RankingMetric, string> = {
+  air_quality_pm25: 'air-quality-pm25',
+  emissions_ghg_total: 'emissions-ghg-total',
+  water_violations_count: 'water-violations-count',
+  disaster_declarations_10y: 'disaster-declarations-10y',
+};
+
+// Short human-facing descriptions per metric. Kept inline here so the
+// rankings index stays self-contained; the per-metric page duplicates
+// some of this copy for its own header.
+const METRIC_DESCRIPTIONS: Record<RankingMetric, string> = {
+  air_quality_pm25:
+    'Annual mean of PM2.5 (fine particulate matter) across monitoring stations in each metro, per AirNow and EPA AQS.',
+  emissions_ghg_total:
+    'Total facility-reported greenhouse gas emissions (CO₂-equivalent, metric tons) from EPA GHGRP and TRI sources.',
+  water_violations_count:
+    'Count of reported Safe Drinking Water Act violations across public water systems serving each metro, per SDWIS.',
+  disaster_declarations_10y:
+    'Federal disaster declarations in the last 10 years (storms, floods, wildfires) per OpenFEMA.',
+};
+
+const METRIC_CADENCES: Record<RankingMetric, string> = {
+  air_quality_pm25: 'annual',
+  emissions_ghg_total: 'annual',
+  water_violations_count: 'quarterly',
+  disaster_declarations_10y: 'event-driven',
+};
+
+const index = rankingsIndexRaw as unknown as RankingsIndex;
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return iso;
+  }
+}
+---
+
+<Layout
+  title="Environmental Rankings — TerraSight"
+  description="Cross-metro rankings for PM2.5 air quality, GHG emissions, drinking water violations, and disaster declarations. 4 metrics, transparent trust tagging, every row sourced."
+  seo={{
+    title: 'Environmental Rankings — TerraSight',
+    description:
+      'Cross-metro rankings for PM2.5 air quality, GHG emissions, drinking water violations, and disaster declarations. Transparent trust tagging, every row sourced.',
+    path: '/rankings',
+  }}
+>
+  <main id="main" class="rankings-index">
+    <header class="rankings-index__hero">
+      <div class="ts-container">
+        <p class="rankings-index__crumbs">
+          <a href="/">Home</a>
+          <span aria-hidden="true"> / </span>
+          <span class="rankings-index__crumbs-current">Rankings</span>
+        </p>
+        <h1 class="rankings-index__title">Environmental Rankings</h1>
+        <p class="rankings-index__lede">
+          Cross-metro comparisons on the 4 metrics most referenced by local
+          reports. Each row carries a trust tag indicating signal directness;
+          no composite scores, only per-metric transparency.
+        </p>
+        <p class="rankings-index__meta">
+          Index generated {formatDate(index.generatedAt)} ·
+          pipeline {index.pipelineVersion} ·
+          {index.files.length} {index.files.length === 1 ? 'metric' : 'metrics'}
+        </p>
+      </div>
+    </header>
+
+    <div class="ts-container rankings-index__ad-row">
+      <AdSlot slot="rankings-header" />
+    </div>
+
+    <section class="rankings-index__list-wrap ts-container" aria-labelledby="rankings-list-title">
+      <h2 id="rankings-list-title" class="rankings-index__sr">Available rankings</h2>
+
+      <ul class="rankings-index__list">
+        {index.files.map((entry) => {
+          const slug = SLUG_MAP[entry.metric];
+          const desc = METRIC_DESCRIPTIONS[entry.metric] ?? '';
+          const cadence = METRIC_CADENCES[entry.metric] ?? '—';
+          return (
+            <li class="rankings-index__item">
+              <a class="ranking-row" href={`/rankings/${slug}`} data-link-type="internal" data-target-section="rankings">
+                <div class="ranking-row__top">
+                  <span class="ranking-row__badge">{cadence}</span>
+                  <span class="ranking-row__count">
+                    {entry.nCbsa} {entry.nCbsa === 1 ? 'metro' : 'metros'}
+                  </span>
+                </div>
+                <h3 class="ranking-row__title">{entry.title}</h3>
+                <p class="ranking-row__desc">{desc}</p>
+                <p class="ranking-row__updated">Updated {formatDate(entry.generatedAt)}</p>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+
+    <section class="rankings-index__methodology ts-container" aria-labelledby="rankings-methodology-title">
+      <h2 id="rankings-methodology-title">How rankings are built</h2>
+      <p>
+        Each ranking is a standalone file under <code>data/rankings/*.json</code>,
+        generated by a pipeline job that reads every city report and extracts the
+        matching metric. Rankings are never embedded in an individual report — see
+        <a href="/reports">reports</a> for single-metro narratives.
+      </p>
+      <p class="rankings-index__note">
+        <strong>Compliance ≠ exposure:</strong> regulatory counts (ECHO, SDWIS) indicate reporting
+        activity, not measured health outcomes. See
+        <a href="/guides/why-compliance-is-not-exposure">the guide</a> for how to read these numbers.
+      </p>
+    </section>
+  </main>
+
+  <SiteFooter generatedAt={index.generatedAt} />
+</Layout>
+
+<style>
+  .rankings-index { padding-bottom: 48px; }
+
+  .rankings-index__sr {
+    position: absolute;
+    width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  .rankings-index__hero {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    padding: 48px 0 40px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .rankings-index__crumbs {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0 0 12px;
+  }
+  .rankings-index__crumbs a {
+    color: #1d4ed8;
+    text-decoration: none;
+  }
+  .rankings-index__crumbs a:hover { text-decoration: underline; }
+  .rankings-index__crumbs-current { color: #0f172a; font-weight: 500; }
+  .rankings-index__title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+  }
+  .rankings-index__lede {
+    font-size: 1rem;
+    color: #475569;
+    max-width: 680px;
+    margin: 0 0 12px;
+    line-height: 1.55;
+  }
+  .rankings-index__meta {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rankings-index__ad-row {
+    padding: 24px;
+  }
+
+  .rankings-index__list-wrap {
+    padding: 16px 24px 0;
+  }
+
+  .rankings-index__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .rankings-index__item { display: block; }
+
+  .ranking-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    height: 100%;
+  }
+  .ranking-row:hover {
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+  .ranking-row__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ranking-row__badge {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+  }
+  .ranking-row__count {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+  }
+  .ranking-row__title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    margin: 4px 0 0;
+  }
+  .ranking-row__desc {
+    font-size: 0.8125rem;
+    color: #475569;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .ranking-row__updated {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 6px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rankings-index__methodology {
+    padding: 48px 24px 0;
+    max-width: 760px;
+  }
+  .rankings-index__methodology h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 14px;
+  }
+  .rankings-index__methodology p {
+    font-size: 0.9375rem;
+    color: #475569;
+    line-height: 1.65;
+    margin: 0 0 12px;
+  }
+  .rankings-index__methodology a {
+    color: #1d4ed8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .rankings-index__methodology code {
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+  .rankings-index__note {
+    padding: 12px 14px;
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    border-radius: 4px;
+    color: #78350f;
+  }
+  .rankings-index__note strong { color: #78350f; }
+</style>

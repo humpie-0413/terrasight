@@ -1,0 +1,38 @@
+---
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import GuideStub from '../../components/GuideStub.astro';
+
+const title = 'Finding local environmental data — Guides — TerraSight';
+const intro =
+  'A navigation hub for environmental engineers, students, and curious locals. Whether you need a specific metro report, a cross-city ranking, a live globe layer, or the full data atlas, this guide walks you through which TerraSight surface to open first and why.';
+const path = '/guides/finding-local-environmental-data';
+const generatedAt = new Date().toISOString();
+---
+
+<Layout
+  title={title}
+  description="Navigation hub — where to look in TerraSight for reports, rankings, the globe, and the atlas."
+  seo={{
+    title,
+    description:
+      'Navigation hub — where to look in TerraSight for reports, rankings, the globe, and the atlas.',
+    path,
+  }}
+>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+  <main id="main" class="guide-stub ts-container">
+    <GuideStub
+      title="Finding local environmental data"
+      intro={intro}
+      path={path}
+    />
+  </main>
+  <SiteFooter generatedAt={generatedAt} />
+</Layout>
+
+<style>
+  .guide-stub { padding: 48px 24px; }
+</style>

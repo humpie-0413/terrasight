@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-04-18",
+  "source": "placeholder — to be populated from live connectors in a future step",
+  "cards": [
+    {
+      "id": "co2",
+      "title": "Atmospheric CO₂",
+      "value": "424.5",
+      "unit": "ppm",
+      "deltaLabel": "+2.3 ppm YoY",
+      "deltaDirection": "up-bad",
+      "cadence": "monthly",
+      "trustTag": "observed",
+      "source": "NOAA GML — Mauna Loa",
+      "sourceUrl": "https://gml.noaa.gov/ccgg/trends/",
+      "caveat": "Monthly mean. Displayed value is an illustrative placeholder until the connector lands."
+    },
+    {
+      "id": "temp_anomaly",
+      "title": "Global Temp Anomaly",
+      "value": "+1.18",
+      "unit": "°C vs 1901–2000 mean",
+      "deltaLabel": "10 of last 10 years above +1.0°C",
+      "deltaDirection": "up-bad",
+      "cadence": "monthly",
+      "trustTag": "observed",
+      "source": "NOAA NCEI NOAAGlobalTemp CDR",
+      "sourceUrl": "https://www.ncei.noaa.gov/products/land-based-station/noaa-global-temp",
+      "caveat": "Anomaly vs 20th-century baseline. Placeholder value."
+    },
+    {
+      "id": "arctic_ice",
+      "title": "Arctic Sea Ice Extent",
+      "value": "13.8",
+      "unit": "M km²",
+      "deltaLabel": "≈ 900k km² below 1981–2010 median",
+      "deltaDirection": "down-bad",
+      "cadence": "daily",
+      "trustTag": "observed",
+      "source": "NSIDC Sea Ice Index",
+      "sourceUrl": "https://nsidc.org/arcticseaicenews/",
+      "caveat": "5-day trailing mean. Placeholder value."
+    }
+  ]
+}

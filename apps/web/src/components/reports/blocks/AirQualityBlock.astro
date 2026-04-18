@@ -1,0 +1,130 @@
+---
+/**
+ * Air Quality body component.
+ *
+ * Sources:
+ *  - EPA AirNow (AQI snapshot)
+ *  - EPA ECHO (facility compliance)
+ *
+ * Block-specific data shape (when status === 'ok'):
+ *   {
+ *     top_facilities?: Array<{
+ *       facility_name: string;
+ *       violation_count?: number;
+ *       status?: string;
+ *     }>
+ *   }
+ *
+ * UI guardrails:
+ *  - Never label AOD-derived fields as "PM2.5". If AOD appears,
+ *    render as "Aerosol Proxy (AOD)".
+ *  - Mandatory disclaimers handled by BlockRenderer (notes[] rendering).
+ */
+import type { ReportBlock } from '@terrasight/schemas';
+import NoData from '../NoData.astro';
+import MetricsTable from '../MetricsTable.astro';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+type Facility = {
+  facility_name?: string;
+  name?: string;
+  violation_count?: number;
+  violations?: number;
+  status?: string;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block.data ?? {}) as any;
+const topFacilities: Facility[] = Array.isArray(data.top_facilities)
+  ? data.top_facilities.slice(0, 5)
+  : [];
+---
+
+{block.status !== 'ok' ? (
+  <NoData block={block} />
+) : (
+  <div class="block-body">
+    <p class="block-body__prose">{block.body}</p>
+    <MetricsTable metrics={block.metrics} fallbackTag={block.trustTag} />
+
+    {topFacilities.length > 0 ? (
+      <div class="block-body__subsection">
+        <h3 class="block-body__subtitle">Top facilities by compliance flags</h3>
+        <table class="facility-table">
+          <thead>
+            <tr>
+              <th scope="col">Facility</th>
+              <th scope="col">Violations</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topFacilities.map((f) => (
+              <tr>
+                <td>{f.facility_name ?? f.name ?? '—'}</td>
+                <td>{f.violation_count ?? f.violations ?? '—'}</td>
+                <td>{f.status ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : null}
+  </div>
+)}
+
+<style>
+  .block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .block-body__prose {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #334155;
+    margin: 0;
+  }
+  .block-body__subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .block-body__subtitle {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 4px 0 0;
+  }
+  .facility-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .facility-table thead th {
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  .facility-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #0f172a;
+  }
+  .facility-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+</style>

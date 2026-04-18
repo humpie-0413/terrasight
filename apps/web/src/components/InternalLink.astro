@@ -1,0 +1,126 @@
+---
+/**
+ * InternalLink — cross-section link wrapper for internal navigation.
+ *
+ * Wraps an `<a>` tag with analytics data attributes so future traffic
+ * reporting can distinguish in-site navigation from external clicks.
+ * Stays deliberately thin — no icon, no JS, no tracking library.
+ *
+ * Design:
+ *  - `to`     : absolute path (must start with `/`).
+ *  - `variant`: layout hint. `inline` = flows in paragraph text,
+ *               `card`   = full-width block (e.g., cross-section CTA),
+ *               `nav`    = header/nav/sidebar link.
+ *  - Analytics attributes emitted on every render:
+ *      data-link-type="internal"
+ *      data-target-section — inferred from the leading path segment
+ *                            (e.g., `reports`, `globe`, `rankings`,
+ *                            `guides`, `atlas`).
+ *
+ * External-link handling: NOT this component's job. Use a plain `<a>`
+ * with `target="_blank" rel="noopener noreferrer"` for those — the
+ * report-block citation list already follows that pattern.
+ *
+ * Rule 5 (graceful degradation) does not apply here: a missing target
+ * is a compile-time bug, not a runtime one, so we prefer a console
+ * warning at build over fallback behavior.
+ */
+
+export interface Props {
+  /** Absolute path. MUST start with "/". */
+  to: string;
+  /** Layout hint. Defaults to `inline`. */
+  variant?: 'inline' | 'card' | 'nav';
+  /** Optional title attribute (accessibility / tooltip). */
+  title?: string;
+  /**
+   * Optional aria-label override. Defaults to the link's text content
+   * via the native slot behavior; set explicitly when text is icon-only
+   * or truncated.
+   */
+  ariaLabel?: string;
+  /** Override the inferred `data-target-section` (rarely needed). */
+  targetSection?: string;
+}
+
+const {
+  to,
+  variant = 'inline',
+  title,
+  ariaLabel,
+  targetSection,
+} = Astro.props;
+
+// Defensive: emit a build-time warning if `to` is not an absolute path.
+// We still render the link so the build doesn't fail — but the warning
+// tells the developer to fix the call site.
+if (!to.startsWith('/')) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[InternalLink] "to" prop must be an absolute path (starts with "/"). Got: "${to}"`,
+  );
+}
+
+// Infer the target section from the first path segment.
+// `/reports/new-york-...` → "reports"
+// `/rankings/air-quality-pm25` → "rankings"
+// `/` → "home"
+function inferSection(path: string): string {
+  const segs = path.split('/').filter(Boolean);
+  if (segs.length === 0) return 'home';
+  return segs[0] ?? 'unknown';
+}
+
+const resolvedSection = targetSection ?? inferSection(to);
+---
+
+<a
+  href={to}
+  class:list={[
+    'internal-link',
+    variant === 'inline' ? 'internal-link--inline' : null,
+    variant === 'card' ? 'internal-link--card' : null,
+    variant === 'nav' ? 'internal-link--nav' : null,
+  ]}
+  title={title}
+  aria-label={ariaLabel}
+  data-link-type="internal"
+  data-target-section={resolvedSection}
+>
+  <slot />
+</a>
+
+<style>
+  .internal-link {
+    color: #1d4ed8;
+    text-decoration: none;
+  }
+  .internal-link--inline {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: #bfdbfe;
+  }
+  .internal-link--inline:hover {
+    text-decoration-color: #1d4ed8;
+  }
+  .internal-link--nav {
+    font-size: 0.9375rem;
+    color: #475569;
+    font-weight: 500;
+  }
+  .internal-link--nav:hover {
+    color: #1d4ed8;
+  }
+  .internal-link--card {
+    display: block;
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    transition: border-color 120ms ease, background 120ms ease;
+  }
+  .internal-link--card:hover {
+    border-color: #bfdbfe;
+    background: #f8fafc;
+  }
+</style>

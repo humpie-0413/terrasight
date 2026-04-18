@@ -1,0 +1,59 @@
+---
+// TerraSight home (Step 6, Task 2)
+// Pure Astro SSG — all content is server-rendered HTML at build time.
+// No client:* directives anywhere below. View-source must show every
+// value (trend numbers, report cities, CTAs) as static HTML.
+//
+// Data sources:
+//   - Climate Trends strip -> ../data/climate-trends.json (placeholder)
+//   - Featured Reports     -> ../data/reports-index.json (mirrored from
+//     repo root `data/reports/index.json`; refreshed by the pipeline step)
+//
+// The raw `data/reports/index.json` lives outside `apps/web` and Astro/Vite
+// does not reliably resolve imports across workspace roots without extra
+// config, so we keep a build-time fixture inside the Astro src tree.
+
+import Layout from '../layouts/BaseLayout.astro';
+import HeroSection from '../components/HeroSection.astro';
+import ClimateTrendsStrip from '../components/ClimateTrendsStrip.astro';
+import FeaturedReports from '../components/FeaturedReports.astro';
+import LinkCards from '../components/LinkCards.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+
+import trendsRaw from '../data/climate-trends.json';
+import reportsIndexRaw from '../data/reports-index.json';
+
+import type { CityReportIndex, CityReportIndexEntry } from '@terrasight/schemas';
+import type { TrendCard } from '../components/ClimateTrendsStrip.astro';
+
+// JSON imports are inferred as plain strings. We narrow them to the
+// exact union types required by our components. Shapes are validated
+// at pipeline build time in `pipelines/`, so we trust the values here.
+const trends = trendsRaw as {
+  generatedAt: string;
+  source: string;
+  cards: TrendCard[];
+};
+const reportsIndex = reportsIndexRaw as unknown as CityReportIndex;
+
+const featuredReports: CityReportIndexEntry[] = reportsIndex.reports.slice(0, 5);
+---
+
+<Layout
+  title="TerraSight — Environmental Observatory"
+  description="Live climate signals, environmental data atlas, and U.S. metro-level environmental reports. NASA / NOAA / EPA sources with transparent trust tags."
+  seo={{
+    title: 'TerraSight — Environmental Observatory',
+    description: 'Live climate signals, environmental data atlas, and U.S. metro-level environmental reports. NASA / NOAA / EPA sources with transparent trust tags.',
+    path: '/',
+    type: 'website',
+  }}
+>
+  <main id="main">
+    <HeroSection />
+    <ClimateTrendsStrip trends={trends} />
+    <FeaturedReports reports={featuredReports} />
+    <LinkCards />
+  </main>
+  <SiteFooter generatedAt={reportsIndex.generatedAt} />
+</Layout>

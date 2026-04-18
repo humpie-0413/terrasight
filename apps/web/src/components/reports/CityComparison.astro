@@ -1,0 +1,124 @@
+---
+/**
+ * CityComparison: external-link callout to per-metric rankings.
+ *
+ * Always renders — `city_comparison` is always `'external'` per Step 5
+ * policy. Never embeds a cross-report table (2-pass aggregation is
+ * explicitly avoided).
+ *
+ * LANDMINE — metric slug translation (underscore → hyphen):
+ *   The schema `RankingMetric` enum uses underscore ids
+ *   (e.g. `air_quality_pm25`), but Step 8 ranking routes will live at
+ *   hyphenated paths (e.g. `/rankings/air-quality-pm25`) for SEO
+ *   cleanliness. This component owns the translation and must stay in
+ *   sync with the Step 8 route map.
+ *
+ *   Record mirror: `docs/guardrails.md` §"Step 7 frontend landmines".
+ */
+import type { CityReport, RankingMetric } from '@terrasight/schemas';
+
+export interface Props {
+  report: CityReport;
+}
+
+// Map schema underscore ids → hyphenated URL slugs. Values here MUST
+// match Step 8's `pages/rankings/*.astro` route names.
+const SLUG_MAP: Record<RankingMetric, string> = {
+  air_quality_pm25: 'air-quality-pm25',
+  emissions_ghg_total: 'emissions-ghg-total',
+  water_violations_count: 'water-violations-count',
+  disaster_declarations_10y: 'disaster-declarations-10y',
+};
+
+interface RankingLink {
+  metric: RankingMetric;
+  label: string;
+}
+
+const RANKINGS: RankingLink[] = [
+  { metric: 'air_quality_pm25', label: 'PM2.5 (annual mean)' },
+  { metric: 'emissions_ghg_total', label: 'Facility GHG emissions (tons CO₂e)' },
+  { metric: 'water_violations_count', label: 'Drinking water violations' },
+  { metric: 'disaster_declarations_10y', label: 'Federal disaster declarations (10y)' },
+];
+
+// Prop intentionally unused in Step 7 (external-only card, no data
+// lookup required) — kept in the signature so Agent 1's page can pass
+// the report uniformly across all sidebar components.
+void Astro.props;
+---
+
+<aside class="city-comparison-external" aria-labelledby="city-comparison-title">
+  <h3 id="city-comparison-title">Compare across cities</h3>
+  <p class="city-comparison-external__intro">
+    TerraSight publishes 4 metric-wise rankings across all covered CBSAs.
+  </p>
+  <ul class="city-comparison-external__list">
+    {RANKINGS.map((r) => (
+      <li>
+        <a
+          href={`/rankings/${SLUG_MAP[r.metric]}`}
+          class="city-comparison-external__link"
+        >
+          {r.label}
+        </a>
+      </li>
+    ))}
+  </ul>
+  <p class="city-comparison-external__caption">
+    Rankings are updated independently of reports. See each metric for
+    definitions and methodology.
+  </p>
+</aside>
+
+<style>
+  .city-comparison-external {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 18px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .city-comparison-external h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .city-comparison-external__intro {
+    font-size: 0.8125rem;
+    color: #475569;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .city-comparison-external__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .city-comparison-external__link {
+    font-size: 0.875rem;
+    color: #1d4ed8;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .city-comparison-external__link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .city-comparison-external__caption {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 4px 0 0;
+    line-height: 1.5;
+  }
+</style>

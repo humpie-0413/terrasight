@@ -1,0 +1,71 @@
+---
+/**
+ * AdSlot: pure placeholder for ad units on report pages.
+ *
+ * Step 7 scope: render an empty reserved box so the layout stays CLS-free.
+ * Step 8 will wire real AdSense. This component never loads Google tag code.
+ *
+ * Reserved-box rule: always render `min-height` inline (CLS-safe) so the
+ * post-hydration ad insert doesn't reflow the page. Dev-only dotted
+ * outline + slot label for developer orientation.
+ *
+ * Valid slot names live in `./AdSlot.types.ts` as the exported
+ * `AdSlotName` union — Astro cannot export types from .astro directly,
+ * so the sibling .ts file is the canonical source.
+ */
+import type { AdSlotName } from './AdSlot.types';
+
+export interface Props {
+  slot: AdSlotName;
+  minHeight?: number;
+}
+
+const { slot, minHeight = 120 } = Astro.props;
+const isDev = import.meta.env.DEV;
+---
+
+<aside
+  data-ad-slot={slot}
+  class:list={['ad-slot', isDev ? 'ad-slot--dev' : null]}
+  style={`min-height:${minHeight}px`}
+  aria-label="Advertisement"
+  role="complementary"
+>
+  <span class="ad-slot__label">Advertisement</span>
+  {isDev ? <span class="ad-slot__dev-caption">slot={slot}</span> : null}
+</aside>
+
+<style>
+  .ad-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    color: #94a3b8;
+    /* In production the box is neutrally colored, border-less, and the
+       label goes visually subdued — still reserves exact height. */
+    border: 1px solid transparent;
+  }
+  .ad-slot--dev {
+    border: 1px dotted #cbd5e1;
+    background: #f1f5f9;
+  }
+  .ad-slot__label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .ad-slot__dev-caption {
+    margin-top: 4px;
+    font-size: 0.6875rem;
+    color: #94a3b8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+</style>

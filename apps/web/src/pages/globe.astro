@@ -1,0 +1,9 @@
+---
+import Layout from '../layouts/BaseLayout.astro';
+import GlobeApp from '../islands/GlobeApp.tsx';
+---
+<Layout title="Earth Now — TerraSight">
+  <main>
+    <GlobeApp client:visible />
+  </main>
+</Layout>

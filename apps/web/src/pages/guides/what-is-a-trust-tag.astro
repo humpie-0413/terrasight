@@ -1,0 +1,38 @@
+---
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import GuideStub from '../../components/GuideStub.astro';
+
+const title = 'What is a trust tag? — Guides — TerraSight';
+const intro =
+  'The 5-enum vocabulary (observed, near-real-time, forecast, derived, compliance) that appears on every value across TerraSight. This guide explains what each tag implies, why it matters for reading environmental data, and how we pick a tag when sources disagree.';
+const path = '/guides/what-is-a-trust-tag';
+const generatedAt = new Date().toISOString();
+---
+
+<Layout
+  title={title}
+  description="Trust tag explainer — the 5-enum vocabulary across TerraSight and how to read it."
+  seo={{
+    title,
+    description:
+      'Trust tag explainer — the 5-enum vocabulary across TerraSight and how to read it.',
+    path,
+  }}
+>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+  <main id="main" class="guide-stub ts-container">
+    <GuideStub
+      title="What is a trust tag?"
+      intro={intro}
+      path={path}
+    />
+  </main>
+  <SiteFooter generatedAt={generatedAt} />
+</Layout>
+
+<style>
+  .guide-stub { padding: 48px 24px; }
+</style>

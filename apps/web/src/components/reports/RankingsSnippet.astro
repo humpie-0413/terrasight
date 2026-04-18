@@ -1,0 +1,237 @@
+---
+/**
+ * RankingsSnippet: sidebar card showing this city's position in each of
+ * the 4 metric-wise rankings.
+ *
+ * Data mirror note (Step 7 temporary):
+ *   `apps/web/src/data/rankings/*.json` mirrors `C:/0_project/terrasight/data/rankings/*.json`
+ *   because Astro/Vite cannot reliably `import.meta.glob` across the
+ *   workspace root. Step 7 follow-up will automate this copy via a build
+ *   hook. Until then, re-run `cp data/rankings/*.json
+ *   apps/web/src/data/rankings/` whenever the pipeline regenerates.
+ *
+ * Gracefully handles:
+ *  - Row not found for this slug → skip silently.
+ *  - Row found but value=null / rank=null → render "pending" row.
+ *  - Zero rankings matched → render "Rankings not yet available…" card.
+ *
+ * Direct use of `import.meta.glob` here (not a shared loader) because
+ * Astro evaluates globs at build time and the 4-file set is small. The
+ * `eager: true` flag ensures JSON becomes part of the build graph — no
+ * runtime fetch.
+ */
+import type { CityReport, Ranking, RankingRow } from '@terrasight/schemas';
+import { TrustBadge } from '@terrasight/ui';
+
+export interface Props {
+  report: CityReport;
+}
+
+const { report } = Astro.props;
+
+// Glob-load all 4 rankings at build time. Keys look like
+// '../../data/rankings/air_quality_pm25.json'. The `index.json` entry
+// also gets pulled in — we filter it out below.
+const rankingModules = import.meta.glob<Ranking>(
+  '../../data/rankings/*.json',
+  { eager: true, import: 'default' },
+);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isRanking(obj: any): obj is Ranking {
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    typeof obj.metric === 'string' &&
+    Array.isArray(obj.rows)
+  );
+}
+
+const rankings: Ranking[] = Object.entries(rankingModules)
+  // Exclude the `index.json` file — it doesn't match the Ranking shape.
+  .filter(([path]) => !path.endsWith('/index.json'))
+  .map(([, mod]) => mod)
+  .filter(isRanking);
+
+// Stable display order (matches CityComparison.astro list order).
+const METRIC_ORDER = [
+  'air_quality_pm25',
+  'emissions_ghg_total',
+  'water_violations_count',
+  'disaster_declarations_10y',
+] as const;
+
+rankings.sort(
+  (a, b) =>
+    METRIC_ORDER.indexOf(a.metric as (typeof METRIC_ORDER)[number]) -
+    METRIC_ORDER.indexOf(b.metric as (typeof METRIC_ORDER)[number]),
+);
+
+interface RankingEntry {
+  metric: string;
+  title: string;
+  unit: string;
+  n: number;
+  row: RankingRow | null;
+}
+
+const entries: RankingEntry[] = [];
+for (const r of rankings) {
+  const row = r.rows.find((x) => x.slug === report.slug) ?? null;
+  if (row === null) {
+    // Not in this ranking at all — skip silently (per spec).
+    continue;
+  }
+  entries.push({
+    metric: r.metric,
+    title: r.title,
+    unit: r.unit,
+    n: r.n,
+    row,
+  });
+}
+
+function formatValue(v: number | null): string {
+  if (v === null) return '—';
+  if (Number.isInteger(v)) return v.toLocaleString();
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+---
+
+<aside class="rankings-snippet" aria-labelledby="rankings-snippet-title">
+  <h3 id="rankings-snippet-title">This city's rankings</h3>
+  {entries.length === 0 ? (
+    <p class="rankings-snippet__empty">
+      Rankings not yet available for this metro.
+    </p>
+  ) : (
+    <ul class="rankings-snippet__list">
+      {entries.map((e) => {
+        const isPending = e.row === null || e.row.rank === null || e.row.value === null;
+        const row = e.row;
+        return (
+          <li class="rankings-snippet__item">
+            <div class="rankings-snippet__title">{e.title}</div>
+            <div class="rankings-snippet__row">
+              {isPending ? (
+                <>
+                  <span class="rankings-snippet__rank rankings-snippet__rank--pending">
+                    — of {e.n}
+                  </span>
+                  <span class="rankings-snippet__pending-label">pending</span>
+                </>
+              ) : (
+                <>
+                  <span class="rankings-snippet__rank">
+                    #{row?.rank} of {e.n}
+                  </span>
+                  <span class="rankings-snippet__value">
+                    {formatValue(row?.value ?? null)}
+                    {e.unit ? <span class="rankings-snippet__unit"> {e.unit}</span> : null}
+                  </span>
+                </>
+              )}
+              {row ? <TrustBadge tag={row.trustTag} /> : null}
+            </div>
+            {isPending ? (
+              <div class="rankings-snippet__pending-note">
+                Ranking pending data.
+              </div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  )}
+</aside>
+
+<style>
+  .rankings-snippet {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 18px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .rankings-snippet h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .rankings-snippet__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .rankings-snippet__item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .rankings-snippet__item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .rankings-snippet__title {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #334155;
+    line-height: 1.35;
+  }
+  .rankings-snippet__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+  }
+  .rankings-snippet__rank {
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+  .rankings-snippet__rank--pending {
+    font-weight: 600;
+    color: #94a3b8;
+  }
+  .rankings-snippet__value {
+    color: #475569;
+    font-variant-numeric: tabular-nums;
+  }
+  .rankings-snippet__unit {
+    color: #64748b;
+    font-size: 0.75rem;
+  }
+  .rankings-snippet__pending-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #92400e;
+    background: #fef3c7;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .rankings-snippet__pending-note {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+  }
+  .rankings-snippet__empty {
+    font-size: 0.8125rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 0;
+  }
+</style>

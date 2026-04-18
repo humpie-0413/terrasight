@@ -1,0 +1,284 @@
+{
+  "slug": "los-angeles-long-beach-anaheim",
+  "cbsaCode": "31080",
+  "city": "Los Angeles-Long Beach-Anaheim",
+  "region": "CA",
+  "country": "US",
+  "coastal": true,
+  "lat": 34.05,
+  "lon": -118.24,
+  "population": 13200000,
+  "populationYear": "2022",
+  "climateZone": "Mediterranean (Csb)",
+  "summary": {
+    "headline": "Environmental snapshot for Los Angeles-Long Beach-Anaheim — 2 of 10 blocks populated (8 pending upstream migration).",
+    "bullets": [
+      "Coastal metro — tide gauge data available via the optional Coastal Conditions block.",
+      "CBSA population ≈ 13,200,000 (2022).",
+      "Climate zone: Mediterranean (Csb).",
+      "Report is statically generated — see Methodology block for trust-tag vocabulary and source list."
+    ]
+  },
+  "blocks": [
+    {
+      "id": "air_quality",
+      "title": "Air Quality",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Ambient air quality in the Los Angeles-Long Beach-Anaheim metro is tracked by EPA AirNow (current AQI) and regulated facility compliance via EPA ECHO. Step 5 scaffolding — live AirNow/ECHO data pending v2 connector migration.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "EPA AirNow",
+          "url": "https://www.airnow.gov/"
+        },
+        {
+          "label": "EPA ECHO",
+          "url": "https://echo.epa.gov/"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "AirNow reporting area may differ from the CBSA boundary — regional readings approximate metro conditions.",
+        "ECHO compliance status is not a direct measure of local exposure (compliance ≠ exposure)."
+      ],
+      "data": null
+    },
+    {
+      "id": "climate_locally",
+      "title": "Climate & Heat",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Local climate baseline for Los Angeles-Long Beach-Anaheim is drawn from the NOAA 1991-2020 climate normals at the primary city station. Heat-day counts (days ≥ 90°F / ≥ 95°F) are derived from daily summaries. Step 5 scaffolding — ClimateNormals v2 connector pending.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "NOAA Climate Normals",
+          "url": "https://www.ncei.noaa.gov/products/land-based-station/us-climate-normals"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "Köppen climate zone: Mediterranean (Csb).",
+        "Reference station: Los Angeles Intl AP (USW00023174)."
+      ],
+      "data": null
+    },
+    {
+      "id": "hazards_disasters",
+      "title": "Disaster Exposure",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Federal disaster declarations affecting Los Angeles County over the past decade are catalogued by OpenFEMA. The summary block reports counts by incident type; the detailed event-level history appears in the optional Disaster History block when ≥1 declaration is present.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "OpenFEMA",
+          "url": "https://www.fema.gov/about/openfema"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "Declarations reflect federal response requests, not the full inventory of hazard events."
+      ],
+      "data": null
+    },
+    {
+      "id": "water",
+      "title": "Drinking Water & Surface Quality",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Public water system compliance in Los Angeles-Long Beach-Anaheim is tracked by EPA SDWIS (violations and health-based actions). Ambient surface water quality samples come from the USGS/EPA Water Quality Portal (WQP). Step 5 scaffolding.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "EPA SDWIS",
+          "url": "https://www.epa.gov/ground-water-and-drinking-water/safe-drinking-water-information-system-sdwis-federal-reporting"
+        },
+        {
+          "label": "Water Quality Portal",
+          "url": "https://www.waterqualitydata.us/"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "WQP samples are discrete observations — date coverage varies by parameter and station.",
+        "SDWIS violation counts do not include every small system on identical cadence; reporting latency applies."
+      ],
+      "data": null
+    },
+    {
+      "id": "industrial_emissions",
+      "title": "Industrial & Emissions",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Reporting facilities in and around Los Angeles-Long Beach-Anaheim disclose toxic chemical releases to the EPA Toxics Release Inventory (TRI) and greenhouse-gas emissions to the GHGRP programme. Both inventories lag by roughly one reporting year.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "EPA TRI",
+          "url": "https://www.epa.gov/toxics-release-inventory-tri-program"
+        },
+        {
+          "label": "EPA GHGRP",
+          "url": "https://www.epa.gov/ghgreporting"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "TRI covers threshold facilities only — small emitters are not represented.",
+        "GHGRP applies to facilities emitting ≥25,000 metric tons CO₂e."
+      ],
+      "data": null
+    },
+    {
+      "id": "site_cleanup",
+      "title": "Contaminated Sites & Cleanup",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Federal contaminated-site programmes tracked in Los Angeles County include Superfund NPL (National Priorities List), the EPA Brownfields ACRES database, and RCRA hazardous-waste TSDFs.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "Superfund NPL",
+          "url": "https://www.epa.gov/superfund"
+        },
+        {
+          "label": "EPA ACRES (Brownfields)",
+          "url": "https://www.epa.gov/cleanups/cleanups-my-community"
+        },
+        {
+          "label": "RCRA Info",
+          "url": "https://enviro.epa.gov/facts/rcrainfo/search.html"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "Site status reflects programme listings — active remediation status and on-site exposure pathways are case-specific."
+      ],
+      "data": null
+    },
+    {
+      "id": "population_exposure",
+      "title": "Population Exposure & Environmental Justice",
+      "status": "pending",
+      "trustTag": "observed",
+      "body": "Roughly 13,200,000 residents live in the Los Angeles-Long Beach-Anaheim CBSA. Full environmental-justice indicators (EJSCREEN percentile exposure + demographic overlap) are a Step-6 deliverable — this Step 5 block reports CBSA-level population only.",
+      "metrics": [
+        {
+          "label": "CBSA population",
+          "value": 13200000,
+          "unit": "people",
+          "note": "Census 2022 estimate.",
+          "trustTag": "observed"
+        }
+      ],
+      "citations": [
+        {
+          "label": "U.S. Census CBSA estimates",
+          "url": "https://www.census.gov/programs-surveys/metro-micro.html"
+        },
+        {
+          "label": "EPA EJSCREEN",
+          "url": "https://www.epa.gov/ejscreen"
+        }
+      ],
+      "error": "EJSCREEN indicators not yet wired (Step 6).",
+      "notes": [
+        "CBSA boundaries approximate commuting patterns, not exposure watersheds. Block-group EJ analysis requires a different geographic unit."
+      ],
+      "data": null
+    },
+    {
+      "id": "methodology",
+      "title": "Methodology & Data Trust",
+      "status": "ok",
+      "trustTag": "derived",
+      "body": "This report is assembled at build time from multiple federal environmental data programmes. Each block above carries its own `trustTag` indicating how direct the underlying signal is — `observed` (direct measurement), `near-real-time` (satellite or sensor feeds with hours-to-day latency), `forecast` (modelled projections), `compliance` (regulatory self-reporting), and `derived` (composite or estimated quantities). Missing data is reported explicitly, never filled by imputation.",
+      "metrics": [
+        {
+          "label": "Core blocks present",
+          "value": 7,
+          "unit": "blocks",
+          "note": null,
+          "trustTag": "derived"
+        },
+        {
+          "label": "Block trust-tag mix",
+          "value": "6 × derived, 1 × observed",
+          "unit": null,
+          "note": null,
+          "trustTag": "derived"
+        }
+      ],
+      "citations": [
+        {
+          "label": "TerraSight data source policy",
+          "url": "docs/architecture/architecture-v2.md#data-source-policy"
+        },
+        {
+          "label": "Report block policy",
+          "url": "docs/reports/report-block-policy.md"
+        }
+      ],
+      "error": null,
+      "notes": [
+        "No composite environmental score is computed. Each indicator is reported on its own axis with its source programme named."
+      ],
+      "data": null
+    },
+    {
+      "id": "coastal_conditions",
+      "title": "Coastal Conditions",
+      "status": "pending",
+      "trustTag": "derived",
+      "body": "Tide gauge observations and mean sea-level trends for Los Angeles-Long Beach-Anaheim are drawn from NOAA CO-OPS. Step 5 scaffolding — CO-OPS v2 connector pending.",
+      "metrics": [],
+      "citations": [
+        {
+          "label": "NOAA CO-OPS",
+          "url": "https://tidesandcurrents.noaa.gov/"
+        }
+      ],
+      "error": "Upstream v2 connector not yet wired (Step 5 scaffolding).",
+      "notes": [
+        "Station coverage is non-uniform — the nearest gauge may be outside the CBSA boundary."
+      ],
+      "data": null
+    },
+    {
+      "id": "related_cities",
+      "title": "Related Metros",
+      "status": "ok",
+      "trustTag": "derived",
+      "body": "Peer metros for comparison — selected on shared climate zone (Mediterranean (Csb)) and region.",
+      "metrics": [],
+      "citations": [],
+      "error": null,
+      "notes": [],
+      "data": {
+        "peer_slugs": [
+          "san-diego-chula-vista-carlsbad",
+          "san-jose-sunnyvale-santa-clara",
+          "riverside-san-bernardino-ontario-ca",
+          "sacramento-roseville-folsom-ca",
+          "san-francisco-oakland-berkeley-ca"
+        ]
+      }
+    }
+  ],
+  "meta": {
+    "updatedAt": "2026-04-17T15:28:16+00:00",
+    "build": {
+      "pipelineVersion": "v2.step5.0",
+      "generatedAt": "2026-04-17T15:28:16+00:00"
+    },
+    "optionalAvailability": {
+      "pfas_monitoring": "absent",
+      "coastal_conditions": "included",
+      "disaster_history_detailed": "absent",
+      "city_comparison": "external",
+      "related_cities": "included"
+    }
+  }
+}

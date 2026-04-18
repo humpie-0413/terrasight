@@ -1,0 +1,158 @@
+---
+/**
+ * Methodology & Data Trust body component.
+ *
+ * Per policy, this block's status is ALWAYS 'ok' — never pending.
+ * (If a producer somehow emits non-ok, fall back to NoData just in case.)
+ *
+ * Renders:
+ *  - Body prose
+ *  - Trust-tag vocabulary legend (5 tags × 1-sentence definitions)
+ *  - Methodology metrics table (block counts, trust-tag mix, pipeline version)
+ *
+ * Pipeline version is expected either from block.data.pipeline_version
+ * or from a metric labeled "pipeline version".
+ */
+import type { ReportBlock, TrustTag } from '@terrasight/schemas';
+import NoData from '../NoData.astro';
+import MetricsTable from '../MetricsTable.astro';
+import { TrustBadge } from '@terrasight/ui';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block.data ?? {}) as any;
+
+const TRUST_TAG_DEFINITIONS: Array<{ tag: TrustTag; definition: string }> = [
+  {
+    tag: 'observed',
+    definition: 'Direct instrument measurement (ground station, gauge, or in-situ sensor).',
+  },
+  {
+    tag: 'near-real-time',
+    definition: 'Satellite or sensor feeds processed within hours to a day of observation.',
+  },
+  {
+    tag: 'forecast',
+    definition: 'Modelled projection (e.g. CAMS, GFS, ERA5 hindcast).',
+  },
+  {
+    tag: 'derived',
+    definition: 'Computed or estimated quantity composed from one or more observations.',
+  },
+  {
+    tag: 'compliance',
+    definition: 'Self-reported regulatory disclosure (e.g. EPA ECHO, TRI, GHGRP).',
+  },
+];
+
+let pipelineVersion: string | undefined;
+if (typeof data.pipeline_version === 'string') {
+  pipelineVersion = data.pipeline_version;
+} else {
+  const pvMetric = block.metrics.find((m) => /pipeline/i.test(m.label));
+  if (pvMetric && typeof pvMetric.value === 'string') pipelineVersion = pvMetric.value;
+}
+---
+
+{block.status !== 'ok' ? (
+  <NoData block={block} />
+) : (
+  <div class="block-body">
+    <p class="block-body__prose">{block.body}</p>
+
+    <section class="trust-legend" aria-labelledby="trust-legend-title">
+      <h3 class="block-body__subtitle" id="trust-legend-title">Trust-tag vocabulary</h3>
+      <dl class="trust-legend__list">
+        {TRUST_TAG_DEFINITIONS.map(({ tag, definition }) => (
+          <div class="trust-legend__row">
+            <dt>
+              <TrustBadge tag={tag} />
+            </dt>
+            <dd>{definition}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+
+    <MetricsTable metrics={block.metrics} fallbackTag={block.trustTag} />
+
+    {pipelineVersion ? (
+      <p class="pipeline-version">
+        Pipeline version: <code>{pipelineVersion}</code>
+      </p>
+    ) : null}
+  </div>
+)}
+
+<style>
+  .block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .block-body__prose {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #334155;
+    margin: 0;
+  }
+  .block-body__subtitle {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 6px;
+  }
+  .trust-legend {
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+  }
+  .trust-legend__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+  }
+  .trust-legend__row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .trust-legend__row dt {
+    margin: 0;
+  }
+  .trust-legend__row dd {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #334155;
+    line-height: 1.5;
+  }
+  .pipeline-version {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+  }
+  .pipeline-version code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  @media (max-width: 640px) {
+    .trust-legend__row {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+  }
+</style>

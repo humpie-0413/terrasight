@@ -1,0 +1,163 @@
+---
+/**
+ * BaseLayout — shared site shell for every Astro page.
+ *
+ * Per-page SEO metadata is optional. When `seo` is passed, we emit:
+ *   - `<title>` (overrides the `title` prop)
+ *   - `<meta name="description">` (overrides the `description` prop)
+ *   - Canonical `<link rel="canonical">` — ONLY when `PUBLIC_SITE_URL`
+ *     is set at build time (see `lib/seo.ts::resolveSiteUrl`).
+ *   - OG + Twitter meta tags (`summary_large_image`).
+ *
+ * When `seo` is omitted, we fall back to the historical behavior (title
+ * + description only, no canonical, minimal OG + `summary` twitter card).
+ * This preserves backward compatibility with pages that haven't yet
+ * migrated to pass `seo`.
+ *
+ * The `<slot name="head" />` slot is preserved — pages continue to inject
+ * JSON-LD there (Article / Breadcrumb / Dataset) per Step 7 pattern.
+ */
+import type { PageSeo } from '../lib/seo';
+import { buildPageMeta } from '../lib/seo';
+
+interface Props {
+  title: string;
+  description?: string;
+  /**
+   * Optional per-page SEO bundle. When passed, canonical/OG/Twitter
+   * tags are rendered from this and take precedence over the basic
+   * `title` / `description` props.
+   */
+  seo?: PageSeo;
+}
+
+const {
+  title,
+  description = 'TerraSight — live climate signals, an environmental data atlas, and U.S. metro-level reports. NASA / NOAA / EPA sources with transparent trust tags.',
+  seo,
+} = Astro.props;
+
+// Build the merged meta. Per the contract, `canonicalUrl` is null unless
+// PUBLIC_SITE_URL was provided at build time.
+const meta = seo ? buildPageMeta(seo) : null;
+
+// Effective title + description: per-page SEO overrides the layout props.
+const effectiveTitle = meta?.title ?? title;
+const effectiveDescription = meta?.description ?? description;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={effectiveDescription} />
+
+    {/*
+      OG + Twitter tags — when `seo` was passed, use the rich set from
+      lib/seo.ts (includes og:url, og:image, twitter:image, and
+      summary_large_image). Otherwise fall back to the historical
+      minimal set so old pages keep working.
+    */}
+    {meta ? (
+      <>
+        {meta.ogTags.map((t) => (
+          <meta property={t.property} content={t.content} />
+        ))}
+        {meta.twitterTags.map((t) => (
+          <meta name={t.name} content={t.content} />
+        ))}
+        {meta.canonicalUrl ? (
+          <link rel="canonical" href={meta.canonicalUrl} />
+        ) : null}
+      </>
+    ) : (
+      <>
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={effectiveTitle} />
+        <meta property="og:description" content={effectiveDescription} />
+        <meta property="og:site_name" content="TerraSight" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={effectiveTitle} />
+        <meta name="twitter:description" content={effectiveDescription} />
+      </>
+    )}
+
+    <title>{effectiveTitle}</title>
+    <!-- Named head slot for per-page JSON-LD + any per-page-only meta tags. -->
+    <slot name="head" />
+    <style is:global>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        font-size: 16px;
+        line-height: 1.55;
+        color: #0f172a;
+        background: #ffffff;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+      h1, h2, h3, h4 { margin: 0; line-height: 1.2; color: #0f172a; }
+      p { margin: 0; }
+      a { color: inherit; }
+      img { max-width: 100%; height: auto; display: block; }
+      button { font: inherit; }
+      .ts-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      .ts-site-header {
+        border-bottom: 1px solid #e2e8f0;
+        background: #ffffff;
+      }
+      .ts-site-header__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+        gap: 24px;
+      }
+      .ts-site-header__brand {
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: #0f172a;
+        text-decoration: none;
+      }
+      .ts-site-header__brand span {
+        color: #22c55e;
+      }
+      .ts-site-header__nav {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .ts-site-header__nav a {
+        font-size: 14px;
+        color: #64748b;
+        text-decoration: none;
+      }
+      .ts-site-header__nav a:hover { color: #0f172a; }
+      @media (max-width: 560px) {
+        .ts-site-header__inner { height: auto; padding: 14px 0; flex-direction: column; align-items: flex-start; }
+        .ts-site-header__nav { gap: 14px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="ts-site-header">
+      <div class="ts-container ts-site-header__inner">
+        <a href="/" class="ts-site-header__brand">Terra<span>Sight</span></a>
+        <nav class="ts-site-header__nav" aria-label="Primary">
+          <a href="/globe">Earth Now</a>
+          <a href="/atlas">Atlas</a>
+          <a href="/reports">Reports</a>
+          <a href="/rankings">Rankings</a>
+          <a href="/guides">Guides</a>
+        </nav>
+      </div>
+    </header>
+    <slot />
+  </body>
+</html>

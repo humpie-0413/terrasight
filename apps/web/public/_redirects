@@ -1,0 +1,15 @@
+# /api/* is served by the Cloudflare Worker in `apps/worker/` (v2).
+#
+# v2 architecture forbids a Render runtime dependency (see CLAUDE.md
+# Non-Negotiable Rule 1 + docs/architecture/architecture-v2.md §7 +
+# docs/architecture/frontend-routing.md "Worker base URL contract").
+# The Worker is bound either:
+#   (a) same-origin at the Pages zone (preferred; no rewrite needed), or
+#   (b) on a dedicated subdomain exposed to the client via
+#       `PUBLIC_WORKER_BASE_URL` at build time.
+# Globe `fetch()` in `src/islands/GlobeApp.tsx` already reads
+# `PUBLIC_WORKER_BASE_URL` — no Pages rewrite is required at runtime.
+#
+# DO NOT re-add a `/api/* → terrasight-api-o959.onrender.com` rewrite.
+# The legacy Render maintenance stub (backend/main.py) is scheduled for
+# removal once the Worker deploy is live.

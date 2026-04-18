@@ -1,0 +1,82 @@
+---
+import type { ReportBlock } from '@terrasight/schemas';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+const NOTICE_TEXT: Record<'pending' | 'not_configured' | 'error', string> = {
+  pending: 'Data pending connector migration.',
+  not_configured: 'Source not configured — requires API key or env var.',
+  error: block.error ?? 'Upstream source failed.',
+};
+
+// Safe narrow: this component is only used for non-ok statuses. If somehow
+// called for 'ok', fall through to a neutral notice.
+const status = block.status === 'ok' ? 'pending' : block.status;
+const noticeText = NOTICE_TEXT[status];
+---
+
+<div class="no-data">
+  {block.body ? <p class="no-data__body">{block.body}</p> : null}
+  <div class={`no-data__notice no-data__notice--${status}`}>
+    <span class="no-data__notice-label">Status</span>
+    <span class="no-data__notice-text">{noticeText}</span>
+  </div>
+  <p class="no-data__metrics-empty">No metric values available yet.</p>
+</div>
+
+<style>
+  .no-data {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .no-data__body {
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: #334155;
+    margin: 0;
+  }
+  .no-data__notice {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    font-size: 0.8125rem;
+  }
+  .no-data__notice--pending {
+    background: #fffbeb;
+    color: #92400e;
+    border-color: #fde68a;
+  }
+  .no-data__notice--error {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+  }
+  .no-data__notice--not_configured {
+    background: #f8fafc;
+    color: #475569;
+    border-color: #e2e8f0;
+  }
+  .no-data__notice-label {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.6875rem;
+  }
+  .no-data__notice-text {
+    flex: 1;
+  }
+  .no-data__metrics-empty {
+    font-size: 0.8125rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 0;
+  }
+</style>

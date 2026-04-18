@@ -1,0 +1,38 @@
+---
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import GuideStub from '../../components/GuideStub.astro';
+
+const title = 'Why compliance is not exposure — Guides — TerraSight';
+const intro =
+  'Regulatory counts (EPA ECHO, SDWIS, OpenFEMA) track reporting activity — violations filed, declarations issued, systems inspected. They are not the same as measured pollutant concentrations, health outcomes, or actual human exposure. This guide explains the mandatory disclaimer that appears on every compliance-tagged block.';
+const path = '/guides/why-compliance-is-not-exposure';
+const generatedAt = new Date().toISOString();
+---
+
+<Layout
+  title={title}
+  description="Why we display the 'compliance ≠ exposure' disclaimer on every regulatory-sourced block in TerraSight."
+  seo={{
+    title,
+    description:
+      'Why we display the "compliance ≠ exposure" disclaimer on every regulatory-sourced block in TerraSight.',
+    path,
+  }}
+>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+  <main id="main" class="guide-stub ts-container">
+    <GuideStub
+      title="Why compliance is not exposure"
+      intro={intro}
+      path={path}
+    />
+  </main>
+  <SiteFooter generatedAt={generatedAt} />
+</Layout>
+
+<style>
+  .guide-stub { padding: 48px 24px; }
+</style>

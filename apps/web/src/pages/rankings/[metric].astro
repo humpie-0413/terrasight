@@ -1,0 +1,611 @@
+---
+/**
+ * /rankings/{metric-slug} — Per-metric ranking page.
+ *
+ * Dynamic Astro SSG route. `getStaticPaths` emits 4 pages (one per
+ * `RankingMetric`), using the hyphenated URL slug while loading the
+ * underscore-named JSON file. The slug translation map lives in
+ * `CityComparison.astro`; we duplicate it here rather than import the
+ * Astro component (Astro components can't export types through a barrel,
+ * and a small shared const is cheaper than a new shared module).
+ *
+ * ## Rendering
+ *  - Page header (metric display name, definition, cadence).
+ *  - Ranked table: rank · city (linked) · value · trust tag · as-of date.
+ *  - Null-graceful: rows where `rank === null` or `value === null` are
+ *    rendered in a "data pending" section below the ranked rows. Rule 5.
+ *  - Methodology footer: citations + "compliance ≠ exposure" disclaimer
+ *    where applicable + link back to /rankings.
+ *  - JSON-LD: `Dataset` (emitted only when ≥1 non-null row) + `BreadcrumbList`.
+ *  - Canonical: emitted only when `PUBLIC_SITE_URL` is set.
+ *
+ * ## Ad slot
+ *  - `rankings-footer` below the methodology (page-bottom revenue unit).
+ */
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import { AdSlot } from '../../components/reports';
+import { TrustBadge } from '@terrasight/ui';
+import rankingsIndexRaw from '../../data/rankings/index.json';
+import type { Ranking, RankingsIndex, RankingMetric } from '@terrasight/schemas';
+
+// Hyphenated URL → underscore metric id (JSON filename).
+// Mirrors `CityComparison.astro::SLUG_MAP` but inverted.
+//
+// LANDMINE (Astro): `getStaticPaths` runs in an isolated scope and
+// cannot access top-level frontmatter constants. The map must be
+// redeclared inside `getStaticPaths` OR defined in an imported module.
+// We keep two copies here — one inside `getStaticPaths`, one at the
+// top level for the render phase — because the frontmatter needs it
+// AFTER the static path pick.
+const URL_SLUG_TO_METRIC: Record<string, RankingMetric> = {
+  'air-quality-pm25': 'air_quality_pm25',
+  'emissions-ghg-total': 'emissions_ghg_total',
+  'water-violations-count': 'water_violations_count',
+  'disaster-declarations-10y': 'disaster_declarations_10y',
+};
+
+// Per-metric metadata (definitions, cadence, disclaimer visibility).
+// Keep aligned with `rankings/index.astro::METRIC_DESCRIPTIONS`.
+interface MetricMeta {
+  definition: string;
+  cadence: string;
+  source: { label: string; url: string };
+  showComplianceDisclaimer: boolean;
+}
+
+const METRIC_META: Record<RankingMetric, MetricMeta> = {
+  air_quality_pm25: {
+    definition:
+      'Annual mean PM2.5 (fine particulate matter, µg/m³) computed from AirNow + EPA AQS monitoring stations within each CBSA. Values reflect monitored ambient concentrations; reporting areas may not cover the entire CBSA.',
+    cadence: 'Annual (refreshed when new validated monitor-year aggregates are posted).',
+    source: { label: 'EPA AirNow / AQS', url: 'https://www.airnow.gov/' },
+    showComplianceDisclaimer: false,
+  },
+  emissions_ghg_total: {
+    definition:
+      'Total facility-reported greenhouse gas emissions (metric tons CO₂-equivalent) from EPA GHGRP + TRI sources located within the CBSA boundary. Counts only facilities large enough to trigger federal reporting (Subpart A thresholds).',
+    cadence: 'Annual (reporting year N published in October of N+1).',
+    source: { label: 'EPA GHGRP / TRI', url: 'https://www.epa.gov/ghgreporting' },
+    showComplianceDisclaimer: true,
+  },
+  water_violations_count: {
+    definition:
+      'Count of reported Safe Drinking Water Act violations across public water systems serving residents in the CBSA. Sourced from EPA SDWIS. A higher count indicates more reported events, not necessarily worse water — enforcement activity and system size both drive the count.',
+    cadence: 'Quarterly (SDWIS data lag is typically one full quarter).',
+    source: { label: 'EPA SDWIS', url: 'https://sdwis.epa.gov/ords/sfdw_pub/f?p=108:1' },
+    showComplianceDisclaimer: true,
+  },
+  disaster_declarations_10y: {
+    definition:
+      'Count of federal disaster declarations affecting the CBSA over the last 10 calendar years, per OpenFEMA. Includes major disaster declarations only (not emergency declarations or fire-management assistance).',
+    cadence: 'Event-driven (new declarations appear as they are issued).',
+    source: { label: 'FEMA OpenFEMA', url: 'https://www.fema.gov/openfema' },
+    showComplianceDisclaimer: false,
+  },
+};
+
+export async function getStaticPaths() {
+  // Astro isolates this function — top-level frontmatter constants are
+  // not visible here. Redeclare the 4 URL slugs locally.
+  const slugs = [
+    'air-quality-pm25',
+    'emissions-ghg-total',
+    'water-violations-count',
+    'disaster-declarations-10y',
+  ];
+  return slugs.map((slug) => ({ params: { metric: slug } }));
+}
+
+// ---- Resolve the ranking for this build target ----
+const { metric: metricSlug } = Astro.params;
+const metricId = metricSlug ? URL_SLUG_TO_METRIC[metricSlug] : undefined;
+
+// Eager glob: inline every ranking JSON at build time. `index.json`
+// gets pulled in too — we filter it out below.
+const rankingModules = import.meta.glob<Ranking>(
+  '../../data/rankings/*.json',
+  { eager: true, import: 'default' },
+);
+
+const rankingByMetric: Record<string, Ranking> = {};
+for (const [path, mod] of Object.entries(rankingModules)) {
+  // Skip the index file — it doesn't match Ranking shape.
+  if (path.endsWith('/index.json')) continue;
+  const maybe = mod as unknown;
+  if (
+    maybe &&
+    typeof maybe === 'object' &&
+    'metric' in maybe &&
+    typeof (maybe as Ranking).metric === 'string'
+  ) {
+    const r = maybe as Ranking;
+    rankingByMetric[r.metric] = r;
+  }
+}
+
+const ranking: Ranking | undefined = metricId ? rankingByMetric[metricId] : undefined;
+const meta = metricId ? METRIC_META[metricId] : undefined;
+
+// Partition rows: ranked (non-null rank & value) vs pending (null).
+const rankedRows = ranking
+  ? ranking.rows.filter((r) => r.rank !== null && r.value !== null)
+  : [];
+const pendingRows = ranking
+  ? ranking.rows.filter((r) => r.rank === null || r.value === null)
+  : [];
+
+// Stable sort for ranked rows by rank asc (matches data, but defensive).
+rankedRows.sort((a, b) => (a.rank ?? Number.POSITIVE_INFINITY) - (b.rank ?? Number.POSITIVE_INFINITY));
+
+// ---- SEO, canonical, JSON-LD ----
+const SITE_URL: string | null =
+  ((import.meta as unknown as { env?: Record<string, string | undefined> }).env
+    ?.PUBLIC_SITE_URL ?? null) as string | null;
+const siteUrlTrimmed = SITE_URL ? SITE_URL.replace(/\/$/, '') : null;
+
+const pageTitle = ranking
+  ? `${ranking.title} — Rankings — TerraSight`
+  : 'Ranking not found — TerraSight';
+const pageDescription = ranking && meta
+  ? `Ranked environmental metric across ${ranking.n} U.S. metros. ${meta.definition.slice(0, 120)}…`
+  : 'Requested ranking was not available at build time.';
+const pagePath = metricSlug ? `/rankings/${metricSlug}` : '/rankings';
+const canonicalUrl = siteUrlTrimmed ? `${siteUrlTrimmed}${pagePath}` : null;
+
+// JSON-LD Breadcrumb — always emitted when we have a ranking.
+const jsonLdBreadcrumb = ranking
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: siteUrlTrimmed ? `${siteUrlTrimmed}/` : '/',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Rankings',
+          item: siteUrlTrimmed ? `${siteUrlTrimmed}/rankings` : '/rankings',
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: ranking.title,
+          item: siteUrlTrimmed ? `${siteUrlTrimmed}${pagePath}` : pagePath,
+        },
+      ],
+    }
+  : null;
+
+// JSON-LD Dataset — emitted only when ≥1 ranked (non-null) row exists.
+// Rule 5 compliance: empty ranking tables should NOT advertise themselves
+// as a Dataset to search engines.
+const jsonLdDataset = ranking && meta && rankedRows.length > 0
+  ? {
+      '@context': 'https://schema.org',
+      '@type': 'Dataset',
+      name: ranking.title,
+      description: meta.definition,
+      creator: { '@type': 'Organization', name: 'TerraSight' },
+      dateModified: ranking.generatedAt,
+      url: siteUrlTrimmed ? `${siteUrlTrimmed}${pagePath}` : pagePath,
+      citation: meta.source.label,
+      measurementTechnique: meta.source.url,
+      variableMeasured: {
+        '@type': 'PropertyValue',
+        name: ranking.title,
+        unitText: ranking.unit,
+      },
+    }
+  : null;
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return iso;
+  }
+}
+
+function formatValue(v: number | null, unit: string): string {
+  if (v === null) return '—';
+  const num = Number.isInteger(v)
+    ? v.toLocaleString()
+    : v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return unit ? `${num} ${unit}` : num;
+}
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDescription}
+  seo={{
+    title: pageTitle,
+    description: pageDescription,
+    path: pagePath,
+  }}
+>
+  <Fragment slot="head">
+    {canonicalUrl ? <link rel="canonical" href={canonicalUrl} /> : null}
+    {jsonLdBreadcrumb ? (
+      <script
+        is:inline
+        type="application/ld+json"
+        set:html={JSON.stringify(jsonLdBreadcrumb)}
+      />
+    ) : null}
+    {jsonLdDataset ? (
+      <script
+        is:inline
+        type="application/ld+json"
+        set:html={JSON.stringify(jsonLdDataset)}
+      />
+    ) : null}
+  </Fragment>
+
+  <main id="main" class="ranking-page">
+    {!ranking || !meta ? (
+      <section class="ts-container ranking-404">
+        <h1 class="ranking-404__title">Ranking not available</h1>
+        <p class="ranking-404__body">
+          We could not find a ranking for <code>{metricSlug ?? '(unknown)'}</code>. The
+          pipeline may not have produced it yet.
+        </p>
+        <p class="ranking-404__cta"><a href="/rankings">← Back to all rankings</a></p>
+      </section>
+    ) : (
+      <>
+        <header class="ranking-hero">
+          <div class="ts-container">
+            <p class="ranking-hero__crumbs">
+              <a href="/">Home</a>
+              <span aria-hidden="true"> / </span>
+              <a href="/rankings">Rankings</a>
+              <span aria-hidden="true"> / </span>
+              <span class="ranking-hero__crumbs-current">{ranking.title}</span>
+            </p>
+            <h1 class="ranking-hero__title">{ranking.title}</h1>
+            <p class="ranking-hero__unit">
+              Unit: <strong>{ranking.unit}</strong> ·
+              Direction: {ranking.direction === 'asc' ? 'lower is better' : 'higher is better'}
+            </p>
+            <p class="ranking-hero__def">{meta.definition}</p>
+            <p class="ranking-hero__meta">
+              Cadence: {meta.cadence}
+              <br />
+              Generated {formatDate(ranking.generatedAt)} · pipeline {ranking.pipelineVersion} ·
+              {ranking.n} {ranking.n === 1 ? 'metro' : 'metros'}
+            </p>
+          </div>
+        </header>
+
+        <section class="ts-container ranking-table-wrap" aria-labelledby="ranking-table-title">
+          <h2 id="ranking-table-title" class="ranking-section-title">Ranked metros</h2>
+          {rankedRows.length === 0 ? (
+            <p class="ranking-empty">
+              No metros have ranked values yet — every row is pending data (see below).
+            </p>
+          ) : (
+            <div class="ranking-table" role="table" aria-label={ranking.title}>
+              <div class="ranking-table__header" role="row">
+                <span class="ranking-table__cell ranking-table__cell--rank" role="columnheader">Rank</span>
+                <span class="ranking-table__cell ranking-table__cell--city" role="columnheader">Metro</span>
+                <span class="ranking-table__cell ranking-table__cell--value" role="columnheader">Value</span>
+                <span class="ranking-table__cell ranking-table__cell--trust" role="columnheader">Trust</span>
+                <span class="ranking-table__cell ranking-table__cell--asof" role="columnheader">As of</span>
+              </div>
+              {rankedRows.map((row) => (
+                <div class="ranking-table__row" role="row">
+                  <span class="ranking-table__cell ranking-table__cell--rank" role="cell">
+                    <strong>#{row.rank}</strong>
+                  </span>
+                  <span class="ranking-table__cell ranking-table__cell--city" role="cell">
+                    <a
+                      class="ranking-table__link"
+                      href={`/reports/${row.slug}`}
+                      data-link-type="internal"
+                      data-target-section="reports"
+                    >
+                      {row.city}
+                    </a>
+                    <span class="ranking-table__region"> · {row.region}</span>
+                  </span>
+                  <span class="ranking-table__cell ranking-table__cell--value" role="cell">
+                    {formatValue(row.value, row.unit)}
+                  </span>
+                  <span class="ranking-table__cell ranking-table__cell--trust" role="cell">
+                    <TrustBadge tag={row.trustTag} />
+                  </span>
+                  <span class="ranking-table__cell ranking-table__cell--asof" role="cell">
+                    {formatDate(ranking.generatedAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {pendingRows.length > 0 ? (
+          <section class="ts-container ranking-pending-wrap" aria-labelledby="ranking-pending-title">
+            <h2 id="ranking-pending-title" class="ranking-section-title ranking-section-title--muted">
+              Data pending
+            </h2>
+            <p class="ranking-pending-note">
+              These metros are in the CBSA universe but do not yet have a ranked
+              value — the upstream connector has not produced data, or the sample
+              size is below the threshold. Rule 5 (graceful status): pending rows
+              remain visible rather than being silently dropped.
+            </p>
+            <ul class="ranking-pending-list">
+              {pendingRows.map((row) => (
+                <li class="ranking-pending-item">
+                  <a
+                    class="ranking-pending-link"
+                    href={`/reports/${row.slug}`}
+                    data-link-type="internal"
+                    data-target-section="reports"
+                  >
+                    {row.city}
+                  </a>
+                  <span class="ranking-pending-region"> · {row.region}</span>
+                  <span class="ranking-pending-label">pending</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <section class="ts-container ranking-methodology" aria-labelledby="ranking-methodology-title">
+          <h2 id="ranking-methodology-title" class="ranking-section-title">Methodology &amp; sources</h2>
+          <p><strong>Source:</strong>{' '}
+            <a href={meta.source.url} target="_blank" rel="noopener noreferrer">
+              {meta.source.label}
+            </a>
+          </p>
+          <p><strong>Definition:</strong> {meta.definition}</p>
+          <p><strong>Cadence:</strong> {meta.cadence}</p>
+          {meta.showComplianceDisclaimer ? (
+            <p class="ranking-disclaimer">
+              <strong>Compliance ≠ exposure.</strong> Regulatory counts indicate reporting activity
+              — not measured health outcomes. See
+              <a href="/guides/why-compliance-is-not-exposure"> why compliance is not exposure</a>
+              for how to read these numbers.
+            </p>
+          ) : null}
+          <p class="ranking-methodology__back">
+            <a href="/rankings" data-link-type="internal" data-target-section="rankings">
+              ← Back to all rankings
+            </a>
+          </p>
+        </section>
+
+        <div class="ts-container ranking-ad-row">
+          <AdSlot slot="rankings-footer" />
+        </div>
+      </>
+    )}
+  </main>
+
+  <SiteFooter generatedAt={ranking?.generatedAt ?? (rankingsIndexRaw as unknown as RankingsIndex).generatedAt} />
+</Layout>
+
+<style>
+  .ranking-page { padding-bottom: 48px; }
+
+  /* 404 */
+  .ranking-404 { padding: 72px 24px; text-align: center; }
+  .ranking-404__title { font-size: 2rem; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+  .ranking-404__body { font-size: 1rem; color: #64748b; max-width: 460px; margin: 0 auto 18px; line-height: 1.55; }
+  .ranking-404__body code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+  .ranking-404__cta a { color: #1d4ed8; text-decoration: underline; font-weight: 600; }
+
+  /* Hero */
+  .ranking-hero {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    padding: 48px 0 32px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .ranking-hero__crumbs { font-size: 0.8125rem; color: #64748b; margin: 0 0 12px; }
+  .ranking-hero__crumbs a { color: #1d4ed8; text-decoration: none; }
+  .ranking-hero__crumbs a:hover { text-decoration: underline; }
+  .ranking-hero__crumbs-current { color: #0f172a; font-weight: 500; }
+  .ranking-hero__title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin: 0 0 10px;
+    line-height: 1.15;
+  }
+  .ranking-hero__unit {
+    font-size: 0.875rem;
+    color: #475569;
+    margin: 0 0 12px;
+  }
+  .ranking-hero__def {
+    font-size: 0.9375rem;
+    color: #334155;
+    line-height: 1.6;
+    max-width: 720px;
+    margin: 0 0 14px;
+  }
+  .ranking-hero__meta {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+    line-height: 1.55;
+  }
+
+  .ranking-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+  .ranking-section-title--muted { color: #64748b; }
+
+  .ranking-table-wrap {
+    padding: 32px 24px 0;
+  }
+  .ranking-empty {
+    padding: 32px;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+  }
+
+  .ranking-table {
+    width: 100%;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .ranking-table__header, .ranking-table__row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 2fr) minmax(120px, 1fr) 96px 100px;
+    gap: 16px;
+    padding: 12px 16px;
+    align-items: center;
+  }
+  .ranking-table__header {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ranking-table__row {
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.875rem;
+  }
+  .ranking-table__row:last-child { border-bottom: none; }
+  .ranking-table__cell { min-width: 0; }
+  .ranking-table__cell--rank { font-variant-numeric: tabular-nums; color: #0f172a; }
+  .ranking-table__cell--city { overflow: hidden; text-overflow: ellipsis; }
+  .ranking-table__cell--value {
+    font-variant-numeric: tabular-nums;
+    color: #334155;
+    font-weight: 600;
+  }
+  .ranking-table__cell--asof {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+  }
+  .ranking-table__link {
+    color: #1d4ed8;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .ranking-table__link:hover { text-decoration: underline; }
+  .ranking-table__region { color: #94a3b8; font-size: 0.8125rem; }
+
+  @media (max-width: 720px) {
+    .ranking-table__header { display: none; }
+    .ranking-table__row {
+      grid-template-columns: 56px minmax(0, 1fr);
+      grid-template-areas:
+        "rank city"
+        ". value"
+        ". trust"
+        ". asof";
+      row-gap: 4px;
+    }
+    .ranking-table__cell--rank { grid-area: rank; }
+    .ranking-table__cell--city { grid-area: city; }
+    .ranking-table__cell--value { grid-area: value; font-size: 0.8125rem; }
+    .ranking-table__cell--trust { grid-area: trust; }
+    .ranking-table__cell--asof { grid-area: asof; }
+  }
+
+  /* Pending section */
+  .ranking-pending-wrap {
+    padding: 40px 24px 0;
+  }
+  .ranking-pending-note {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin: 0 0 12px;
+    line-height: 1.55;
+    max-width: 680px;
+  }
+  .ranking-pending-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ranking-pending-item {
+    padding: 8px 12px;
+    background: #fffbeb;
+    border-left: 3px solid #fbbf24;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ranking-pending-link {
+    color: #1d4ed8;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .ranking-pending-link:hover { text-decoration: underline; }
+  .ranking-pending-region { color: #78350f; font-size: 0.8125rem; }
+  .ranking-pending-label {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #fef3c7;
+    color: #78350f;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+
+  .ranking-methodology {
+    padding: 40px 24px 0;
+    max-width: 760px;
+  }
+  .ranking-methodology p {
+    font-size: 0.9375rem;
+    color: #475569;
+    line-height: 1.65;
+    margin: 0 0 10px;
+  }
+  .ranking-methodology a {
+    color: #1d4ed8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ranking-disclaimer {
+    padding: 12px 14px;
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    border-radius: 4px;
+    color: #78350f;
+  }
+  .ranking-disclaimer strong { color: #78350f; }
+  .ranking-methodology__back { margin-top: 18px !important; }
+
+  .ranking-ad-row {
+    padding: 32px 24px 0;
+  }
+</style>

@@ -1,0 +1,214 @@
+---
+import type { CityReportIndexEntry } from '@terrasight/schemas';
+
+export interface Props {
+  reports: CityReportIndexEntry[];
+}
+
+const { reports } = Astro.props;
+
+function statusLabel(s: CityReportIndexEntry['status']): string {
+  if (s === 'ok') return 'Complete';
+  if (s === 'partial') return 'Building';
+  return 'Error';
+}
+
+function statusClass(s: CityReportIndexEntry['status']): string {
+  if (s === 'ok') return 'report-card__status--ok';
+  if (s === 'partial') return 'report-card__status--partial';
+  return 'report-card__status--error';
+}
+---
+
+<section class="featured" aria-labelledby="featured-title">
+  <div class="ts-container">
+    <header class="featured__header">
+      <div>
+        <h2 id="featured-title" class="featured__title">Featured Local Reports</h2>
+        <p class="featured__subtitle">
+          U.S. metro-level environmental dossiers — air, water, facilities, hazards.
+          Built block-by-block from authoritative sources.
+        </p>
+      </div>
+      <a class="featured__all" href="/reports">Browse all <span aria-hidden="true">→</span></a>
+    </header>
+
+    {reports.length === 0 ? (
+      <div class="featured__empty">
+        Reports building — check back soon.
+      </div>
+    ) : (
+      <ul class="featured__grid">
+        {reports.map((r) => (
+          <li class="report-card-wrap">
+            <a class="report-card" href={`/reports/${r.slug}`} aria-label={`Open ${r.city} environmental report`}>
+              <div class="report-card__top">
+                <span class="report-card__region" aria-label={`Region ${r.region}`}>{r.region}</span>
+                <span class={`report-card__status ${statusClass(r.status)}`}>
+                  <span aria-hidden="true" class="report-card__status-dot"></span>
+                  {statusLabel(r.status)}
+                </span>
+              </div>
+              <h3 class="report-card__city">{r.city}</h3>
+              <p class="report-card__progress">
+                <strong>{r.coreBlocksOk}</strong> / {r.coreBlocksTotal} core blocks populated
+              </p>
+              <div class="report-card__progress-bar" role="presentation">
+                <span
+                  class="report-card__progress-fill"
+                  style={`width:${(r.coreBlocksOk / r.coreBlocksTotal) * 100}%;`}
+                ></span>
+              </div>
+              <p class="report-card__cta">
+                View report <span aria-hidden="true">→</span>
+              </p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+</section>
+
+<style>
+  .featured {
+    padding: 72px 0;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .featured__header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .featured__title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .featured__subtitle {
+    font-size: 14px;
+    color: #64748b;
+    max-width: 600px;
+    margin: 0;
+  }
+  .featured__all {
+    font-size: 14px;
+    color: #0f172a;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .featured__all:hover { color: #22c55e; }
+
+  .featured__empty {
+    padding: 40px 24px;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .featured__grid {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .report-card-wrap { display: block; }
+
+  .report-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    height: 100%;
+  }
+  .report-card:hover {
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+  .report-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .report-card__region {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 9999px;
+  }
+  .report-card__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+  }
+  .report-card__status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    display: inline-block;
+  }
+  .report-card__status--ok { color: #15803d; background: #dcfce7; }
+  .report-card__status--partial { color: #b45309; background: #fef3c7; }
+  .report-card__status--error { color: #b91c1c; background: #fee2e2; }
+
+  .report-card__city {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    margin: 4px 0 0;
+  }
+  .report-card__progress {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+  }
+  .report-card__progress strong {
+    color: #0f172a;
+    font-weight: 700;
+  }
+  .report-card__progress-bar {
+    height: 4px;
+    border-radius: 9999px;
+    background: #f1f5f9;
+    overflow: hidden;
+  }
+  .report-card__progress-fill {
+    display: block;
+    height: 100%;
+    background: #22c55e;
+  }
+  .report-card__cta {
+    margin-top: auto;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+</style>

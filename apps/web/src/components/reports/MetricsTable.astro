@@ -1,0 +1,113 @@
+---
+import type { ReportMetric, TrustTag } from '@terrasight/schemas';
+import { TrustBadge } from '@terrasight/ui';
+
+export interface Props {
+  metrics: ReportMetric[];
+  // Block-level trust tag — used when a metric does not carry its own.
+  fallbackTag: TrustTag;
+}
+
+const { metrics, fallbackTag } = Astro.props;
+
+function formatValue(v: ReportMetric['value']): string {
+  if (v === null || v === undefined) return '—';
+  if (typeof v === 'number') {
+    // Preserve integers; format floats with up to 3 significant digits.
+    if (Number.isInteger(v)) return v.toLocaleString();
+    return v.toLocaleString(undefined, {
+      maximumFractionDigits: 3,
+    });
+  }
+  return String(v);
+}
+---
+
+{metrics.length === 0 ? (
+  <p class="metrics-empty">No metric values available yet.</p>
+) : (
+  <table class="metrics-table">
+    <thead>
+      <tr>
+        <th scope="col">Metric</th>
+        <th scope="col">Value</th>
+        <th scope="col">Trust</th>
+      </tr>
+    </thead>
+    <tbody>
+      {metrics.map((m) => (
+        <tr>
+          <td class="metrics-table__label">
+            <span>{m.label}</span>
+            {m.note ? <span class="metrics-table__note">{m.note}</span> : null}
+          </td>
+          <td class="metrics-table__value">
+            <strong>{formatValue(m.value)}</strong>
+            {m.unit ? <span class="metrics-table__unit">{m.unit}</span> : null}
+          </td>
+          <td class="metrics-table__trust">
+            <TrustBadge tag={m.trustTag ?? fallbackTag} />
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
+
+<style>
+  .metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+  .metrics-table thead th {
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  .metrics-table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+  .metrics-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .metrics-table__label {
+    color: #0f172a;
+    max-width: 40%;
+  }
+  .metrics-table__label span {
+    display: block;
+  }
+  .metrics-table__note {
+    color: #64748b;
+    font-size: 0.75rem;
+    margin-top: 2px;
+  }
+  .metrics-table__value strong {
+    font-weight: 600;
+    color: #0f172a;
+  }
+  .metrics-table__unit {
+    color: #64748b;
+    margin-left: 4px;
+    font-size: 0.8125rem;
+  }
+  .metrics-table__trust {
+    white-space: nowrap;
+  }
+  .metrics-empty {
+    font-size: 0.8125rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 0;
+  }
+</style>

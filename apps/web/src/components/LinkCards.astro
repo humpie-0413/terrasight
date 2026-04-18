@@ -1,0 +1,255 @@
+---
+// Three topical cards (Atlas, Guides, Rankings) + one prominent Globe
+// preview CTA card. Pure SSG; no client:* directives.
+
+const topicalCards = [
+  {
+    id: 'atlas',
+    href: '/atlas',
+    glyph: '▦',
+    title: 'Environmental Data Atlas',
+    blurb:
+      '8 categories — air, water, hydrology, coast/ocean, soil/land, waste, emissions, climate/hazards. Every dataset tagged with its trust level.',
+    cta: 'Open the atlas',
+  },
+  {
+    id: 'guides',
+    href: '/guides',
+    glyph: '❖',
+    title: 'Guides',
+    blurb:
+      'Methodology notes. How we tag trust. Why composite scores are out. Read before you cite.',
+    cta: 'Read the guides',
+  },
+  {
+    id: 'rankings',
+    href: '/rankings',
+    glyph: '≡',
+    title: 'Metro Rankings',
+    blurb:
+      'U.S. metros sorted by PM2.5, GHG emissions, water-quality violations, and declared disasters. Direction noted per metric.',
+    cta: 'See the rankings',
+  },
+];
+---
+
+<section class="explore" aria-labelledby="explore-title">
+  <div class="ts-container">
+    <header class="explore__header">
+      <h2 id="explore-title" class="explore__title">Go deeper</h2>
+      <p class="explore__subtitle">
+        Four entry points into TerraSight — whether you want the whole globe, a catalog, or a metro ranking.
+      </p>
+    </header>
+
+    <div class="explore__grid">
+      <!-- Globe preview — spans 2 cols on wide screens -->
+      <a href="/globe" class="globe-card" aria-labelledby="globe-card-title">
+        <div class="globe-card__preview" aria-hidden="true">
+          <span class="globe-card__sphere"></span>
+          <span class="globe-card__ring globe-card__ring--a"></span>
+          <span class="globe-card__ring globe-card__ring--b"></span>
+        </div>
+        <div class="globe-card__body">
+          <p class="globe-card__eyebrow">Earth Now · 6-layer MVP</p>
+          <h3 id="globe-card-title" class="globe-card__title">Watch the planet in real time</h3>
+          <p class="globe-card__blurb">
+            Base imagery, SST, AOD, clouds, night lights, wildfires, earthquakes.
+            One continuous field and one event overlay at a time — no overplotting.
+          </p>
+          <p class="globe-card__cta">
+            Launch the globe <span aria-hidden="true">→</span>
+          </p>
+        </div>
+      </a>
+
+      {topicalCards.map((card) => (
+        <a href={card.href} class="link-card" aria-labelledby={`link-card-${card.id}-title`}>
+          <span class="link-card__glyph" aria-hidden="true">{card.glyph}</span>
+          <h3 id={`link-card-${card.id}-title`} class="link-card__title">{card.title}</h3>
+          <p class="link-card__blurb">{card.blurb}</p>
+          <p class="link-card__cta">
+            {card.cta} <span aria-hidden="true">→</span>
+          </p>
+        </a>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .explore {
+    padding: 72px 0 80px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .explore__header {
+    margin-bottom: 28px;
+    max-width: 680px;
+  }
+  .explore__title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+  }
+  .explore__subtitle {
+    font-size: 14px;
+    color: #64748b;
+    margin: 0;
+  }
+
+  .explore__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+
+  /* Globe card — visually prominent */
+  .globe-card {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(180px, 280px) 1fr;
+    gap: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid #1e293b;
+    background: #0f172a;
+    color: #f1f5f9;
+    text-decoration: none;
+    transition: transform 140ms ease, box-shadow 140ms ease;
+    min-height: 220px;
+  }
+  .globe-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.24);
+  }
+  .globe-card__preview {
+    position: relative;
+    background:
+      radial-gradient(circle at 35% 35%, #0c4a6e 0%, #0f172a 60%),
+      #020617;
+    overflow: hidden;
+  }
+  .globe-card__sphere {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 30%, #38bdf8 0%, #0284c7 35%, #0c4a6e 65%, #082f49 100%);
+    box-shadow:
+      inset 6px -8px 30px rgba(0, 0, 0, 0.55),
+      0 6px 24px rgba(56, 189, 248, 0.25);
+  }
+  .globe-card__ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    left: 50%;
+    top: 50%;
+  }
+  .globe-card__ring--a {
+    width: 200px;
+    height: 200px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(56, 189, 248, 0.25);
+  }
+  .globe-card__ring--b {
+    width: 260px;
+    height: 260px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(148, 163, 184, 0.15);
+  }
+
+  .globe-card__body {
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    justify-content: center;
+  }
+  .globe-card__eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #38bdf8;
+    font-weight: 700;
+    margin: 0;
+  }
+  .globe-card__title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #f1f5f9;
+    margin: 0;
+  }
+  .globe-card__blurb {
+    font-size: 14px;
+    color: #cbd5e1;
+    max-width: 520px;
+    margin: 0;
+  }
+  .globe-card__cta {
+    margin-top: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #f1f5f9;
+  }
+
+  @media (max-width: 560px) {
+    .globe-card {
+      grid-template-columns: 1fr;
+      min-height: 0;
+    }
+    .globe-card__preview { min-height: 160px; }
+    .globe-card__body { padding: 22px; }
+    .globe-card__title { font-size: 20px; }
+  }
+
+  /* Topical link cards */
+  .link-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 24px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .link-card:hover {
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+  .link-card__glyph {
+    font-size: 22px;
+    color: #22c55e;
+    line-height: 1;
+  }
+  .link-card__title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+  }
+  .link-card__blurb {
+    font-size: 14px;
+    color: #475569;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .link-card__cta {
+    margin: 4px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+</style>

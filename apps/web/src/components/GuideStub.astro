@@ -1,0 +1,133 @@
+---
+/**
+ * GuideStub — shared shell for every /guides/* stub page.
+ *
+ * Per the Step 8 user refinement, every guide stub emits
+ * `<meta name="robots" content="noindex, nofollow">` until the
+ * content body ships. This component centralizes that constraint + the
+ * "coming soon" scaffolding so the 4 stub pages can stay tiny.
+ *
+ * The canonical link is NOT emitted for guide stubs (they are not yet
+ * indexable). The JSON-LD head slot is also left empty.
+ */
+export interface Props {
+  title: string;
+  /** 1-paragraph intro describing what the guide will cover. */
+  intro: string;
+  /** URL path for the page (e.g. `/guides/what-is-a-trust-tag`). */
+  path: string;
+}
+
+const { title, intro, path } = Astro.props;
+---
+
+<p class="guide-stub__crumbs">
+  <a href="/">Home</a>
+  <span aria-hidden="true"> / </span>
+  <a href="/guides">Guides</a>
+  <span aria-hidden="true"> / </span>
+  <span class="guide-stub__crumbs-current">{title}</span>
+</p>
+<h1 class="guide-stub__title">{title}</h1>
+<p class="guide-stub__intro">{intro}</p>
+<section class="guide-stub__coming-soon" role="note" aria-labelledby="guide-stub-soon">
+  <h2 id="guide-stub-soon" class="guide-stub__coming-title">Coming soon</h2>
+  <p class="guide-stub__coming-body">
+    The full body of this guide is being written. In the meantime:
+  </p>
+  <ul class="guide-stub__links">
+    <li>
+      <a href="/guides" data-link-type="internal" data-target-section="guides">
+        ← Back to all guides
+      </a>
+    </li>
+    <li>
+      <a href="/reports" data-link-type="internal" data-target-section="reports">
+        Browse U.S. metro reports
+      </a>
+    </li>
+  </ul>
+  <p class="guide-stub__meta">
+    This page is currently <code>noindex, nofollow</code> — it will not
+    appear in search results until the content ships. Current path:
+    <code>{path}</code>
+  </p>
+</section>
+
+<style>
+  .guide-stub__crumbs {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0 0 12px;
+  }
+  .guide-stub__crumbs a { color: #1d4ed8; text-decoration: none; }
+  .guide-stub__crumbs a:hover { text-decoration: underline; }
+  .guide-stub__crumbs-current { color: #0f172a; font-weight: 500; }
+
+  .guide-stub__title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    line-height: 1.2;
+  }
+
+  .guide-stub__intro {
+    font-size: 1rem;
+    color: #334155;
+    line-height: 1.65;
+    max-width: 680px;
+    margin: 0 0 32px;
+  }
+
+  .guide-stub__coming-soon {
+    padding: 18px 20px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    background: #f8fafc;
+    max-width: 680px;
+  }
+  .guide-stub__coming-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 10px;
+  }
+  .guide-stub__coming-body {
+    font-size: 0.9375rem;
+    color: #334155;
+    margin: 0 0 10px;
+    line-height: 1.6;
+  }
+  .guide-stub__links {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .guide-stub__links a {
+    color: #1d4ed8;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-size: 0.9375rem;
+  }
+  .guide-stub__meta {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.55;
+  }
+  .guide-stub__meta code {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.75rem;
+    color: #475569;
+  }
+</style>

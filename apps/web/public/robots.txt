@@ -1,0 +1,19 @@
+# robots.txt for TerraSight
+#
+# Policy (Step 8 SEO / monetization):
+#  - All public pages are crawlable by default.
+#  - Individual guide stubs are `noindex, nofollow` via per-page meta
+#    tag; we also exclude them from the sitemap integration.
+#  - Sitemap URL is appended by CI only when PUBLIC_SITE_URL is set at
+#    build time (see docs/architecture/seo-ia.md §"Deploy wiring").
+#    When unset, the `Sitemap:` line is omitted.
+
+User-agent: *
+Allow: /
+
+# Block direct crawling of internal build artifacts + guide stubs.
+# Guide stubs are noindex at the page level; this is belt-and-suspenders.
+Disallow: /guides/what-is-a-trust-tag
+Disallow: /guides/how-to-read-a-report
+Disallow: /guides/why-compliance-is-not-exposure
+Disallow: /guides/finding-local-environmental-data

@@ -1,0 +1,190 @@
+---
+/**
+ * RelatedCities: sidebar card listing peer metros for cross-navigation.
+ *
+ * Gate rules (Step 5 policy):
+ *  - meta.optionalAvailability.related_cities === 'absent' → render nothing.
+ *  - === 'included' → render up to 5 peers from the `related_cities` block.
+ *  - === 'external' is NOT applicable for this block (schema allows it,
+ *    but the composer does not emit it); defensive: render nothing.
+ *
+ * Data shape handling (the composer output is in flux):
+ *  - Preferred: `block.data.peers` = Array<{ slug, city, region, reason? }>
+ *  - Actual (Step 5 output): `block.data.peer_slugs` = string[]
+ *    — resolved against the reports-index mirror to fetch city/region.
+ *  - If neither yields a list, render a compact empty card.
+ *
+ * The component never crashes on missing/pending data (CLAUDE.md rule 5).
+ */
+import type { CityReport } from '@terrasight/schemas';
+import reportsIndex from '../../data/reports-index.json';
+
+export interface Props {
+  report: CityReport;
+}
+
+const { report } = Astro.props;
+
+interface ResolvedPeer {
+  slug: string;
+  city: string;
+  region: string;
+  reason?: string;
+}
+
+interface IndexEntry {
+  slug: string;
+  city: string;
+  region: string;
+  // other fields ignored
+}
+
+// The mirror JSON has a leading `_source` doc string — strip it before
+// treating the array. Tolerate unknown shape safely.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const indexRaw = reportsIndex as any;
+const indexEntries: IndexEntry[] = Array.isArray(indexRaw?.reports)
+  ? indexRaw.reports
+  : [];
+const bySlug = new Map<string, IndexEntry>(
+  indexEntries.map((e) => [e.slug, e]),
+);
+
+const availability = report.meta.optionalAvailability.related_cities;
+const isIncluded = availability === 'included';
+
+// Find the block defensively — composer may have skipped emitting it
+// even when availability === 'included' (e.g. upstream error).
+const block = isIncluded
+  ? report.blocks.find((b) => b.id === 'related_cities')
+  : undefined;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block?.data ?? {}) as any;
+
+let peers: ResolvedPeer[] = [];
+
+if (Array.isArray(data.peers)) {
+  // Preferred shape — rich objects
+  peers = data.peers
+    .filter((p: unknown) => p && typeof (p as { slug?: unknown }).slug === 'string')
+    .slice(0, 5)
+    .map((p: Record<string, unknown>) => ({
+      slug: String(p.slug),
+      city: typeof p.city === 'string' ? p.city : String(p.slug),
+      region: typeof p.region === 'string' ? p.region : '',
+      reason: typeof p.reason === 'string' ? p.reason : undefined,
+    }));
+} else if (Array.isArray(data.peer_slugs)) {
+  // Actual Step 5 output — flat slug list, resolve via index mirror.
+  peers = (data.peer_slugs as unknown[])
+    .filter((s): s is string => typeof s === 'string')
+    .slice(0, 5)
+    .map((slug) => {
+      const entry = bySlug.get(slug);
+      return {
+        slug,
+        city: entry?.city ?? slug,
+        region: entry?.region ?? '',
+      };
+    });
+}
+---
+
+{isIncluded ? (
+  <aside class="related-cities" aria-labelledby="related-cities-title">
+    <h3 id="related-cities-title">Related cities</h3>
+    {peers.length === 0 ? (
+      <p class="related-cities__empty">No related cities available.</p>
+    ) : (
+      <>
+        <ul class="related-cities__list">
+          {peers.map((peer) => (
+            <li class="related-cities__item">
+              <a
+                class="related-cities__link"
+                href={`/reports/${peer.slug}`}
+              >
+                {peer.city}
+              </a>
+              {peer.region ? (
+                <>, <span class="related-cities__region">{peer.region}</span></>
+              ) : null}
+              {peer.reason ? (
+                <span class="related-cities__reason"> — {peer.reason}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <p class="related-cities__caption">
+          Selected by climate zone or state.
+        </p>
+      </>
+    )}
+  </aside>
+) : null}
+
+<style>
+  .related-cities {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 18px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .related-cities h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .related-cities__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .related-cities__item {
+    font-size: 0.875rem;
+    color: #334155;
+    line-height: 1.5;
+  }
+  .related-cities__link {
+    color: #1d4ed8;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .related-cities__link:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .related-cities__region {
+    color: #64748b;
+    font-size: 0.8125rem;
+  }
+  .related-cities__reason {
+    color: #64748b;
+    font-size: 0.8125rem;
+    font-style: italic;
+  }
+  .related-cities__caption {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 4px 0 0;
+    line-height: 1.5;
+  }
+  .related-cities__empty {
+    font-size: 0.8125rem;
+    color: #64748b;
+    font-style: italic;
+    margin: 0;
+  }
+</style>

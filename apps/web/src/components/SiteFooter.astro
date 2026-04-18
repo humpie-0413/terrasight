@@ -1,0 +1,198 @@
+---
+export interface Props {
+  generatedAt: string;
+}
+const { generatedAt } = Astro.props;
+
+// Format the pipeline generatedAt into a short date string.
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return iso;
+  }
+}
+const displayDate = formatDate(generatedAt);
+const year = new Date().getUTCFullYear();
+---
+
+<footer class="site-footer" aria-labelledby="site-footer-title">
+  <div class="ts-container">
+    <h2 id="site-footer-title" class="site-footer__sr" >TerraSight footer</h2>
+
+    <div class="site-footer__grid">
+      <div class="site-footer__brand-col">
+        <p class="site-footer__brand">Terra<span>Sight</span></p>
+        <p class="site-footer__tagline">
+          Statically generated · {displayDate}
+        </p>
+        <p class="site-footer__lede">
+          A visual-first environmental observatory. Source-first, trust-tagged, no composite scores.
+        </p>
+      </div>
+
+      <nav class="site-footer__links" aria-label="Footer">
+        <div class="site-footer__col">
+          <p class="site-footer__col-title">Explore</p>
+          <a href="/globe">Earth Now</a>
+          <a href="/atlas">Data Atlas</a>
+          <a href="/reports">Local Reports</a>
+          <a href="/rankings">Metro Rankings</a>
+        </div>
+        <div class="site-footer__col">
+          <p class="site-footer__col-title">About</p>
+          <a href="/guides">Guides</a>
+          <a href="/guides/how-to-read-a-report">Methodology</a>
+          <a href="/guides/what-is-a-trust-tag">Trust tag legend</a>
+          <a href="#">GitHub</a>
+        </div>
+      </nav>
+    </div>
+
+    <div class="site-footer__legend" aria-label="Trust tag legend">
+      <span class="legend-pill legend-pill--observed">
+        <span aria-hidden="true" class="legend-pill__dot"></span>observed
+      </span>
+      <span class="legend-pill legend-pill--nrt">
+        <span aria-hidden="true" class="legend-pill__dot"></span>near-real-time
+      </span>
+      <span class="legend-pill legend-pill--forecast">
+        <span aria-hidden="true" class="legend-pill__dot"></span>forecast
+      </span>
+      <span class="legend-pill legend-pill--derived">
+        <span aria-hidden="true" class="legend-pill__dot"></span>derived
+      </span>
+      <span class="legend-pill legend-pill--compliance">
+        <span aria-hidden="true" class="legend-pill__dot"></span>compliance
+      </span>
+      <a href="/guides/what-is-a-trust-tag" class="site-footer__legend-link">What do these mean? →</a>
+    </div>
+
+    <p class="site-footer__copy">
+      © {year} TerraSight · content under its source licenses · see methodology.
+    </p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    background: #ffffff;
+    padding: 56px 0 32px;
+    color: #475569;
+    border-top: 1px solid #e2e8f0;
+  }
+  .site-footer__sr {
+    position: absolute;
+    width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .site-footer__grid {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 32px;
+    margin-bottom: 28px;
+  }
+  .site-footer__brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 4px;
+  }
+  .site-footer__brand span { color: #22c55e; }
+  .site-footer__tagline {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0 0 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .site-footer__lede {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0;
+    max-width: 360px;
+    line-height: 1.55;
+  }
+  .site-footer__links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 24px;
+  }
+  .site-footer__col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .site-footer__col-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #0f172a;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .site-footer__col a {
+    font-size: 13px;
+    color: #64748b;
+    text-decoration: none;
+  }
+  .site-footer__col a:hover { color: #0f172a; }
+
+  .site-footer__legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 14px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    margin-bottom: 20px;
+  }
+  .legend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+  }
+  .legend-pill__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    display: inline-block;
+  }
+  .legend-pill--observed { color: #22c55e; background: #22c55e14; border-color: #22c55e55; }
+  .legend-pill--nrt { color: #eab308; background: #eab30814; border-color: #eab30855; }
+  .legend-pill--forecast { color: #f97316; background: #f9731614; border-color: #f9731655; }
+  .legend-pill--derived { color: #3b82f6; background: #3b82f614; border-color: #3b82f655; }
+  .legend-pill--compliance { color: #a855f7; background: #a855f714; border-color: #a855f755; }
+
+  .site-footer__legend-link {
+    font-size: 12px;
+    color: #0f172a;
+    text-decoration: underline;
+    text-decoration-color: #cbd5e1;
+    margin-left: auto;
+  }
+  .site-footer__legend-link:hover {
+    color: #22c55e;
+    text-decoration-color: #22c55e;
+  }
+
+  .site-footer__copy {
+    font-size: 12px;
+    color: #94a3b8;
+    margin: 0;
+  }
+
+  @media (max-width: 560px) {
+    .site-footer__grid { grid-template-columns: 1fr; gap: 24px; }
+    .site-footer__legend-link { margin-left: 0; }
+  }
+</style>

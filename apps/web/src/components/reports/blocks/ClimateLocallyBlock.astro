@@ -1,0 +1,122 @@
+---
+/**
+ * Climate & Heat body component.
+ *
+ * Source: NOAA 1991-2020 climate normals + daily summaries.
+ *
+ * Block-specific data shape (when status === 'ok'):
+ *   {
+ *     station_id?: string;
+ *     station_name?: string;
+ *     heat_days_90f?: number;
+ *     heat_days_95f?: number;
+ *   }
+ */
+import type { ReportBlock } from '@terrasight/schemas';
+import NoData from '../NoData.astro';
+import MetricsTable from '../MetricsTable.astro';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block.data ?? {}) as any;
+const stationId: string | undefined = typeof data.station_id === 'string' ? data.station_id : undefined;
+const stationName: string | undefined = typeof data.station_name === 'string' ? data.station_name : undefined;
+const heatDays90f: number | undefined = typeof data.heat_days_90f === 'number' ? data.heat_days_90f : undefined;
+const heatDays95f: number | undefined = typeof data.heat_days_95f === 'number' ? data.heat_days_95f : undefined;
+const hasHeatCallout = heatDays90f !== undefined || heatDays95f !== undefined;
+---
+
+{block.status !== 'ok' ? (
+  <NoData block={block} />
+) : (
+  <div class="block-body">
+    <p class="block-body__prose">{block.body}</p>
+
+    {stationId ? (
+      <p class="station-ref">
+        Reference station: <strong>{stationName ?? stationId}</strong>
+        {stationName ? <span class="station-ref__code"> ({stationId})</span> : null}
+      </p>
+    ) : null}
+
+    <MetricsTable metrics={block.metrics} fallbackTag={block.trustTag} />
+
+    {hasHeatCallout ? (
+      <div class="heat-callout">
+        <h3 class="heat-callout__title">Annual heat-day normals</h3>
+        <ul class="heat-callout__list">
+          {heatDays90f !== undefined ? (
+            <li>
+              <strong>{heatDays90f.toLocaleString()}</strong> days ≥ 90°F
+            </li>
+          ) : null}
+          {heatDays95f !== undefined ? (
+            <li>
+              <strong>{heatDays95f.toLocaleString()}</strong> days ≥ 95°F
+            </li>
+          ) : null}
+        </ul>
+      </div>
+    ) : null}
+  </div>
+)}
+
+<style>
+  .block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .block-body__prose {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #334155;
+    margin: 0;
+  }
+  .station-ref {
+    font-size: 0.875rem;
+    color: #475569;
+    margin: 0;
+  }
+  .station-ref strong {
+    color: #0f172a;
+  }
+  .station-ref__code {
+    color: #64748b;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+  }
+  .heat-callout {
+    padding: 12px 16px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+  }
+  .heat-callout__title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9a3412;
+    margin: 0 0 6px;
+  }
+  .heat-callout__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.875rem;
+    color: #7c2d12;
+  }
+  .heat-callout__list strong {
+    font-weight: 700;
+    color: #431407;
+  }
+</style>

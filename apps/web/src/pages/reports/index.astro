@@ -1,0 +1,266 @@
+---
+/**
+ * /reports — City reports index page.
+ *
+ * Pure Astro SSG. Reads the mirrored `reports-index.json` and renders a
+ * list of links to every per-city report page, with status badges and a
+ * core-blocks progress indicator.
+ *
+ * No client directives, no Cesium, no React islands.
+ */
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import { StatusPill } from '@terrasight/ui';
+import reportsIndexRaw from '../../data/reports-index.json';
+import type {
+  CityReportIndex,
+  CityReportIndexEntry,
+  BlockStatus,
+} from '@terrasight/schemas';
+
+const index = reportsIndexRaw as unknown as CityReportIndex;
+const entries: CityReportIndexEntry[] = index.reports;
+
+// CityReportIndexStatus ('ok' | 'partial' | 'error') is broader than the
+// BlockStatus enum used by StatusPill — we map it to the nearest pill state.
+function toPillStatus(s: CityReportIndexEntry['status']): BlockStatus {
+  if (s === 'ok') return 'ok';
+  if (s === 'error') return 'error';
+  // 'partial' — report built with some missing blocks → 'pending' is closest.
+  return 'pending';
+}
+
+function formatDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return iso;
+  }
+}
+---
+
+<Layout
+  title="City Reports — TerraSight"
+  description="U.S. metro-level environmental reports based on NASA / NOAA / EPA data with transparent trust tagging."
+>
+  <main id="main" class="reports-index">
+    <header class="reports-index__hero">
+      <div class="ts-container">
+        <p class="reports-index__crumbs">
+          <a href="/">Home</a>
+          <span aria-hidden="true"> / </span>
+          <span class="reports-index__crumbs-current">Reports</span>
+        </p>
+        <h1 class="reports-index__title">City Reports</h1>
+        <p class="reports-index__lede">
+          U.S. metro-level environmental reports based on NASA, NOAA, and EPA
+          data. Every block carries a trust tag indicating signal directness —
+          observed measurements, near-real-time feeds, forecasts, regulatory
+          compliance, or derived composites.
+        </p>
+        <p class="reports-index__meta">
+          Index generated {formatDate(index.generatedAt)} ·
+          pipeline {index.pipelineVersion} ·
+          {entries.length} {entries.length === 1 ? 'metro' : 'metros'}
+        </p>
+      </div>
+    </header>
+
+    <section class="reports-index__list-wrap ts-container" aria-labelledby="reports-list-title">
+      <h2 id="reports-list-title" class="reports-index__sr">Available reports</h2>
+
+      {entries.length === 0 ? (
+        <p class="reports-index__empty">
+          No reports available yet — the pipeline has not produced any city JSON files.
+        </p>
+      ) : (
+        <ul class="reports-index__list">
+          {entries.map((entry) => {
+            const pct = Math.round((entry.coreBlocksOk / entry.coreBlocksTotal) * 100);
+            return (
+              <li class="reports-index__item">
+                <a class="report-row" href={`/reports/${entry.slug}`}>
+                  <div class="report-row__top">
+                    <span class="report-row__region">{entry.region}</span>
+                    <StatusPill status={toPillStatus(entry.status)} />
+                  </div>
+                  <h3 class="report-row__city">{entry.city}</h3>
+                  <p class="report-row__updated">
+                    Updated {formatDate(entry.updatedAt)}
+                  </p>
+                  <p class="report-row__progress">
+                    <strong>{entry.coreBlocksOk}</strong>
+                    <span class="report-row__progress-sep"> / </span>
+                    <span>{entry.coreBlocksTotal}</span>
+                    <span class="report-row__progress-label"> core blocks</span>
+                  </p>
+                  <div class="report-row__bar" role="presentation">
+                    <span
+                      class="report-row__bar-fill"
+                      style={`width:${pct}%;`}
+                    ></span>
+                  </div>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  </main>
+
+  <SiteFooter generatedAt={index.generatedAt} />
+</Layout>
+
+<style>
+  .reports-index {
+    padding-bottom: 48px;
+  }
+
+  .reports-index__sr {
+    position: absolute;
+    width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  .reports-index__hero {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    padding: 48px 0 40px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .reports-index__crumbs {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0 0 12px;
+  }
+  .reports-index__crumbs a {
+    color: #1d4ed8;
+    text-decoration: none;
+  }
+  .reports-index__crumbs a:hover { text-decoration: underline; }
+  .reports-index__crumbs-current {
+    color: #0f172a;
+    font-weight: 500;
+  }
+  .reports-index__title {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    margin: 0 0 12px;
+  }
+  .reports-index__lede {
+    font-size: 1rem;
+    color: #475569;
+    max-width: 680px;
+    margin: 0 0 12px;
+    line-height: 1.55;
+  }
+  .reports-index__meta {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .reports-index__list-wrap {
+    padding: 32px 24px 0;
+  }
+  .reports-index__empty {
+    padding: 40px 24px;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    font-size: 0.9375rem;
+  }
+
+  .reports-index__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .reports-index__item {
+    display: block;
+  }
+
+  .report-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    height: 100%;
+  }
+  .report-row:hover {
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  }
+  .report-row__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .report-row__region {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 9999px;
+  }
+  .report-row__city {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    margin: 4px 0 0;
+  }
+  .report-row__updated {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .report-row__progress {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .report-row__progress strong {
+    color: #0f172a;
+    font-weight: 700;
+  }
+  .report-row__progress-sep {
+    color: #cbd5e1;
+  }
+  .report-row__progress-label {
+    color: #94a3b8;
+  }
+  .report-row__bar {
+    height: 4px;
+    border-radius: 9999px;
+    background: #f1f5f9;
+    overflow: hidden;
+  }
+  .report-row__bar-fill {
+    display: block;
+    height: 100%;
+    background: #22c55e;
+  }
+</style>

@@ -1,0 +1,38 @@
+---
+import Layout from '../../layouts/BaseLayout.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import GuideStub from '../../components/GuideStub.astro';
+
+const title = 'How to read a local environmental report — Guides — TerraSight';
+const intro =
+  'A tour of the 8 core blocks in every TerraSight metro report — air quality, climate locally, hazards & disasters, water, industrial emissions, site cleanup, population exposure, and methodology — plus how to interpret embedded optional blocks for coastal, PFAS, and detailed disaster history.';
+const path = '/guides/how-to-read-a-report';
+const generatedAt = new Date().toISOString();
+---
+
+<Layout
+  title={title}
+  description="Report structure explainer — 8 core blocks, optional blocks, and how trust tags apply per block."
+  seo={{
+    title,
+    description:
+      'Report structure explainer — 8 core blocks, optional blocks, and how trust tags apply per block.',
+    path,
+  }}
+>
+  <Fragment slot="head">
+    <meta name="robots" content="noindex, nofollow" />
+  </Fragment>
+  <main id="main" class="guide-stub ts-container">
+    <GuideStub
+      title="How to read a local environmental report"
+      intro={intro}
+      path={path}
+    />
+  </main>
+  <SiteFooter generatedAt={generatedAt} />
+</Layout>
+
+<style>
+  .guide-stub { padding: 48px 24px; }
+</style>

@@ -1,0 +1,13 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "cesium": ["src/cesium-shim/index.d.ts"],
+      "cesium/Build/Cesium/Widgets/widgets.css": ["src/cesium-shim/index.d.ts"]
+    }
+  }
+}

@@ -1,0 +1,125 @@
+---
+/**
+ * PFAS Monitoring body component (optional, embedded only when gate allows).
+ *
+ * Source: EPA UCMR / state PFAS testing programmes.
+ *
+ * Block-specific data shape (when status === 'ok'):
+ *   {
+ *     sample_count?: number;
+ *     detections?: number;
+ *     max_concentration?: number | string;
+ *     max_concentration_unit?: string;
+ *   }
+ */
+import type { ReportBlock } from '@terrasight/schemas';
+import NoData from '../NoData.astro';
+import MetricsTable from '../MetricsTable.astro';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block.data ?? {}) as any;
+const sampleCount: number | undefined =
+  typeof data.sample_count === 'number' ? data.sample_count : undefined;
+const detections: number | undefined =
+  typeof data.detections === 'number' ? data.detections : undefined;
+const maxConc = data.max_concentration;
+const maxConcUnit: string | undefined =
+  typeof data.max_concentration_unit === 'string' ? data.max_concentration_unit : undefined;
+
+function fmtMax(v: unknown): string | undefined {
+  if (typeof v === 'number') return v.toLocaleString();
+  if (typeof v === 'string') return v;
+  return undefined;
+}
+const maxConcText = fmtMax(maxConc);
+const hasKeyNumbers =
+  sampleCount !== undefined || detections !== undefined || maxConcText !== undefined;
+---
+
+{block.status !== 'ok' ? (
+  <NoData block={block} />
+) : (
+  <div class="block-body">
+    <p class="block-body__prose">{block.body}</p>
+
+    {hasKeyNumbers ? (
+      <div class="pfas-tiles">
+        {sampleCount !== undefined ? (
+          <div class="pfas-tile">
+            <span class="pfas-tile__label">Samples</span>
+            <span class="pfas-tile__value">{sampleCount.toLocaleString()}</span>
+          </div>
+        ) : null}
+        {detections !== undefined ? (
+          <div class="pfas-tile">
+            <span class="pfas-tile__label">Detections</span>
+            <span class="pfas-tile__value">{detections.toLocaleString()}</span>
+          </div>
+        ) : null}
+        {maxConcText !== undefined ? (
+          <div class="pfas-tile">
+            <span class="pfas-tile__label">Max concentration</span>
+            <span class="pfas-tile__value">
+              {maxConcText}
+              {maxConcUnit ? <span class="pfas-tile__unit"> {maxConcUnit}</span> : null}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    ) : null}
+
+    <MetricsTable metrics={block.metrics} fallbackTag={block.trustTag} />
+  </div>
+)}
+
+<style>
+  .block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .block-body__prose {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #334155;
+    margin: 0;
+  }
+  .pfas-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .pfas-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+  }
+  .pfas-tile__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1e40af;
+  }
+  .pfas-tile__value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e3a8a;
+    font-variant-numeric: tabular-nums;
+  }
+  .pfas-tile__unit {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #3b82f6;
+  }
+</style>

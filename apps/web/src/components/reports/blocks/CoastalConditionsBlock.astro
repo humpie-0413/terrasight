@@ -1,0 +1,158 @@
+---
+/**
+ * Coastal Conditions body component (optional, embedded when coastal gate = included).
+ *
+ * Source: NOAA CO-OPS tide gauges / sea-level trends.
+ *
+ * Block-specific data shape (when status === 'ok'):
+ *   {
+ *     tide_station_id?: string;
+ *     tide_station_name?: string;
+ *     mean_sea_level_trend_mm_per_yr?: number;
+ *     trend_95ci_mm_per_yr?: number;   // optional confidence interval
+ *     record_length_years?: number;
+ *   }
+ */
+import type { ReportBlock } from '@terrasight/schemas';
+import NoData from '../NoData.astro';
+import MetricsTable from '../MetricsTable.astro';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block.data ?? {}) as any;
+const stationId: string | undefined =
+  typeof data.tide_station_id === 'string' ? data.tide_station_id : undefined;
+const stationName: string | undefined =
+  typeof data.tide_station_name === 'string' ? data.tide_station_name : undefined;
+const trend: number | undefined =
+  typeof data.mean_sea_level_trend_mm_per_yr === 'number'
+    ? data.mean_sea_level_trend_mm_per_yr
+    : undefined;
+const trendCi: number | undefined =
+  typeof data.trend_95ci_mm_per_yr === 'number' ? data.trend_95ci_mm_per_yr : undefined;
+const recordYears: number | undefined =
+  typeof data.record_length_years === 'number' ? data.record_length_years : undefined;
+
+const hasAnyField =
+  stationId !== undefined || trend !== undefined || recordYears !== undefined;
+---
+
+{block.status !== 'ok' ? (
+  <NoData block={block} />
+) : (
+  <div class="block-body">
+    <p class="block-body__prose">{block.body}</p>
+
+    {hasAnyField ? (
+      <div class="coast-card">
+        {stationId ? (
+          <div class="coast-card__row">
+            <span class="coast-card__label">Tide station</span>
+            <span class="coast-card__value">
+              {stationName ?? stationId}
+              {stationName ? <code class="coast-card__code"> {stationId}</code> : null}
+            </span>
+          </div>
+        ) : null}
+        {trend !== undefined ? (
+          <div class="coast-card__row">
+            <span class="coast-card__label">Mean sea-level trend</span>
+            <span class="coast-card__value">
+              <strong>
+                {trend >= 0 ? '+' : ''}
+                {trend.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </strong>
+              <span class="coast-card__unit"> mm / yr</span>
+              {trendCi !== undefined ? (
+                <span class="coast-card__ci"> ± {trendCi.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
+        {recordYears !== undefined ? (
+          <div class="coast-card__row">
+            <span class="coast-card__label">Record length</span>
+            <span class="coast-card__value">
+              {recordYears.toLocaleString()} years
+            </span>
+          </div>
+        ) : null}
+      </div>
+    ) : null}
+
+    <MetricsTable metrics={block.metrics} fallbackTag={block.trustTag} />
+  </div>
+)}
+
+<style>
+  .block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .block-body__prose {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #334155;
+    margin: 0;
+  }
+  .coast-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    background: #ecfeff;
+    border: 1px solid #a5f3fc;
+    border-radius: 8px;
+  }
+  .coast-card__row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    align-items: baseline;
+    font-size: 0.875rem;
+  }
+  .coast-card__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #0e7490;
+  }
+  .coast-card__value {
+    color: #0f172a;
+  }
+  .coast-card__value strong {
+    font-weight: 700;
+    color: #164e63;
+    font-variant-numeric: tabular-nums;
+  }
+  .coast-card__unit {
+    color: #0e7490;
+    font-size: 0.8125rem;
+  }
+  .coast-card__ci {
+    color: #64748b;
+    font-size: 0.8125rem;
+  }
+  .coast-card__code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    color: #475569;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+  }
+  @media (max-width: 640px) {
+    .coast-card__row {
+      grid-template-columns: 1fr;
+      gap: 2px;
+    }
+  }
+</style>

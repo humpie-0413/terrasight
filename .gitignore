@@ -41,3 +41,6 @@ yarn-debug.log*
 
 # Cloudflare Workers local dev state (Miniflare cache + bundle output)
 .wrangler/
+
+# Astro-generated per-project state
+.astro/

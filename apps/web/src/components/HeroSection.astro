@@ -1,0 +1,124 @@
+---
+// Hero — TerraSight brand + value prop + primary CTA (/globe).
+// Pure SSG. No islands. No client:* directives.
+---
+<section class="hero" aria-labelledby="hero-title">
+  <div class="ts-container hero__inner">
+    <p class="hero__eyebrow">Environmental Observatory · v2</p>
+    <h1 id="hero-title" class="hero__title">TerraSight</h1>
+    <p class="hero__tagline">Environmental signals, explained.</p>
+    <p class="hero__lede">
+      Live climate trends. An environmental data atlas. U.S. metro-level reports.
+      Every dataset tagged with its trust level — so you know what the numbers actually mean.
+    </p>
+    <div class="hero__ctas">
+      <a class="hero__cta hero__cta--primary" href="/globe">
+        Explore Earth Now
+        <span aria-hidden="true" class="hero__cta-arrow">→</span>
+      </a>
+      <a class="hero__cta hero__cta--secondary" href="/reports">
+        Browse Local Reports
+      </a>
+    </div>
+    <p class="hero__note">
+      Non-profit, source-first. NASA · NOAA · EPA · USGS · NSIDC.
+      No composite scores — only transparent indicators.
+    </p>
+  </div>
+</section>
+
+<style>
+  .hero {
+    background:
+      radial-gradient(circle at 12% 10%, rgba(34, 197, 94, 0.12), transparent 50%),
+      radial-gradient(circle at 90% 15%, rgba(59, 130, 246, 0.10), transparent 55%),
+      #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .hero__inner {
+    padding: 72px 24px 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .hero__eyebrow {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #22c55e;
+    font-weight: 700;
+    margin: 0;
+  }
+  .hero__title {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: #0f172a;
+    margin: 0;
+  }
+  .hero__tagline {
+    font-size: 22px;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+  }
+  .hero__lede {
+    font-size: 16px;
+    color: #334155;
+    max-width: 640px;
+    margin: 4px 0 12px;
+    line-height: 1.6;
+  }
+  .hero__ctas {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .hero__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    transition: transform 120ms ease, background-color 120ms ease;
+  }
+  .hero__cta--primary {
+    background: #0f172a;
+    color: #ffffff;
+  }
+  .hero__cta--primary:hover {
+    background: #1e293b;
+    transform: translateY(-1px);
+  }
+  .hero__cta--secondary {
+    background: #ffffff;
+    color: #0f172a;
+    border: 1px solid #cbd5e1;
+  }
+  .hero__cta--secondary:hover {
+    background: #f1f5f9;
+  }
+  .hero__cta-arrow {
+    font-weight: 400;
+    transition: transform 120ms ease;
+  }
+  .hero__cta--primary:hover .hero__cta-arrow {
+    transform: translateX(2px);
+  }
+  .hero__note {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 12px;
+  }
+  @media (max-width: 560px) {
+    .hero__inner { padding: 48px 24px 40px; }
+    .hero__title { font-size: 40px; }
+    .hero__tagline { font-size: 19px; }
+  }
+</style>

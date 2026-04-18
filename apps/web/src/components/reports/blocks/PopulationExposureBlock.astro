@@ -1,0 +1,166 @@
+---
+/**
+ * Population & Environmental Justice body component.
+ *
+ * Sources: U.S. Census CBSA estimates + EPA EJSCREEN.
+ *
+ * Block-specific data shape (when status === 'ok'):
+ *   {
+ *     population?: number;
+ *     ej_indicators?: Array<{ label?: string; value?: number | string; note?: string }>;
+ *   }
+ *
+ * Per the task brief: ALWAYS prefer block.data.population over the
+ * metric row for a headline number. Fallback to metrics[] when data
+ * shape omits it (Step 5 sample has population in metrics[]).
+ *
+ * Renders body for both 'ok' AND non-ok statuses when a population
+ * fact is already embedded in metrics[] — because showing the
+ * population is a lightweight win per the current Step 5 payload.
+ */
+import type { ReportBlock } from '@terrasight/schemas';
+import NoData from '../NoData.astro';
+import MetricsTable from '../MetricsTable.astro';
+
+export interface Props {
+  block: ReportBlock;
+}
+
+const { block } = Astro.props;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data = (block.data ?? {}) as any;
+let population: number | undefined;
+if (typeof data.population === 'number') {
+  population = data.population;
+} else {
+  const metricPop = block.metrics.find(
+    (m) => typeof m.value === 'number' && /population/i.test(m.label),
+  );
+  if (metricPop && typeof metricPop.value === 'number') population = metricPop.value;
+}
+
+type EjEntry = { label?: string; value?: number | string; note?: string };
+const ejIndicators: EjEntry[] = Array.isArray(data.ej_indicators)
+  ? data.ej_indicators.slice(0, 10)
+  : [];
+---
+
+{block.status !== 'ok' ? (
+  <NoData block={block} />
+) : (
+  <div class="block-body">
+    <p class="block-body__prose">{block.body}</p>
+
+    {population !== undefined ? (
+      <div class="pop-headline">
+        <span class="pop-headline__label">CBSA population</span>
+        <strong class="pop-headline__value">{population.toLocaleString()}</strong>
+        <span class="pop-headline__unit">residents</span>
+      </div>
+    ) : null}
+
+    <MetricsTable metrics={block.metrics} fallbackTag={block.trustTag} />
+
+    {ejIndicators.length > 0 ? (
+      <div class="block-body__subsection">
+        <h3 class="block-body__subtitle">EJSCREEN indicators</h3>
+        <table class="simple-table">
+          <thead>
+            <tr>
+              <th scope="col">Indicator</th>
+              <th scope="col">Value</th>
+              <th scope="col">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ejIndicators.map((e) => (
+              <tr>
+                <td>{e.label ?? '—'}</td>
+                <td>{e.value !== undefined ? String(e.value) : '—'}</td>
+                <td>{e.note ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : null}
+  </div>
+)}
+
+<style>
+  .block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .block-body__prose {
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: #334155;
+    margin: 0;
+  }
+  .block-body__subsection {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .block-body__subtitle {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 4px 0 0;
+  }
+  .pop-headline {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 16px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+  }
+  .pop-headline__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #166534;
+  }
+  .pop-headline__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #14532d;
+    font-variant-numeric: tabular-nums;
+  }
+  .pop-headline__unit {
+    font-size: 0.875rem;
+    color: #166534;
+  }
+  .simple-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .simple-table thead th {
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  .simple-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #0f172a;
+  }
+  .simple-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+</style>
