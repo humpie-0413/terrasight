@@ -3,6 +3,10 @@
   "type": "module",
   "version": "0.2.0",
   "scripts": {
+    "setup-cesium": "node -e \"require('fs').cpSync('node_modules/cesium/Build/Cesium','public/cesium',{recursive:true,force:true})\"",
+    "predev": "pnpm run setup-cesium",
+    "prebuild": "pnpm run setup-cesium",
+    "prepreview": "pnpm run setup-cesium",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",

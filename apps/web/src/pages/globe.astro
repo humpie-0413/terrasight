@@ -3,6 +3,21 @@ import Layout from '../layouts/BaseLayout.astro';
 import GlobeApp from '../islands/GlobeApp.tsx';
 ---
 <Layout title="Earth Now — TerraSight">
+  {/*
+    Cesium base-URL contract: MUST be set before any Cesium module
+    evaluates, otherwise the Viewer requests `/Workers/*.js` and
+    `/Assets/*` from the page origin root, gets the SPA 404 HTML back,
+    and crashes with `InvalidStateError: The source image could not be
+    decoded`. `is:inline` keeps this literal in the emitted HTML so it
+    runs before the island hydration script.
+
+    Assets under /cesium/ come from `pnpm run setup-cesium`
+    (apps/web/package.json → copies node_modules/cesium/Build/Cesium
+    into public/cesium/ via `prebuild`). Directory is .gitignored.
+  */}
+  <script slot="head" is:inline>
+    window.CESIUM_BASE_URL = '/cesium/';
+  </script>
   <main>
     <GlobeApp client:visible />
   </main>
