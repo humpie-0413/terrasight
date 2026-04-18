@@ -35,3 +35,6 @@ yarn-debug.log*
 .cache/
 .pytest_cache/
 .mypy_cache/
+
+# Superpowers plugin scratch state
+.superpowers/
