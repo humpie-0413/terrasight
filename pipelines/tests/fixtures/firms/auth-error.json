@@ -1,0 +1,7 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://firms.modaps.eosdis.nasa.gov/api/area/csv/BAD_KEY/VIIRS_SNPP_NRT/world/1",
+  "_notes": "FIRMS bad-MAP_KEY response body. Critical landmine: this arrives with HTTP 400, not 401/403. detect_error_body() recognizes the 'Invalid MAP_KEY' substring and the connector returns status='error' without raising.",
+  "http_status": 400,
+  "raw_body": "Invalid MAP_KEY.\n"
+}

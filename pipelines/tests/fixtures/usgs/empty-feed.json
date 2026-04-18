@@ -1,0 +1,16 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+  "_notes": "Synthesized empty-feed shape. USGS returns this skeleton when no events are found (extremely rare for all_day; normal for narrower time windows or region-filtered feeds). bbox is null in the empty case — verified against the schema in USGS feed docs.",
+  "type": "FeatureCollection",
+  "metadata": {
+    "generated": 1776436391000,
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+    "title": "USGS All Earthquakes, Past Day",
+    "status": 200,
+    "api": "2.3.0",
+    "count": 0
+  },
+  "features": [],
+  "bbox": null
+}

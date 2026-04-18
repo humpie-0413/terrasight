@@ -1,0 +1,131 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://nasa-gibs.github.io/gibs-api-docs/",
+  "_notes": "Step 4 Agent 1 — generated via GIBS_MANIFESTS.model_dump(mode=json). Five approved v2 MVP layers. Source of truth: docs/datasets/gibs-approved-layers.md. ENCC variant explicitly excluded.",
+  "data": [
+    {
+      "id": "BlueMarble_ShadedRelief_Bathymetry",
+      "title": "Natural Earth",
+      "category": "imagery",
+      "kind": "continuous",
+      "source": "NASA GIBS / Blue Marble",
+      "trustTag": "observed",
+      "coverage": "global",
+      "cadence": "monthly",
+      "enabled": true,
+      "legend": null,
+      "imagery": {
+        "type": "wmts",
+        "urlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/default/500m/{TileMatrix}/{TileRow}/{TileCol}.jpg",
+        "tileMatrixSet": "500m",
+        "availableDates": "static"
+      },
+      "eventApi": null,
+      "caveats": [
+        "Monthly composite — not real-time.",
+        "UI label must read 'Natural Earth', not 'Blue Marble' (avoid brand confusion with the NASA Blue Marble Navigator)."
+      ]
+    },
+    {
+      "id": "GHRSST_L4_MUR_Sea_Surface_Temperature",
+      "title": "Sea Surface Temperature (SST)",
+      "category": "imagery",
+      "kind": "continuous",
+      "source": "NASA JPL MUR GHRSST L4 via GIBS",
+      "trustTag": "near-real-time",
+      "coverage": "ocean-only",
+      "cadence": "daily",
+      "enabled": true,
+      "legend": {
+        "unit": "°C",
+        "min": -2.0,
+        "max": 32.0,
+        "colormap": "thermal"
+      },
+      "imagery": {
+        "type": "wmts",
+        "urlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/{Time}/1km/{TileMatrix}/{TileRow}/{TileCol}.png",
+        "tileMatrixSet": "1km",
+        "availableDates": "2002-06-01/present (daily)"
+      },
+      "eventApi": null,
+      "caveats": [
+        "1-day latency (NRT).",
+        "Polar regions are interpolated.",
+        "Click values come from Worker /api/sst-point (OISST) — do NOT reverse-engineer the GIBS tile RGB to obtain temperatures."
+      ]
+    },
+    {
+      "id": "MODIS_Terra_Aerosol",
+      "title": "Aerosol Proxy (AOD)",
+      "category": "imagery",
+      "kind": "continuous",
+      "source": "MODIS Terra — NASA GSFC via GIBS",
+      "trustTag": "near-real-time",
+      "coverage": "global",
+      "cadence": "daily",
+      "enabled": true,
+      "legend": null,
+      "imagery": {
+        "type": "wmts",
+        "urlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/MODIS_Terra_Aerosol/default/{Time}/2km/{TileMatrix}/{TileRow}/{TileCol}.png",
+        "tileMatrixSet": "2km",
+        "availableDates": "2000-02-24/present (daily)"
+      },
+      "eventApi": null,
+      "caveats": [
+        "AOD = column-integrated aerosol optical depth (unitless).",
+        "Do NOT label as PM2.5, particulate matter, or air-quality index.",
+        "Combined land + ocean product.",
+        "Click behaviour: descriptive card only — no value readout."
+      ]
+    },
+    {
+      "id": "MODIS_Aqua_Cloud_Fraction_Day",
+      "title": "Cloud Fraction (Day)",
+      "category": "imagery",
+      "kind": "continuous",
+      "source": "MODIS Aqua — NASA GSFC via GIBS",
+      "trustTag": "near-real-time",
+      "coverage": "global",
+      "cadence": "daily",
+      "enabled": true,
+      "legend": null,
+      "imagery": {
+        "type": "wmts",
+        "urlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/MODIS_Aqua_Cloud_Fraction_Day/default/{Time}/2km/{TileMatrix}/{TileRow}/{TileCol}.png",
+        "tileMatrixSet": "2km",
+        "availableDates": "2002-07-04/present (daily)"
+      },
+      "eventApi": null,
+      "caveats": [
+        "Day-pass only — night hemisphere blank.",
+        "Click behaviour: descriptive card only — no value readout."
+      ]
+    },
+    {
+      "id": "VIIRS_SNPP_DayNightBand",
+      "title": "Night Lights",
+      "category": "imagery",
+      "kind": "continuous",
+      "source": "VIIRS Suomi NPP Day/Night Band via GIBS",
+      "trustTag": "near-real-time",
+      "coverage": "global",
+      "cadence": "daily",
+      "enabled": true,
+      "legend": null,
+      "imagery": {
+        "type": "wmts",
+        "urlTemplate": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/VIIRS_SNPP_DayNightBand/default/{Time}/1km/{TileMatrix}/{TileRow}/{TileCol}.png",
+        "tileMatrixSet": "1km",
+        "availableDates": "2012-01-19/present (daily)"
+      },
+      "eventApi": null,
+      "caveats": [
+        "Label as 'human activity proxy' — not a direct electricity consumption measurement.",
+        "Raw radiance, no atmospheric correction; ocean/ice glare is expected.",
+        "`VIIRS_SNPP_DayNightBand_ENCC` variant frozen 2023-07-07; do not substitute — current-date requests return HTTP 400."
+      ]
+    }
+  ]
+}

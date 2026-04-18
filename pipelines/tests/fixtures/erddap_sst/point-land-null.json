@@ -1,0 +1,13 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B(last)%5D%5B(0.0)%5D%5B(40.0)%5D%5B(260.0)%5D",
+  "_notes": "Synthesized off Step-2 spike (data/fixtures/oisst/point-sample.json::near_coast_null_example). Input: lat=40.0, lon=-100.0 (middle of Kansas). lon_erddap = 260.0. Snapped grid centre: lat=40.125, lon_erddap=260.125 -> snappedLon=-99.875. SST column is JSON null because the cell is pure land (ERDDAP returns a well-formed envelope with null, NOT an HTTP 404). This must be treated as status='no_data' in normalize().",
+  "table": {
+    "columnNames": ["time", "zlev", "latitude", "longitude", "sst"],
+    "columnTypes": ["String", "float", "float", "float", "float"],
+    "columnUnits": ["UTC", "m", "degrees_north", "degrees_east", "degree_C"],
+    "rows": [
+      ["2026-04-15T12:00:00Z", 0, 40.125, 260.125, null]
+    ]
+  }
+}

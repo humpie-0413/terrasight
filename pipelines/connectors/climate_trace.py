@@ -3,7 +3,7 @@
 Source:  https://climatetrace.org/
 Cadence: Annual data, updated approximately 6 months after the reference year
          (e.g., 2022 emissions published mid-2023).
-Tag:     estimated  (ML + satellite-derived asset-level estimates, not direct measurement)
+Tag:     derived  (ML + satellite-derived asset-level estimates; v2 mapping — v1 `estimated` retired 2026-04-17)
 Auth:    None required — public API, no API key needed.
 
 =============================================================================
@@ -162,7 +162,7 @@ class ClimateTraceConnector(BaseConnector):
     source = "Climate TRACE"
     source_url = "https://climatetrace.org/"
     cadence = "annual (~6-month publication lag after reference year)"
-    tag = "estimated"
+    tag = "derived"
 
     async def fetch(
         self,

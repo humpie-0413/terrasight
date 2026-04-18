@@ -1,0 +1,6 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://firms.modaps.eosdis.nasa.gov/api/area/csv/<KEY>/VIIRS_SNPP_NRT/world/1",
+  "_notes": "FIRMS empty-feed edge case: a valid CSV that contains only the header row (no data rows). Must normalize to status='ok', values=[], NOT to an error. Synthesized offline — FIRMS has returned this shape during quiet windows and during regional bbox queries over oceans.",
+  "raw_csv": "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
+}

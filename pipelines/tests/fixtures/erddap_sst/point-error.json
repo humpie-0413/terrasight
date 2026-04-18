@@ -1,0 +1,10 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B(last)%5D%5B(0.0)%5D%5B(35.0)%5D%5B(239.5)%5D",
+  "_notes": "Simulated malformed ERDDAP response — the body is well-formed JSON but the expected 'table' key is missing. This models the class of upstream failures where ERDDAP returns 200 with an unexpected shape (e.g. during partial rollouts or an error envelope emitted as JSON). normalize() must catch KeyError and downgrade to SSTPoint(status='error', sst_c=None) per graceful-degradation (normalized-contracts.md §6). A transport-level error (5xx) is exercised by the run() / fetch() exception path and is documented in the connector test's _wrap_lon + run-level assertions.",
+  "error": {
+    "code": "InternalError",
+    "message": "Upstream transient failure — table unavailable.",
+    "simulated_http_status": 500
+  }
+}

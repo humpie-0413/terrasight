@@ -1,0 +1,13 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B(last)%5D%5B(0.0)%5D%5B(35.0)%5D%5B(239.5)%5D",
+  "_notes": "Synthesized off Step-2 spike (data/fixtures/oisst/point-sample.json::california_coast_sample). Input: lat=35.0, lon=-120.5 (off California). lon_erddap = 239.5. Snapped grid centre returned by ERDDAP: lat=35.125, lon_erddap=239.625 -> converts to snappedLon=-120.375. Sample sst value taken from a realistic mid-April Pacific surface temperature (14.36 C range shifted to 16.42 C for distinguishability across fixtures).",
+  "table": {
+    "columnNames": ["time", "zlev", "latitude", "longitude", "sst"],
+    "columnTypes": ["String", "float", "float", "float", "float"],
+    "columnUnits": ["UTC", "m", "degrees_north", "degrees_east", "degree_C"],
+    "rows": [
+      ["2026-04-15T12:00:00Z", 0, 35.125, 239.625, 16.42]
+    ]
+  }
+}

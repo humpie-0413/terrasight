@@ -1,0 +1,11 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://nasa-gibs.github.io/gibs-api-docs/",
+  "_notes": "SST legend snapshot (deg C, min=-2, max=32, colormap=thermal). Matches GHRSST_L4_MUR_Sea_Surface_Temperature LayerLegend in gibs.py.",
+  "data": {
+    "unit": "°C",
+    "min": -2.0,
+    "max": 32.0,
+    "colormap": "thermal"
+  }
+}

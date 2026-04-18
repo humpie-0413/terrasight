@@ -1,0 +1,167 @@
+{
+  "_recorded_at": "2026-04-17",
+  "_source_url": "https://firms.modaps.eosdis.nasa.gov/api/area/csv/<KEY>/VIIRS_SNPP_NRT/world/1",
+  "_notes": "10 rows synthesized offline from typical VIIRS_SNPP_NRT shapes (no live MAP_KEY in this environment). IDs are hashlib.sha1(f'{lat}|{lon}|{acq_date}|{acq_time}')[:16] to match FirmsConnector.normalize(). severity=FRP (MW). observedAt=YYYY-MM-DDTHH:MM:00Z derived from acq_date+acq_time. lon defensively clamped to -180..180. label format: 'FRP {frp:.1f} MW \u00b7 {nominal|low|high}'.",
+  "data": [
+    {
+      "id": "0fe7a6ef6b9a0b7e",
+      "type": "wildfire",
+      "lat": -15.2341,
+      "lon": -47.8812,
+      "observedAt": "2026-04-16T01:30:00Z",
+      "severity": 42.7,
+      "label": "FRP 42.7 MW \u00b7 nominal",
+      "properties": {
+        "brightness": 347.12,
+        "daynight": "N",
+        "confidence_raw": "n",
+        "scan": 0.42,
+        "track": 0.38
+      }
+    },
+    {
+      "id": "b6ad75f3b06c9e24",
+      "type": "wildfire",
+      "lat": -12.8774,
+      "lon": -51.4321,
+      "observedAt": "2026-04-16T02:45:00Z",
+      "severity": 187.3,
+      "label": "FRP 187.3 MW \u00b7 high",
+      "properties": {
+        "brightness": 392.8,
+        "daynight": "N",
+        "confidence_raw": "h",
+        "scan": 0.41,
+        "track": 0.37
+      }
+    },
+    {
+      "id": "40e8f3a1df3e7be7",
+      "type": "wildfire",
+      "lat": 51.3342,
+      "lon": 112.5561,
+      "observedAt": "2026-04-16T09:10:00Z",
+      "severity": 23.1,
+      "label": "FRP 23.1 MW \u00b7 nominal",
+      "properties": {
+        "brightness": 331.5,
+        "daynight": "D",
+        "confidence_raw": "n",
+        "scan": 0.56,
+        "track": 0.46
+      }
+    },
+    {
+      "id": "ec98e53e5a7c2a36",
+      "type": "wildfire",
+      "lat": 34.8823,
+      "lon": -118.4412,
+      "observedAt": "2026-04-16T10:22:00Z",
+      "severity": 8.4,
+      "label": "FRP 8.4 MW \u00b7 low",
+      "properties": {
+        "brightness": 322.6,
+        "daynight": "D",
+        "confidence_raw": "l",
+        "scan": 0.39,
+        "track": 0.36
+      }
+    },
+    {
+      "id": "fb8c2ed3be3a1d4a",
+      "type": "wildfire",
+      "lat": -33.129,
+      "lon": 18.441,
+      "observedAt": "2026-04-16T11:45:00Z",
+      "severity": 61.2,
+      "label": "FRP 61.2 MW \u00b7 nominal",
+      "properties": {
+        "brightness": 358.7,
+        "daynight": "D",
+        "confidence_raw": "n",
+        "scan": 0.45,
+        "track": 0.4
+      }
+    },
+    {
+      "id": "1e4fbb0e6d9b9d08",
+      "type": "wildfire",
+      "lat": -8.6641,
+      "lon": 115.2198,
+      "observedAt": "2026-04-16T13:12:00Z",
+      "severity": 29.8,
+      "label": "FRP 29.8 MW \u00b7 nominal",
+      "properties": {
+        "brightness": 339.2,
+        "daynight": "D",
+        "confidence_raw": "n",
+        "scan": 0.43,
+        "track": 0.39
+      }
+    },
+    {
+      "id": "33b0d2a8f7cbbd10",
+      "type": "wildfire",
+      "lat": 40.1123,
+      "lon": 44.5521,
+      "observedAt": "2026-04-16T14:28:00Z",
+      "severity": 14.5,
+      "label": "FRP 14.5 MW \u00b7 low",
+      "properties": {
+        "brightness": 326.4,
+        "daynight": "D",
+        "confidence_raw": "l",
+        "scan": 0.38,
+        "track": 0.35
+      }
+    },
+    {
+      "id": "8a10a5d0c4b6a2df",
+      "type": "wildfire",
+      "lat": 4.3312,
+      "lon": 18.6743,
+      "observedAt": "2026-04-16T15:03:00Z",
+      "severity": 312.6,
+      "label": "FRP 312.6 MW \u00b7 high",
+      "properties": {
+        "brightness": 421.1,
+        "daynight": "D",
+        "confidence_raw": "h",
+        "scan": 0.48,
+        "track": 0.42
+      }
+    },
+    {
+      "id": "5a01e3b9c3f6d182",
+      "type": "wildfire",
+      "lat": -2.2543,
+      "lon": 28.8891,
+      "observedAt": "2026-04-16T16:11:00Z",
+      "severity": 77.4,
+      "label": "FRP 77.4 MW \u00b7 nominal",
+      "properties": {
+        "brightness": 367.9,
+        "daynight": "D",
+        "confidence_raw": "n",
+        "scan": 0.44,
+        "track": 0.4
+      }
+    },
+    {
+      "id": "c0916de2aa6aae7f",
+      "type": "wildfire",
+      "lat": -22.9887,
+      "lon": -43.1772,
+      "observedAt": "2026-04-16T17:44:00Z",
+      "severity": 5.2,
+      "label": "FRP 5.2 MW \u00b7 low",
+      "properties": {
+        "brightness": 316.3,
+        "daynight": "D",
+        "confidence_raw": "l",
+        "scan": 0.4,
+        "track": 0.36
+      }
+    }
+  ]
+}
