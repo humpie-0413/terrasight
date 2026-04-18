@@ -1,0 +1,20 @@
+{
+  "layerId": "BlueMarble_ShadedRelief_Bathymetry",
+  "title": "Blue Marble Shaded Relief and Bathymetry",
+  "testedUrl": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/default/500m/0/0/0.jpg",
+  "httpStatus": 200,
+  "contentType": "image/jpeg",
+  "sizeBytes": 38143,
+  "sampleDate": "static",
+  "tileMatrixSet": "500m",
+  "format": "image/jpeg",
+  "projection": "EPSG:4326",
+  "auth": "none",
+  "rateLimit": "CDN-backed, none documented",
+  "cadence": "monthly (static composite)",
+  "coverage": "global",
+  "latencyDays": "N/A (static)",
+  "clientDirect": true,
+  "notes": "Static layer — use 'default' as the date segment. UI label: 'Natural Earth'.",
+  "probeDate": "2026-04-17"
+}

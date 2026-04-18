@@ -1,0 +1,20 @@
+{
+  "layerId": "GHRSST_L4_MUR_Sea_Surface_Temperature",
+  "title": "MUR Sea Surface Temperature (L4, GHRSST)",
+  "testedUrl": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/GHRSST_L4_MUR_Sea_Surface_Temperature/default/2026-04-16/1km/0/0/0.png",
+  "httpStatus": 200,
+  "contentType": "image/png",
+  "sizeBytes": 71997,
+  "sampleDate": "2026-04-16",
+  "tileMatrixSet": "1km",
+  "format": "image/png",
+  "projection": "EPSG:4326",
+  "auth": "none",
+  "rateLimit": "CDN-backed, none documented",
+  "cadence": "daily",
+  "coverage": "global (ocean + coastal)",
+  "latencyDays": 1,
+  "clientDirect": true,
+  "notes": "DefaultDate from WMTS caps was 2026-04-16 (1-day lag vs probe date 2026-04-17). Date format YYYY-MM-DD.",
+  "probeDate": "2026-04-17"
+}

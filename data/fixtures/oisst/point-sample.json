@@ -1,0 +1,77 @@
+{
+  "_meta": {
+    "spiked": "2026-04-17",
+    "host": "coastwatch.pfeg.noaa.gov",
+    "datasetID": "ncdcOisst21NrtAgg",
+    "sampleUrl_equatorial": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B%28last%29%5D%5B%280.0%29%5D%5B%280.0%29%5D%5B%28220.0%29%5D",
+    "sampleUrl_california": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B%28last%29%5D%5B%280.0%29%5D%5B%2836.5%29%5D%5B%28236.5%29%5D",
+    "notes": [
+      "Longitude convention is 0-360 (NOT -180..180). Convert: lon_erddap = lon_user + 360 if lon_user < 0.",
+      "Null (land) cells are returned as JSON null — must check before parsing.",
+      "Nearest valid ocean cell for lat=37.5 lon=-122.5 (San Francisco) is lat=36.625 lon=236.625.",
+      "Snapping: ERDDAP snaps to nearest grid cell center (0.125 offsets from integer degrees at 0.25 resolution).",
+      "Time format: ISO8601 UTC string e.g. 2026-04-15T12:00:00Z",
+      "zlev dimension is always 0.0 m (surface only) — include in every query or ERDDAP returns error.",
+      "v1 spike (2026-04-10) confirmed lat=0/lon=0 block works; v2 spike (2026-04-17) confirms LAST token + corrected lon."
+    ]
+  },
+  "equatorial_pacific_sample": {
+    "queryUrl": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B%28last%29%5D%5B%280.0%29%5D%5B%280.0%29%5D%5B%28220.0%29%5D",
+    "response": {
+      "table": {
+        "columnNames": ["time", "zlev", "latitude", "longitude", "sst"],
+        "columnTypes": ["String", "float", "float", "float", "float"],
+        "columnUnits": ["UTC", "m", "degrees_north", "degrees_east", "degree_C"],
+        "rows": [
+          ["2026-04-15T12:00:00Z", 0, 0.125, 220.125, 27.66]
+        ]
+      }
+    }
+  },
+  "california_coast_sample": {
+    "queryUrl": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B%28last%29%5D%5B%280.0%29%5D%5B%2836.5%29%5D%5B%28236.5%29%5D",
+    "inputLatLon": {"lat": 36.5, "lon": -123.5},
+    "erddapLon": 236.5,
+    "response": {
+      "table": {
+        "columnNames": ["time", "zlev", "latitude", "longitude", "sst"],
+        "columnTypes": ["String", "float", "float", "float", "float"],
+        "columnUnits": ["UTC", "m", "degrees_north", "degrees_east", "degree_C"],
+        "rows": [
+          ["2026-04-15T12:00:00Z", 0, 36.625, 236.625, 14.36]
+        ]
+      }
+    }
+  },
+  "near_coast_null_example": {
+    "note": "lat=37.5 lon=-122.5 (SF Bay Area) returns null — too close to coast/land. Use nearest open-ocean cell.",
+    "queryUrl": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B%28last%29%5D%5B%280.0%29%5D%5B%2837.5%29%5D%5B%28237.5%29%5D",
+    "response": {
+      "table": {
+        "columnNames": ["time", "zlev", "latitude", "longitude", "sst"],
+        "columnTypes": ["String", "float", "float", "float", "float"],
+        "columnUnits": ["UTC", "m", "degrees_north", "degrees_east", "degree_C"],
+        "rows": [
+          ["2026-04-15T12:00:00Z", 0, 37.625, 237.625, null]
+        ]
+      }
+    }
+  },
+  "dataset_metadata": {
+    "datasetID_nrt": "ncdcOisst21NrtAgg",
+    "datasetID_final": "ncdcOisst21Agg",
+    "latRange": [-89.875, 89.875],
+    "lonRange_erddap": [0.125, 359.875],
+    "lonConvention": "0-360",
+    "resolution_deg": 0.25,
+    "variables": ["sst", "anom", "err", "ice"],
+    "timeLatency_nrt": "1 day",
+    "timeLatency_final": "~14 days",
+    "time_coverage_start": "2020-05-04T12:00:00Z",
+    "time_coverage_end_at_spike": "2026-04-15T12:00:00Z",
+    "auth": "none",
+    "cors": "present (ERDDAP sets Access-Control-Allow-Origin: *)"
+  },
+  "workerQueryTemplate": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg.json?sst%5B%28last%29%5D%5B%280.0%29%5D%5B%28{lat_erddap}%29%5D%5B%28{lon_erddap}%29%5D",
+  "lonConversionNote": "lon_erddap = lon_user < 0 ? lon_user + 360 : lon_user"
+}

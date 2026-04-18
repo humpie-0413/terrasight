@@ -1,0 +1,22 @@
+{
+  "layerId": "VIIRS_SNPP_DayNightBand_ENCC",
+  "title": "Nighttime Imagery (Day/Night Band, ENCC, VIIRS Suomi NPP)",
+  "testedUrl": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/VIIRS_SNPP_DayNightBand_ENCC/default/2023-07-07/500m/0/0/0.png",
+  "httpStatus": 200,
+  "contentType": "image/png",
+  "sizeBytes": 114103,
+  "sampleDate": "2023-07-07",
+  "tileMatrixSet": "500m",
+  "format": "image/png",
+  "projection": "EPSG:4326",
+  "auth": "none",
+  "rateLimit": "CDN-backed, none documented",
+  "cadence": "DISCONTINUED — last date 2023-07-07",
+  "coverage": "global",
+  "latencyDays": "N/A (frozen archive)",
+  "clientDirect": true,
+  "statusWarning": "FROZEN — DefaultDate in WMTS caps is 2023-07-07. No updates since. Queries with any 2024+ date return HTTP 400.",
+  "recommendedReplacement": "VIIRS_SNPP_DayNightBand (1km, daily, default=2026-04-17) or VIIRS_NOAA20_DayNightBand (1km, daily)",
+  "notes": "The identifier VIIRS_SNPP_DayNightBand_ENCC is still present in the WMTS capabilities but is a frozen archive product. The ENCC (Enhanced Near Constant Contrast) processing chain was discontinued ~2023-07. For a live daily night-lights layer use VIIRS_SNPP_DayNightBand (tms=1km, format=image/png) which shows default=2026-04-17.",
+  "probeDate": "2026-04-17"
+}

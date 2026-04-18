@@ -1,0 +1,75 @@
+{
+  "_meta": {
+    "spiked": "2026-04-17",
+    "landmine_resolved": "pae-paha.pacioos.hawaii.edu → HTTP 500 (confirmed dead for DHW). Correct host: oceanwatch.pifsc.noaa.gov"
+  },
+  "host": "https://oceanwatch.pifsc.noaa.gov/erddap",
+  "datasetID": "CRW_dhw_v1_0",
+  "variableName": "degree_heating_week",
+  "productVersion": "3.1",
+  "title": "Degree Heating Week, Coral Reef Watch - Daily, 1985-present",
+  "institution": "NOAA/NESDIS/STAR Coral Reef Watch Program",
+  "spatialResolution": "0.05 degrees (~5 km)",
+  "sampleUrl": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.json?degree_heating_week%5B%28last%29%5D%5B%2818.3%29%5D%5B%28295.4%29%5D",
+  "infoUrl": "https://oceanwatch.pifsc.noaa.gov/erddap/info/CRW_dhw_v1_0/index.json",
+  "coordinateRanges": {
+    "latRange": [-89.975, 89.975],
+    "lonRange_erddap": [0.025, 359.975],
+    "lonConvention": "0-360"
+  },
+  "timeCoverage": {
+    "start": "1985-03-25",
+    "end_at_spike": "2026-04-15",
+    "totalTimesteps": 14982,
+    "cadence": "daily"
+  },
+  "responseSchema": {
+    "columnNames": ["time", "latitude", "longitude", "degree_heating_week"],
+    "columnTypes": ["String", "float", "float", "float"],
+    "columnUnits": ["UTC", "degrees_north", "degrees_east", "degree_Celsius_weeks"]
+  },
+  "sampleResponse": {
+    "table": {
+      "columnNames": ["time", "latitude", "longitude", "degree_heating_week"],
+      "columnTypes": ["String", "float", "float", "float"],
+      "columnUnits": ["UTC", "degrees_north", "degrees_east", "degree_Celsius_weeks"],
+      "rows": [
+        ["2026-04-15T12:00:00Z", 18.275, 295.425, 0]
+      ]
+    }
+  },
+  "samplePoint": {
+    "description": "Caribbean reef — British Virgin Islands area",
+    "inputLat": 18.3,
+    "inputLon_user": -64.6,
+    "erddapLon": 295.4,
+    "snappedLat": 18.275,
+    "snappedLon_erddap": 295.425,
+    "dhw_value": 0,
+    "dhw_units": "degree_Celsius_weeks",
+    "observedAt": "2026-04-15T12:00:00Z"
+  },
+  "queryTemplate": "https://oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0.json?degree_heating_week%5B%28last%29%5D%5B%28{lat}%29%5D%5B%28{lon_erddap}%29%5D",
+  "notes": [
+    "CRITICAL: lonConvention = 0-360. Convert lon_user < 0 via lon_erddap = lon_user + 360.",
+    "No zlev dimension (unlike OISST) — query is [time][lat][lon] only.",
+    "Dead hosts confirmed: pae-paha.pacioos.hawaii.edu → HTTP 500; coastwatch.pfeg.noaa.gov has no DHW dataset.",
+    "Working host: oceanwatch.pifsc.noaa.gov (confirmed 2026-04-17).",
+    "Bleaching alert threshold: DHW >= 4°C-weeks = Bleaching Watch; >= 8 = Bleaching Warning.",
+    "auth: none",
+    "CORS: ERDDAP sets Access-Control-Allow-Origin: * — Worker may pass through without adding header.",
+    "Companion datasets on same host: CRW_sst_v1_0, CRW_hs_v1_0, CRW_sst_anom_v1_0, CRW_baa_max_7d_v1_0"
+  ],
+  "deadHosts": [
+    {
+      "host": "pae-paha.pacioos.hawaii.edu",
+      "status": "HTTP 500",
+      "note": "Was referenced in v1 connector docstring — do not use"
+    },
+    {
+      "host": "coastwatch.pfeg.noaa.gov",
+      "status": "no DHW dataset",
+      "note": "DHW not in coastwatch catalog — OISST only"
+    }
+  ]
+}

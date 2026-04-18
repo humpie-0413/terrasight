@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-04-17T15:28:16+00:00",
+  "pipelineVersion": "v2.step5.0",
+  "reports": [
+    {
+      "slug": "houston-the-woodlands-sugar-land",
+      "cbsaCode": "26420",
+      "city": "Houston-The Woodlands-Sugar Land",
+      "region": "TX",
+      "updatedAt": "2026-04-17T15:28:16+00:00",
+      "status": "partial",
+      "coreBlocksOk": 1,
+      "coreBlocksTotal": 8
+    },
+    {
+      "slug": "los-angeles-long-beach-anaheim",
+      "cbsaCode": "31080",
+      "city": "Los Angeles-Long Beach-Anaheim",
+      "region": "CA",
+      "updatedAt": "2026-04-17T15:28:16+00:00",
+      "status": "partial",
+      "coreBlocksOk": 1,
+      "coreBlocksTotal": 8
+    },
+    {
+      "slug": "new-york-newark-jersey-city",
+      "cbsaCode": "35620",
+      "city": "New York-Newark-Jersey City",
+      "region": "NY",
+      "updatedAt": "2026-04-17T15:28:16+00:00",
+      "status": "partial",
+      "coreBlocksOk": 1,
+      "coreBlocksTotal": 8
+    }
+  ]
+}

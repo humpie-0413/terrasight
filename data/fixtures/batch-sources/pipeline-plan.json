@@ -1,0 +1,290 @@
+{
+  "_meta": {
+    "generated": "2026-04-17",
+    "purpose": "Phase 4+ batch pipeline candidates — suitability spike results",
+    "scope": "CAMS, ERA5, GFS. Not MVP. Runs in GitHub Actions cron, renders PNG → Cloudflare R2.",
+    "spike_method": "Documentation review only — no accounts registered, no data downloaded."
+  },
+
+  "sources": {
+    "cams": {
+      "full_name": "CAMS Global Atmospheric Composition Forecasts",
+      "provider": "Copernicus Atmosphere Monitoring Service (ECMWF)",
+      "portal": "https://ads.atmosphere.copernicus.eu/",
+      "auth": {
+        "type": "ADS personal access token",
+        "config_file": "~/.cdsapirc",
+        "config_format": {
+          "url": "https://ads.atmosphere.copernicus.eu/api",
+          "key": "<PERSONAL-ACCESS-TOKEN>"
+        },
+        "note": "Separate from CDS — different URL despite sharing the cdsapi package. Each dataset requires manual Terms-of-Use acceptance via the web portal before API downloads work."
+      },
+      "client": "cdsapi>=0.7.7 (pip install cdsapi)",
+      "products": {
+        "pm25": {
+          "cds_name": "particulate_matter_d_less_than_2p5_um",
+          "unit": "kg/m3",
+          "note": "Derived from sum of organic matter, black carbon, sulfate, nitrate, sea salt, dust aerosol components — not a single-variable pull; request the composite variable directly."
+        },
+        "no2": {
+          "cds_name": "nitrogen_dioxide",
+          "unit": "kg/kg"
+        },
+        "o3": {
+          "cds_name": "ozone",
+          "unit": "kg/kg"
+        }
+      },
+      "spatial_resolution_deg": 0.4,
+      "grid_cells": "~900 x 451 = 405,900 cells per level",
+      "vertical": "Single-level surface fields (type=fc, level=0)",
+      "cadence": "2 forecast cycles/day at 00 UTC and 12 UTC; hourly timesteps at single-level",
+      "latency_hours": "~6 h after model run (operational NRT)",
+      "forecast_horizon_hours": 120,
+      "file_format": "GRIB2 (default); netCDF available on request",
+      "payload_size_estimates": {
+        "single_var_single_timestep_grib2_mb": 0.5,
+        "single_var_8_timesteps_grib2_mb": 4.0,
+        "3_vars_8_timesteps_grib2_mb": 12.0,
+        "note": "Back-of-envelope: 405,900 cells × 4 bytes × 0.3 compression ratio"
+      },
+      "queue_system": "Queued asynchronous download via cdsapi; typical wait 5–30 min in off-peak, can exceed 2 h during peak demand",
+      "gh_actions": {
+        "recommended_cron": "0 8 * * *",
+        "cron_description": "Daily at 08 UTC — retrieves previous day 00 UTC cycle (available ~06 UTC)",
+        "estimated_job_duration_min": "25-55 (queue dominated)",
+        "runner_memory_peak_mb": 800,
+        "runner_headroom_gb": 6.2,
+        "rendering_lib": "xarray + matplotlib (cartopy optional for projection) → PNG",
+        "timeout_risk": "LOW — well within 6 h limit even with queue"
+      },
+      "r2_output_path": "r2://terrasight-frames/cams/{variable}/{YYYY}/{MM}/{DD}/global-{HH}00.png",
+      "r2_path_examples": [
+        "r2://terrasight-frames/cams/pm25/2026/04/17/global-0000.png",
+        "r2://terrasight-frames/cams/no2/2026/04/17/global-0000.png",
+        "r2://terrasight-frames/cams/o3/2026/04/17/global-0000.png"
+      ],
+      "client_direct": false,
+      "phase4_priority": 2,
+      "landmines": [
+        "ADS and CDS use different URLs despite sharing the cdsapi package — ~/.cdsapirc must point to https://ads.atmosphere.copernicus.eu/api for CAMS, NOT the CDS URL. Easy to ship wrong config.",
+        "Each dataset requires manual Terms-of-Use acceptance via browser BEFORE the API will return data — cdsapi gives cryptic 'Access restricted' errors without it.",
+        "PM2.5 is NOT a raw model variable — it is a diagnostic computed from 7 aerosol species. Request 'particulate_matter_d_less_than_2p5_um' directly; do NOT try to sum components.",
+        "cdsapi default retry is 3 attempts with no backoff — for long queues, wrap calls with tenacity or custom retry with exponential backoff.",
+        "CAMS forecast files: time dimension is indexed in seconds since epoch, not hours — xarray decode_times=True required or timestamps will be wrong.",
+        "GRIB2 files from CAMS use ECMWF parameter numbering, not standard WMO codes — cfgrib shortName may differ from NCEP conventions (e.g., 'pm2p5' not 'PM2.5').",
+        "GitHub Actions secret must be injected as env var CDS_API_KEY and written to ~/.cdsapirc in the job step — do not hardcode."
+      ]
+    },
+
+    "era5": {
+      "full_name": "ERA5 Monthly Averaged Data on Single Levels",
+      "provider": "Copernicus Climate Data Store (ECMWF)",
+      "portal": "https://cds.climate.copernicus.eu/",
+      "auth": {
+        "type": "CDS personal access token",
+        "config_file": "~/.cdsapirc",
+        "config_format": {
+          "url": "https://cds.climate.copernicus.eu/api",
+          "key": "<PERSONAL-ACCESS-TOKEN>"
+        },
+        "note": "Different portal and URL from ADS/CAMS. Old format used UID:key pair — new format since 2024 uses a single personal access token. Scripts using the old format will silently fail with 403."
+      },
+      "client": "cdsapi>=0.7.7 (pip install cdsapi)",
+      "products": {
+        "2m_temperature": {
+          "cds_name": "2m_temperature",
+          "unit": "K",
+          "note": "Monthly mean of daily means"
+        },
+        "total_precipitation": {
+          "cds_name": "total_precipitation",
+          "unit": "m/month"
+        },
+        "10m_u_component_of_wind": {
+          "cds_name": "10m_u_component_of_wind",
+          "unit": "m/s"
+        },
+        "10m_v_component_of_wind": {
+          "cds_name": "10m_v_component_of_wind",
+          "unit": "m/s"
+        }
+      },
+      "spatial_resolution_deg": 0.25,
+      "grid_cells": "1440 x 721 = 1,038,240 cells",
+      "cadence": "Monthly means; new month available ~6th of following month",
+      "latency": {
+        "era5t_preliminary": "~5 days after end of month (early release, may be revised)",
+        "era5_final": "~2-3 months after ERA5T; corrections rare but possible",
+        "note": "For visualization, ERA5T (preliminary) is acceptable — use product_type='monthly_averaged_reanalysis' with year/month parameters"
+      },
+      "file_format": "GRIB1 (default for ERA5) or netCDF4 (specify format='netcdf' in request)",
+      "payload_size_estimates": {
+        "single_var_monthly_grib_mb": 1.0,
+        "single_var_monthly_netcdf4_mb": 1.5,
+        "4_var_monthly_netcdf4_mb": 6.0,
+        "note": "Monthly means compress very well (~75% compression ratio). 1,038,240 cells × 4 bytes × 0.35 NC4 ratio."
+      },
+      "queue_system": "CDS disk (fast) vs MARS tape (slow). Monthly means are on CDS disk — typical wait 2–10 min. Hourly ERA5 may require MARS tape (hours to days).",
+      "gh_actions": {
+        "recommended_cron": "0 6 5 * *",
+        "cron_description": "Monthly on the 5th at 06 UTC — previous month ERA5T data reliably available by then",
+        "estimated_job_duration_min": "10-20",
+        "runner_memory_peak_mb": 600,
+        "runner_headroom_gb": 6.4,
+        "rendering_lib": "xarray + matplotlib → PNG; use xr.open_dataset with engine='netcdf4'",
+        "timeout_risk": "VERY LOW — monthly batch, short queue, small files"
+      },
+      "r2_output_path": "r2://terrasight-frames/era5/{variable}/{YYYY}/{MM}/global-monthly.png",
+      "r2_path_examples": [
+        "r2://terrasight-frames/era5/t2m/2026/03/global-monthly.png",
+        "r2://terrasight-frames/era5/tp/2026/03/global-monthly.png",
+        "r2://terrasight-frames/era5/wind/2026/03/global-monthly.png"
+      ],
+      "client_direct": false,
+      "phase4_priority": 3,
+      "landmines": [
+        "OLD ~/.cdsapirc format used 'url: ...' + 'key: UID:API_KEY' (colon-separated UID and key). New format (2024+) uses a single personal access token with no colon. Scripts written before 2024 will silently fail with 403.",
+        "Requesting hourly ERA5 for multiple months in one API call triggers MARS tape retrieval (hours to days of queue). Always request one month at a time for monthly-means pipeline.",
+        "format='netcdf' must be explicit in the cdsapi request dict — default is GRIB, and cfgrib is heavier to set up than netCDF4 for ERA5.",
+        "CDS requests have a 'maximum items' cap per request — requesting more than ~100,000 grid-points × time-steps may be split by the server, returning a zip of multiple files.",
+        "ERA5T (preliminary) vs ERA5 (final) are separate product_type values — 'monthly_averaged_reanalysis' for final, 'monthly_averaged_reanalysis_by_hour_of_day' for diurnal. Using wrong product_type silently returns wrong data.",
+        "CDS API returns a job ID for async requests — cdsapi client polls until done, but default timeout is none; set timeout= in Client() init to avoid hung GitHub Actions jobs.",
+        "Data is in K for temperature (not Celsius) and m for precipitation — normalize before colormapping or misleading renders result."
+      ]
+    },
+
+    "gfs": {
+      "full_name": "NOAA Global Forecast System (GFS)",
+      "provider": "NOAA NCEP / NOMADS",
+      "portal": "https://nomads.ncep.noaa.gov/",
+      "auth": {
+        "type": "none",
+        "note": "Fully public, no registration required. Direct HTTP access to GRIB2 files."
+      },
+      "client": "cfgrib + xarray (pip install cfgrib xarray) or direct HTTP byte-range via requests + eccodes",
+      "products": {
+        "2m_temperature": {
+          "grib_shortName": "2t",
+          "grib_name": "Temperature",
+          "level": "2 m above ground",
+          "unit": "K"
+        },
+        "10m_u_wind": {
+          "grib_shortName": "10u",
+          "grib_name": "U-Component of Wind",
+          "level": "10 m above ground",
+          "unit": "m/s"
+        },
+        "10m_v_wind": {
+          "grib_shortName": "10v",
+          "grib_name": "V-Component of Wind",
+          "level": "10 m above ground",
+          "unit": "m/s"
+        },
+        "precipitation_rate": {
+          "grib_shortName": "prate",
+          "grib_name": "Precipitation Rate",
+          "level": "surface",
+          "unit": "kg/m2/s"
+        },
+        "relative_humidity_2m": {
+          "grib_shortName": "2r",
+          "grib_name": "Relative Humidity",
+          "level": "2 m above ground",
+          "unit": "%"
+        }
+      },
+      "spatial_resolution_deg": 0.25,
+      "grid_cells": "1440 x 721 = 1,038,240 cells",
+      "cadence": "4 cycles/day: 00, 06, 12, 18 UTC",
+      "latency_hours": "~3.5-4 h after cycle start (e.g., 00Z data available ~03:30-04:00 UTC)",
+      "forecast_horizon_hours": 384,
+      "file_format": "GRIB2",
+      "file_naming": "https://nomads.ncep.noaa.gov/pub/data/nccf/com/gfs/prod/gfs.{YYYYMMDD}/{HH}/atmos/gfs.t{HH}z.pgrb2.0p25.f{FFF}",
+      "filter_service": "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl",
+      "payload_size_estimates": {
+        "full_pgrb2_f000_mb": 477,
+        "single_var_grib2_mb": 0.7,
+        "note": "Verified: full f000 = 477 MB for 696 records. Per-record average 0.69 MB. Use NOMADS byte-range/filter service to pull only needed variables — avoid downloading full 477 MB.",
+        "filtered_5var_f000_mb": 4.0,
+        "filtered_5var_all_4_cycles_mb": 16.0
+      },
+      "rolling_window_days": 10,
+      "gh_actions": {
+        "recommended_cron": "30 4,10,16,22 * * *",
+        "cron_description": "Every 6 h, 30 min after each cycle availability (00z→04:30, 06z→10:30, 12z→16:30, 18z→22:30 UTC)",
+        "estimated_job_duration_min": "5-10",
+        "runner_memory_peak_mb": 800,
+        "runner_headroom_gb": 6.2,
+        "rendering_lib": "cfgrib + xarray for GRIB2 parse; matplotlib → PNG; eccodes system lib required in runner",
+        "timeout_risk": "VERY LOW — no queue, small filtered payload",
+        "gh_actions_apt": "sudo apt-get install -y libeccodes-dev"
+      },
+      "r2_output_path": "r2://terrasight-frames/gfs/{variable}/{YYYY}/{MM}/{DD}/global-{HH}00.png",
+      "r2_path_examples": [
+        "r2://terrasight-frames/gfs/t2m/2026/04/17/global-0000.png",
+        "r2://terrasight-frames/gfs/wind/2026/04/17/global-0000.png",
+        "r2://terrasight-frames/gfs/precip/2026/04/17/global-0000.png"
+      ],
+      "client_direct": false,
+      "phase4_priority": 1,
+      "landmines": [
+        "NOMADS 10-day rolling window: any URL older than ~10 days returns 404. Pipeline must use current date dynamically — never hardcode dates. Missing runs (e.g., delayed cycles) must be caught with HTTP 404 handling and fallback to prior cycle.",
+        "cfgrib requires the eccodes C library (not just the Python package) — on Ubuntu runners: 'sudo apt-get install libeccodes-dev'. Missing this causes a hard ImportError at runtime, not install time.",
+        "Full pgrb2 file is 477 MB — NEVER download the full file. Use the NOMADS filter service (filter_gfs_0p25.pl) with var_TMP=on&var_UGRD=on etc. to retrieve only needed variables. Filtered payload for 5 vars is ~4 MB.",
+        "cfgrib indexes GRIB2 files on first open, creating .idx sidecar files. On a read-only filesystem or tmpdir, this fails. Set indexing_time=None or use cfgrib.open_datasets() with index_path pointing to a writable temp dir.",
+        "GFS 00z cycle: available ~03:30 UTC but sometimes delayed to ~05:30 UTC during operational issues. Cron must include retry logic — check for file existence before processing.",
+        "Precipitation in GFS pgrb2 f000 is PRATE (instantaneous rate, kg/m2/s), NOT accumulated APCP. For accumulated precip, use f001-f006 with APCP. Ensure correct variable selection per forecast hour.",
+        "GFS grid is NOT centered at 0°: longitude range is 0–359.75°. For cartopy/matplotlib globe plots, roll the array to -180 to 180 with np.roll() or xr.Dataset.assign_coords() before plotting."
+      ]
+    }
+  },
+
+  "rendering_approach": {
+    "recommended_stack": "Python 3.11 + xarray + matplotlib + cartopy",
+    "alternatives": {
+      "numpy_pillow": "Faster render (~3x) but requires manual colormap, no projection support. Acceptable for equirectangular frames.",
+      "xarray_matplotlib": "Recommended default — handles coordinate transforms, colormap, and missing data gracefully."
+    },
+    "output_spec": {
+      "format": "PNG",
+      "size_px": "1440x720 (GFS/ERA5) or 900x450 (CAMS)",
+      "color_model": "RGB (no alpha — R2 CDN serves opaque tiles)",
+      "estimated_size_kb": "200-400 KB per frame",
+      "dpi": 150,
+      "projection": "PlateCarree (equirectangular) for tile compatibility"
+    },
+    "upload": "rclone or boto3 (s3-compatible) to Cloudflare R2"
+  },
+
+  "phase4_priority_ranking": {
+    "1": {
+      "source": "GFS",
+      "reason": "No auth, no queue, 6-hourly cadence, verified file structure, simplest client (wget + cfgrib). Best for wind particles and precipitation. Implement first."
+    },
+    "2": {
+      "source": "CAMS",
+      "reason": "PM2.5 and NO2 are differentiated vs GFS. Requires ADS account + ToU acceptance. Queue adds complexity but manageable. Implement second."
+    },
+    "3": {
+      "source": "ERA5",
+      "reason": "Monthly cadence limits UI freshness. Valuable for climatology/anomaly context but lower urgency for Phase 4 launch. Implement third."
+    }
+  },
+
+  "github_actions_budget_summary": {
+    "runner": "ubuntu-latest (standard, 7 GB RAM, 2 vCPU)",
+    "max_job_duration_min": 360,
+    "peak_memory_worst_case_mb": 800,
+    "headroom_gb": 6.0,
+    "cron_schedules": {
+      "gfs": "30 4,10,16,22 * * *",
+      "cams": "0 8 * * *",
+      "era5": "0 6 5 * *"
+    },
+    "required_apt_packages": ["libeccodes-dev"],
+    "required_pip_packages": ["cdsapi>=0.7.7", "cfgrib", "xarray", "numpy", "matplotlib", "cartopy", "boto3", "tenacity"]
+  }
+}

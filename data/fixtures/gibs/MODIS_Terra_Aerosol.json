@@ -1,0 +1,21 @@
+{
+  "layerId": "MODIS_Terra_Aerosol",
+  "title": "Aerosol Optical Depth (MODIS Terra, Dark Target + Deep Blue)",
+  "testedUrl": "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/MODIS_Terra_Aerosol/default/2026-04-17/2km/0/0/0.png",
+  "httpStatus": 200,
+  "contentType": "image/png",
+  "sizeBytes": 15097,
+  "sampleDate": "2026-04-17",
+  "tileMatrixSet": "2km",
+  "format": "image/png",
+  "projection": "EPSG:4326",
+  "auth": "none",
+  "rateLimit": "CDN-backed, none documented",
+  "cadence": "daily",
+  "coverage": "global",
+  "latencyDays": 0,
+  "clientDirect": true,
+  "notes": "WMTS capabilities lists both 'MODIS_Terra_Aerosol' (short alias, tms=2km) and 'MODIS_Terra_Aerosol_Optical_Depth_3km' (canonical, same tms). Short alias tested and confirmed working. UI MUST label as 'Aerosol Proxy (AOD)' — NEVER PM2.5.",
+  "uiLabelRequirement": "Aerosol Proxy — NOT PM2.5",
+  "probeDate": "2026-04-17"
+}
