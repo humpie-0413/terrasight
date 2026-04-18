@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "terrasight-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "CACHE_TTL_FIRES": "600",
+    "CACHE_TTL_EARTHQUAKES": "300",
+    "CACHE_TTL_SST_POINT": "3600"
+  }
+  // Secrets: set via `wrangler secret put`
+  //   FIRMS_MAP_KEY — FIRMS NRT wildfires MAP_KEY
+}

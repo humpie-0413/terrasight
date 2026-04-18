@@ -38,3 +38,6 @@ yarn-debug.log*
 
 # Superpowers plugin scratch state
 .superpowers/
+
+# Cloudflare Workers local dev state (Miniflare cache + bundle output)
+.wrangler/
