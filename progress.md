@@ -1,6 +1,240 @@
 # TerraSight — Progress Log
 
-**최종 업데이트:** 2026-04-16 (Ocean 종합 업그레이드: SST + Sea Ice + 해류 파티클)
+**최종 업데이트:** 2026-04-18 (v2 Architecture Reset — Step 10 QA / E2E 완료)
+
+---
+
+## Current Phase
+
+**Name:** v2 Architecture Reset
+**Goal:** v1 의 Render 상시 런타임 + Open-Meteo 의존 구조에서 **Astro + Cloudflare Workers + R2 + GitHub Actions 배치** 구조로 재설계. Globe Lite 6 레이어 · Atlas Lite 8 카테고리 · Reports Static 3 샘플 도시 출시.
+
+## Progress
+- **Step 10 QA / E2E 완료 (`docs/review/qa-results-2026-04-18.md`). SHIP-WITH-CAVEATS: 0 P0, 1 P1 fixed in this commit (footer guide links `/guides/methodology` + `/guides/trust-legend` → real stubs `how-to-read-a-report` + `what-is-a-trust-tag`), 3 P2 deferred (home canonical missing · `/atlas` nav dead-route pending Step 11 · 8 peer-city links 404 until full 50-CBSA expansion). Build matrix green both modes (env-unset: 16 pages, no sitemap / env-set: 16 pages, 11-URL sitemap, canonicals on /reports + /rankings). tsc clean. 60 pipeline tests pass. Worker 4/4 endpoints live w/ correct status enum (ok/not_configured/pending/error + SST no_data narrowing). Home 7.07 KB gzipped (3.5 % of 200 KB budget). 4/4 guide stubs noindex. API path grep: all `/api/*` callers in `apps/web` match Worker mount. Lighthouse deferred (no Chrome on QA host).**
+- Step 9 Reviewer 검증 완료 (`docs/review/review-checklist.md`). 1 P0 blocker 발견 + 수정 커밋에서 해결: `apps/web/public/_redirects` 가 v1 Render 백엔드로 proxy 하던 라인 제거(v2 Rule 1 위반). 2 P2 follow-up(OG image asset · data 미러 자동화) 기록. `/api/*` 는 Worker 에서 same-origin 혹은 `PUBLIC_WORKER_BASE_URL` 로 분리 제공. Rule 1–10 모두 pass (60 pipeline 테스트 통과 · tsc clean · home 0 JS · guide stubs triple-noindex · 11-URL sitemap · trust-tag 42/42 coverage).
+- Step 8 SEO / monetization 완료 (`lib/seo.ts` helpers + `BaseLayout.astro` seo prop + `/rankings/index` + `/rankings/{metric}` 4 dynamic pages + `/guides/index` + 4 noindex stubs + `InternalLink.astro` + `@astrojs/sitemap@^3.2.1` + `robots.txt` + `docs/architecture/seo-ia.md` + `docs/revenue/adsense-placement-policy.md`). 16 page build green, tsc clean, sitemap correctly skipped when `PUBLIC_SITE_URL` unset / emitted when set.
+
+## Next Actions (post-Step 10)
+1. **Step 9+ — Consent gate + AdSense runtime wiring** per `docs/revenue/adsense-placement-policy.md` §7 (region-aware default, `data-npa` swap, loader gate).
+2. **Deploy-readiness dry-run** — first Cloudflare Pages preview deploy + Lighthouse against the real URL (`npx lighthouse <preview-url> --only-categories=perf,a11y,bp,seo`). Confirm Worker routing on `/api/*` (same-origin or `PUBLIC_WORKER_BASE_URL`). Remove `backend/main.py` maintenance stub and Render deployment after 2 weeks of Worker-only traffic.
+3. **P2 — Home canonical:** thread `seo={{title,description,path:'/'}}` prop in `apps/web/src/pages/index.astro`; ship together with the OG default image so both social-SEO holes close in one commit.
+4. **P2 — `/atlas` nav link:** gate behind `PUBLIC_ATLAS_READY` env var or drop from nav until Step 11 lands.
+5. **P2 — Data mirror automation:** `pnpm --filter web prebuild` hook copying `data/{reports,rankings}` → `apps/web/src/data/` so pipeline outputs never drift from served fixtures.
+6. **Content backlog:** author 4 guide bodies (compliance → trust tag → how to read → navigation hub); clear noindex + Disallow + sitemap filter together per stub.
+7. **(Step 11) Atlas Lite 8 카테고리** — unblocks the `/atlas` nav dead-route and the `peer_slugs` 404 follow-on (render-side filter once 50-CBSA expansion ships).
+
+### Last Completed (2026-04-18 · Step 10 — QA / E2E, single-agent Opus)
+- **Coverage:** Step 10 prompt §Test matrix — build matrix (env unset vs set) · home zero-JS regression · home bundle size · guide stub noindex coverage · robots/sitemap gating · per-report anchor+JSON-LD+ad-slot invariants · per-rankings table/pending/Breadcrumb/methodology · Worker local dev + 4-endpoint probe · strict-status-vocabulary enforcement · API path naming unification · broken-link scan. Lighthouse deferred (no Chrome binary available on QA host — documented manual command).
+- **Build matrix:** Both `pnpm --filter web build` modes produce 16 pages green (/, /globe, /reports + 3 CBSAs, /rankings + 4 metrics, /guides + 4 stubs). Env-unset: no sitemap, robots.txt has no `Sitemap:` line, canonical absent everywhere. Env-set (`PUBLIC_SITE_URL=https://terrasight.test`): `sitemap-index.xml` + `sitemap-0.xml` emit w/ 11 `<loc>` entries (no `/guides/*` per filter), canonicals emit on `/reports/{cbsa}` and `/rankings/{metric}`. `pnpm lint` (tsc --noEmit) exit 0.
+- **Invariants verified:**
+  - Home zero-JS — `grep -c '_astro/.*\.js' dist/index.html` → 0 ✓
+  - Home bundle gzipped — 4,816 B (HTML) + 2,250 B (CSS) = **7,066 B** (3.5 % of 200 KB budget) ✓
+  - 4/4 guide stubs emit `<meta name="robots" content="noindex, nofollow">` ✓
+  - Every `dist/reports/*/index.html` has 8 core-block anchors (`block-air_quality` … `block-methodology`) + 3 ad slots (`report-hero`, `report-mid`, `report-footer`) + `city-comparison-external` + `related-cities` + `rankings-snippet` + Article JSON-LD + Breadcrumb JSON-LD ✓
+  - Every `dist/rankings/*/index.html` has ranked-table-OR-"all pending" fallback + `rankings-footer` AdSlot + Breadcrumb JSON-LD + methodology (src + definition + cadence) + compliance-disclaimer on GHG/water only ✓
+  - Each guide stub has `href="/reports"` + `href="/guides"` back-links ✓
+- **Worker (local dev, wrangler 3.114.17 → miniflare on `127.0.0.1:8787`):**
+  - `/health` → 200 `{status:"ok",service:"terrasight-worker"}` ✓
+  - `/api/fires` (FIRMS_MAP_KEY unset) → 200 `status:"not_configured"` with message `"FIRMS_MAP_KEY not set"` ✓ (Rule 5 graceful degrade)
+  - `/api/earthquakes` → 200 `status:"ok"` with 261 events in normalized shape ✓
+  - `/api/sst-point?lat=30&lon=-80` → 200 `status:"ok"` `sst_c:26.24` (physically plausible mid-April Atlantic) ✓
+- **Status vocabulary strict-mode grep:** all worker + composer status literals draw from `{ok, error, not_configured, pending}` + documented SST-only `no_data` narrowing. Zero drift. `apps/worker/src/routes/sst-point.ts` + `pipelines/transforms/block_composer.py` audited.
+- **API path unification:** all 3 worker mounts (`/api/fires`, `/api/earthquakes`, `/api/sst-point`) have exact matches in `apps/web/src/lib/layers.ts` (L207, L218) + `apps/web/src/islands/GlobeApp.tsx` (L402). No `/fires` (unprefixed) variants anywhere.
+- **Broken-link scan (32 unique internal hrefs from all `dist/**/*.html`):**
+  - **P1 — `SiteFooter.astro` linked to 2 non-existent guide slugs** (`/guides/methodology`, `/guides/trust-legend`). Actual stubs ship as `how-to-read-a-report` + `what-is-a-trust-tag` — the Step 8 IA-doc draft slugs did not match the emitted routes. **Fixed in this commit** (3 href swaps in `apps/web/src/components/SiteFooter.astro`). Post-fix broken-link count drops 12 → 10.
+  - **P2 (deferred) — `/atlas` (1 ref from nav):** Atlas is Step 11. Nav shipped ahead of target. Gate behind build flag or drop from nav until Atlas lands.
+  - **P2 (deferred) — 8 peer-city reports:** `peer_slugs` in 3 sample report JSONs list metros that won't have built reports until the pipeline's 50-CBSA expansion runs. Render-side filter in `RelatedCities.astro` / `CityComparison.astro` against `reports-index.json` is the one-line cleanup, deferred to Step 11.
+- **P2 surfaced but not fixed (home canonical gap):** `apps/web/src/pages/index.astro` does not pass `seo` to BaseLayout, so home canonical never emits even when `PUBLIC_SITE_URL` set. One-line fix deferred to the Step 9+ OG image follow-up so both social-SEO holes close together.
+- **Guardrails:** added **5 new landmines** to `docs/guardrails.md` under "Step 10 QA landmines": (1) footer/guide-slug drift, (2) `grep -c '<loc>'` undercount trap on minified sitemap, (3) peer-slug render without filter = 404 family, (4) home canonical gap via omitted `seo` prop, (5) wrangler-dev detach-from-task on Windows (must kill by port not by PID).
+- **Verdict: SHIP-WITH-CAVEATS.** 0 release blockers. 1 P1 fixed. 3 P2 deferred with explicit owners + target step. Rule 1–10 all verified pass for this build. Pipeline 60 tests pass. Worker endpoints live and correctly statused.
+- **Deliverables:** `docs/review/qa-results-2026-04-18.md` (NEW, 7 sections — environment · build matrix · worker probes · bug list with remediation · Lighthouse deferral note · ship-readiness verdict · verification commands replay). `docs/guardrails.md` +5 landmines. `progress.md` this block.
+
+### Last Completed (2026-04-18 · Step 9 — Reviewer 검증, single-agent Opus)
+- **Coverage:** Step 3→8 deliverables scanned against CLAUDE.md 10 non-negotiable rules + architecture-v2.md §9 + data-source-policy. must/must-not checklist is §1 of `docs/review/review-checklist.md`.
+- **Scans run (evidence):** `grep -r "open-meteo\|open_meteo"` in `apps/` + `packages/` + `pipelines/` → 0 matches (legacy/docs only). `grep renderSurface\|numpy` in `apps/` → 0 files. `grep _ENCC` → 12 matches but all are warning comments, test negatives, or the frozen fixture — zero active usage. `grep "_astro/.*\.js" dist/index.html` → 0. Guide stubs noindex 4/4. sitemap 11 URLs (no `/guides/*`). Trust-tag 42/42 on report fixtures. 60 pipeline tests pass. `tsc --noEmit` exit 0 on web app.
+- **P0 blocker (found + fixed in this commit):** `apps/web/public/_redirects` was rewriting `/api/* → terrasight-api-o959.onrender.com/:splat`, which violates v2 Rule 1 (no Render runtime dependency). Replaced with an explanatory comment documenting that Worker serves `/api/*` same-origin OR via `PUBLIC_WORKER_BASE_URL`, and warning against re-adding the Render target. Worker already exposes the same 3 routes (`/api/fires`, `/api/earthquakes`, `/api/sst-point`) at `apps/worker/src/index.ts`; Globe island already reads `PUBLIC_WORKER_BASE_URL` at build time.
+- **P2 follow-ups logged (non-blocking):** (a) `/og/default.png` path reserved in `lib/seo.ts` but physical file absent; (b) `data/{reports,rankings}/*.json` → `apps/web/src/data/` currently copied manually (Astro/Vite can't `import.meta.glob` across workspace root — already a Step 7 landmine in `docs/guardrails.md`).
+- **Clean (no action):** `VIIRS_SNPP_DayNightBand_ENCC` matches are all intentional warning comments / negative-case tests / frozen fixture. Cesium bundle size (1.37 MB gzipped) pre-existing in Step 6 follow-ups, not new.
+- **Docs:** `docs/review/review-checklist.md` (new, 7 sections: must/must-not checklist · scan evidence · findings by severity · rule→artifact cross-ref · verdict · actions · verification command replay). `progress.md` Next Actions updated to point at Step 10.
+- **Verdict:** PASS with 1 P0 fixed in this commit + 2 P2 deferred. Release blockers after this commit: **none**. No rule violation in `apps/`, `packages/`, `pipelines/`, `apps/worker/`, or `backend/main.py` (maintenance stub) beyond the `_redirects` file, which is now resolved.
+
+### Last Completed (2026-04-18 · Step 8 — SEO / monetization, single-agent)
+- **SEO helper (`apps/web/src/lib/seo.ts`):** pure TypeScript, zero Astro deps. `resolveSiteUrl()` reads `import.meta.env.PUBLIC_SITE_URL`, trims trailing slash, returns `null` when unset/empty. `buildPageMeta({title,description,path,image?,type?})` → `{title,description,canonicalUrl,ogTags[],twitterTags[]}`. Default OG image `/og/default.png` (path reserved — file not created). Twitter card `summary_large_image`. Canonical URL is `null` when `PUBLIC_SITE_URL` unset (Rule 7 — no placeholder).
+- **`BaseLayout.astro` seo prop:** optional `seo?: PageSeo` prop merges lib/seo output into head; preserves legacy minimal OG/Twitter fallback for pages that don't pass `seo` yet. Canonical emitted via seo path (only when env var set). `<slot name="head" />` preserved (Step 7 JSON-LD injection still works).
+- **Rankings pages (3 files):** `pages/rankings/index.astro` lists the 4 metrics (definitions + cadence + nCbsa from `data/rankings/index.json`) with `AdSlot slot="rankings-header"` on top + methodology footer + compliance disclaimer link to `/guides/why-compliance-is-not-exposure`. `pages/rankings/[metric].astro` is dynamic with `getStaticPaths` iterating 4 hyphenated slugs (`air-quality-pm25` / `emissions-ghg-total` / `water-violations-count` / `disaster-declarations-10y`); eager-globs `data/rankings/*.json` bridging hyphen↔underscore; renders rank/city/value/trust/as-of table + "data pending" section for null rows + methodology w/ source + conditional `Compliance ≠ exposure` disclaimer (GHG / water only) + `rankings-footer` ad slot + Breadcrumb JSON-LD always + Dataset JSON-LD only when ≥1 non-null row + canonical gated by `PUBLIC_SITE_URL`.
+- **Guides (index + 4 stubs):** `pages/guides/index.astro` lists the 4 draft cards (indexable itself). 4 stub pages at `/guides/what-is-a-trust-tag` · `/how-to-read-a-report` · `/why-compliance-is-not-exposure` · `/finding-local-environmental-data`, each emitting `<meta name="robots" content="noindex, nofollow">` in the `<slot name="head" />`. Shared `components/GuideStub.astro` renders breadcrumbs + title + 1-paragraph intro + "coming soon" card with links back to `/guides` and `/reports`.
+- **InternalLink (`components/InternalLink.astro`):** cross-section link wrapper with `data-link-type="internal"` + inferred `data-target-section` (from first path segment). Variants: `inline` / `card` / `nav`. Build-time warning when `to` is not absolute path.
+- **AdSlot extension:** added `rankings-footer` to `AdSlot.types.ts::AdSlotName` union (existing `rankings-header` retained from Step 7). 5 slot names now frozen.
+- **`@astrojs/sitemap@^3.2.1`:** wired in `astro.config.mjs`. Astro's `site` option populated from `process.env.PUBLIC_SITE_URL`; unset → warn + skip sitemap emission, set → emits `sitemap-index.xml` + `sitemap-0.xml`. Filter excludes `/guides/*` (guide stubs noindex per user refinement). Verified: 11 URLs in sitemap (home, globe, rankings index + 4 metrics, reports index + 3 cities) under `PUBLIC_SITE_URL=https://terrasight.example` build.
+- **`public/robots.txt`:** static allow-all + `Disallow:` lines for 4 guide stub paths (belt-and-suspenders alongside noindex meta + sitemap filter). No `Sitemap:` line in file — CI deploy wiring (Step 9+ follow-up) prepends `Sitemap: ${PUBLIC_SITE_URL}/sitemap-index.xml` when env var is set.
+- **Critical Astro landmines encountered + documented:**
+  - (1) `@astrojs/sitemap@3.7.x` assumes Astro 5 `astro:routes:resolved` hook — crashes on Astro 4.16 with `_routes is undefined`. Downgraded to 3.2.1 (Astro-4-compatible branch).
+  - (2) `getStaticPaths` runs in an isolated scope and cannot access top-level frontmatter constants in `.astro` files. Had to redeclare the URL-slug list inline inside `getStaticPaths` for `/rankings/[metric].astro`. Documented in `CLAUDE.md` Step 8 decisions.
+- **Acceptance (Step 8) — all 6 checks pass (2026-04-18):**
+  - `pnpm --filter web build` → 16 pages green in 15.22s (/, /globe, /reports, 3 cities, /rankings, 4 metrics, /guides, 4 stubs)
+  - `pnpm --filter web lint` (tsc --noEmit) → clean exit
+  - `grep -c 'noindex' dist/guides/*/index.html` → ≥1 for all 4 stubs ✓
+  - `dist/robots.txt` exists (779 B) ✓
+  - `dist/sitemap-index.xml` absent when `PUBLIC_SITE_URL` unset (expected); present w/ 11 URLs when set ✓
+  - `dist/rankings/air-quality-pm25/index.html` has ranking table + methodology + Breadcrumb JSON-LD + 3 pending rows (all 3 fixture rows null) ✓
+- **Docs (2 new):** `docs/architecture/seo-ia.md` (8 sections — funnel diagram 유입→체류→수익 · route table · canonical/noindex rules · internal-link conventions · sitemap+robots wiring · content production backlog · ad-slot cross-ref · Step 8 locked decisions · Step 9+ follow-ups). `docs/revenue/adsense-placement-policy.md` (9 sections — 5 slot map · CLS inline `min-height` rule · Rule 5 failure handling · no-in-content-injection / no-lazy-pop-ins / no-auto-ads · labeling + a11y · Step 9+ consent plan · developer checklist). `CLAUDE.md` Step 8 decisions block + "When to read which doc" row for `seo-ia.md` / `adsense-placement-policy.md`.
+- **Step 8 decisions (locked):** canonical emits ONLY when `PUBLIC_SITE_URL` set (never placeholder) · guide stubs triple-protected (noindex meta + sitemap filter + robots.txt Disallow) · `@astrojs/sitemap` pinned to Astro-4-compatible 3.2.x · 5 ad slot names frozen · static ad slots only (reserved boxes, 120 px `min-height` inline for CLS) · no runtime/lazy ad injection in Step 8 · InternalLink analytics attrs frozen.
+- **Step 9+ follow-ups:** (1) CI deploy hook to prepend `Sitemap:` line to `dist/robots.txt` when `PUBLIC_SITE_URL` is set. (2) Create physical `/og/default.png` (1200×630 TerraSight brand). (3) AdSense JS wiring + consent gate (regional default + NPA swap). (4) Author the 4 guide bodies per backlog priority (compliance→trust tag→how to read→navigation hub). (5) Atlas SEO plan once `/atlas/*` scaffolds.
+
+### Last Completed (2026-04-18 · Step 7 — Reports frontend, 3 agents serial→parallel)
+- **Agent 3 (UI primitives, serial first):** `apps/web/src/components/reports/BlockRenderer.astro` (status-aware dispatcher with anchor id, header h2 + TrustBadge + StatusPill, per-id body dispatch, citations list, mandatory ⚠️ disclaimers from `block.notes[]`) + `NoData.astro` (status-keyed notice: pending/not_configured/error with `block.error` passthrough) + `MetricsTable.astro` (shared 3-col) + 11 `blocks/*.astro` per-id body components (8 core: AirQualityBlock/ClimateLocallyBlock/HazardsDisastersBlock/WaterBlock/IndustrialEmissionsBlock/SiteCleanupBlock/PopulationExposureBlock/MethodologyBlock + 3 embeddable: PfasMonitoringBlock/CoastalConditionsBlock/DisasterHistoryDetailedBlock) + `components/reports/index.ts` barrel (default exports + `EMBEDDABLE_OPTIONAL_BLOCK_IDS` const). `packages/ui/src/StatusPill.tsx` (NEW, ~18px pill with BlockStatus→color map: ok=slate, pending=amber, error=red, not_configured=gray) + `packages/ui/src/index.ts` append.
+- **Agent 1 (Page skeleton + lib, parallel pair):** `apps/web/src/lib/reports.ts` (pure TS; `CORE_BLOCK_IDS`, `EMBEDDABLE_OPTIONAL_IDS`, `partitionBlocks(report)` splits into coreBlocks/embeddedOptionals/methodology with methodology ALWAYS last, 3 JSON-LD builders Article/Breadcrumb/Dataset with optional siteUrl). `apps/web/src/pages/reports/[...slug].astro` (NEW, ~370 lines; `getStaticPaths` iterates `reports-index.json`, eager `import.meta.glob<CityReport>(...)` for JSON, Hero + Summary + JSON-LD head slot + 3 ad slots + main/sidebar grid, canonical-link gate). `apps/web/src/pages/reports/index.astro` (NEW listing). `BaseLayout.astro` + `<slot name="head" />`. 3 mirrored report JSONs `apps/web/src/data/reports/*.json`.
+- **Agent 2 (Sidebar components, parallel pair):** `CityComparison.astro` (always-renders external-link card owning underscore→hyphen SLUG_MAP: `air_quality_pm25`→`air-quality-pm25`, etc.) + `RelatedCities.astro` (sidebar, handles both spec `data.peers` and Step 5 actual `data.peer_slugs` shapes) + `RankingsSnippet.astro` (glob-loads 4 rankings JSON, null-value graceful) + `AdSlot.astro` + `AdSlot.types.ts` (sibling .ts because Astro can't export types from .astro through a barrel) + 4 mirrored `apps/web/src/data/rankings/*.json` + index. `docs/guardrails.md` "Step 7 frontend landmines" section (slug translation, peer_slugs drift, rankings mirror, Astro type-export workaround).
+- **Manual stitch (after parallel handoff gap):** Agent 1 left inline `data-report-slot`-marked placeholders because Agent 2 hadn't landed yet; swapped via 5 Edit calls to `<AdSlot>` × 3, `<CityComparison>`, `<RelatedCities>`, `<RankingsSnippet>` imports. Fragment trap discovered during verification — Astro `<>...</>` shorthand drops siblings inside `.map()`; switched to array-return pattern `map((b,i) => [<Primary/>, condition ? <Secondary/> : null])` so mid ad slot emits.
+- **Data-mirror pattern (Step 7 landmine):** `data/reports/*.json` + `data/rankings/*.json` (repo root) → `apps/web/src/data/*.json` (workspace). Astro/Vite cannot reliably import JSON from outside `apps/web/`. Currently manual copy — Step 8 follow-up automates via build script.
+- **User refinements (6 incorporated pre-dispatch):** (1) `getStaticPaths` iterates `reports-index.json` not filesystem glob. (2) Rule 5 = core always render (NoData for pending), optional gate-based via `meta.optionalAvailability`. (3) Agent 3 handles 8 core + 3 embeddable optional; Agent 2 handles `city_comparison` (external link) + `related_cities` (sidebar). (4) canonical emits ONLY when `PUBLIC_SITE_URL` env var set — no placeholder URL. (5) Guides stubs defer to Step 8 with `<meta robots="noindex">`. (6) Step 10 QA enforces strict `ok`/`not_configured`/`pending`/`error` distinction + API path naming unification.
+- **Acceptance (Step 7) — all pass (2026-04-18):**
+  - `pnpm --filter web build` → 6 pages green in 15.64s (/, /globe, /reports, 3 CBSA reports)
+  - `pnpm --filter web lint` (tsc --noEmit) → clean exit
+  - Per-CBSA report HTML contains: 8 core block anchors ✓, 1 embedded optional (coastal_conditions `included`) ✓, 3 ad slots (`report-hero`, `report-mid`, `report-footer`) ✓, CityComparison + RelatedCities + RankingsSnippet ✓
+- **Docs:** `docs/reports/report-page-ux.md` (NEW, 10 sections — route & data model, block order & gating Rule 5, ad slots + Fragment-trap landmine, JSON-LD, canonical Rule 7, sidebar, status→UI mapping Rule 6, files shipped, verification, Step 8 follow-ups). `docs/guardrails.md` "Step 7 frontend landmines".
+- **Step 7 decisions (locked):** Partitioning in shared `lib/reports.ts::partitionBlocks()` (page never hardcodes block ids) · `<Fragment>` / `<>` unsafe inside `.map()` in Astro — array return is canonical · `AdSlot.types.ts` sibling .ts as Astro type-export workaround · `peers` vs `peer_slugs` drift resolved by dual-shape support in RelatedCities · canonical gate by env var (not placeholder URL).
+- **Step 8 follow-ups (not blocking):** (1) Automate `data/reports` + `data/rankings` → `apps/web/src/data/` mirror in build hook. (2) Build `/rankings/{metric}` pages (referenced by CityComparison SLUG_MAP but not yet present). (3) Wire real AdSense code in `AdSlot.astro` (currently reserved-box placeholder only). (4) Sitemap + guide stubs. (5) Reconcile `peers` ↔ `peer_slugs` shape in Step 5 composer to pick one.
+
+### Last Completed (2026-04-18 · Step 6 — Home / Globe 프런트, 3 병렬 agents)
+- **Agent 3 (UI primitives, serial first):** `packages/ui/src/Legend.tsx` (~205 lines, pure presentational, 2 sections Imagery/Events with 3 hardcoded colormap gradients GHRSST/Aerosol/Cloud + neutral fallback, absolute bottom-left overlay) + `packages/ui/src/GlobeMobileFallback.tsx` (~62 lines, full-viewport dark panel, 3 CTAs to /, /reports, /atlas) + `packages/ui/src/index.ts` barrel 갱신 (`export { TrustBadge as TrustTag }` alias 추가 — rename 대신 alias 로 기존 TrustBadge 구현 유지).
+- **Agent 1 (Globe island, parallel):** `apps/web/src/islands/GlobeApp.tsx` (884 lines) — `useIsMobile()` hook + `PopupState` discriminated union (`'none' | 'sst' | 'event' | 'info-only'`) + dynamic `await import('cesium')` inside useEffect + BlueMarble always-on base + toggleable imagery via imageryLayerRef + CustomDataSource events with auto-refresh (fires 600s · earthquakes 300s period=day minMagnitude=3.0) + click handler (event pick → popup · SST-active+ocean → /api/sst-point · info-only → caveat card) + inner `LayerControls` (top-right dark card, Imagery/Events sections with ToggleButton) + inner `PopupCard` (top-center) + `pointSizeFor` (mag3→6px, mag7→14px; fires fixed 4px) + `pointColorFor` (earthquakes `#a855f7`, fires `#ef4444`). `apps/web/src/lib/layers.ts` (252 lines) 전체 manifest (5 imagery defs incl. BlueMarble base + 2 event defs, `yesterdayISO()` / `gibsDateStr()` 헬퍼, GIBS `_ENCC` 금지 준수). `apps/web/src/pages/globe.astro` 가 `GlobeApp` 을 `client:visible` 로 hydrate.
+- **Agent 2 (Home SSG, parallel):** `apps/web/src/pages/index.astro` (54 lines, 5-section 구성: Hero → ClimateTrendsStrip → FeaturedReports → LinkCards → SiteFooter, zero `client:*` directive) + 5 신규 컴포넌트 `HeroSection.astro` · `ClimateTrendsStrip.astro` · `FeaturedReports.astro` · `LinkCards.astro` · `SiteFooter.astro` + `apps/web/src/data/climate-trends.json` (3 카드: CO₂ 424.5ppm observed · Temp +1.18°C observed · Arctic 13.8 M km² observed, 모두 `caveat="placeholder"`) + `apps/web/src/data/reports-index.json` (data/reports/index.json fixture copy — Step 7 reconcile 대상) + `apps/web/src/layouts/BaseLayout.astro` 에 OG/Twitter 메타 + global CSS reset + nav 추가.
+- **Critical build fixes (Agent 1):**
+  - **SSR externalization:** `apps/web/astro.config.mjs` `ssr.external: ['cesium']` (NOT `noExternal` — `noExternal` 가 SSG 중 renderers.mjs 를 wipe). Cesium 은 hydration 후 dynamic `import('cesium')` 로만 로드되므로 서버 평가 불필요.
+  - **Cesium type shim:** `apps/web/src/cesium-shim/index.d.ts` (`declare const cesium: any`) + `tsconfig.json` `paths` + `apps/web/src/env.d.ts` 에 ambient `declare module 'cesium'` 추가. Cesium 1.140 의 50k-line `Cesium.d.ts` 가 `skipLibCheck` 에도 파싱되어 import 가 있을 때마다 resolution 에서 OOM → shim 으로 `any` 단축.
+  - **Lint gate 전환 `astro check` → `tsc --noEmit`:** `@astrojs/check` (Volar 기반) 는 `tsconfig paths` 와 ambient `declare module` 을 npm 패키지 type 추적 시 무시하고 `Cesium.d.ts` 를 직접 walk — 12 GB heap 에서도 OOM 확인 (2026-04-18 측정). `tsc` 는 paths 를 충실히 따라 default 4 GB heap 에서 clean exit. `apps/web/package.json` `lint: "tsc --noEmit"` 로 교체. `.astro` frontmatter 는 `astro build` 의 Vite/Rollup 파이프라인이 여전히 타입 검증함. Cesium upstream 이 lighter `.d.ts` 를 배포하면 `astro check` 복구 + shim 제거.
+- **Widgets 비활성화 (Cesium):** `baseLayerPicker` · `geocoder` · `homeButton` · `sceneModePicker` · `navigationHelpButton` · `animation` · `timeline` · `fullscreenButton` · `infoBox` · `selectionIndicator` 모두 off — 누락된 `/Assets/` base URL 우회. `Cesium.Ion.defaultAccessToken = ''` (Ion 미사용).
+- **Bundle size budget (측정 2026-04-18):**
+  - Home: `dist/index.html` 18,864 B raw / 4,157 B gzipped + `index.css` 2,701 B gzipped = **6,858 B gzipped total** (< 200 KB 예산의 3.4%).
+  - **홈은 JS 제로** — `grep "_astro/.*\\.js" dist/index.html` 결과 0 matches. Astro SSG 로 TrustBadge 포함 모두 서버 렌더 HTML.
+  - Globe: `dist/globe/index.html` 11 KB + `GlobeApp.js` 7.5 KB gzipped + `globe.css` 5.5 KB gzipped + `client.js` ~44 KB gzipped (Astro hydration runtime).
+  - Cesium: `Cesium.js` 5,559,029 B raw / **1,369,090 B (1.37 MB) gzipped** — `/globe` 경로 진입 시 dynamic import 로만 fetch. Step 7 최적화 후보 (CDN 호스트 · custom Cesium build).
+- **Acceptance criteria (Step 6) — all pass:** SEO-friendly HTML (view-source 에 placeholder 값 포함) · home 에 Cesium 0 references · 6 MVP imagery ID 매니페스트 일치 (`_ENCC` 금지 준수) · event popup + Legend 구현 · index route < 200 KB gzipped (6.9 KB · 3.4%) · 모바일 fallback 구현 · TrustTag 5-enum frozen.
+- **Docs:** `docs/architecture/frontend-routing.md` (신규 · 8 섹션: 라우트 맵 · 홈↔Globe 역할 분리 · 번들 예산 · Cesium+SSR 빌드 설정 · Worker base URL 계약 · 모바일 fallback · acceptance verification · Step 7 갭). `CLAUDE.md` "When to read which doc" 표에 frontend-routing.md 추가.
+- **Step 6 decisions (locked):** Astro SSG home + React island Globe (not full rewrite) · `ssr.external` not `noExternal` for Cesium · Cesium `any`-type shim until 1.141+ ships lighter `.d.ts` · Worker base URL via `PUBLIC_WORKER_BASE_URL` env var · mobile fallback at 768px.
+- **Step 7 follow-ups (not blocking):** (1) `apps/web/src/data/reports-index.json` 중복 제거 (build 시 `data/reports/index.json` 에서 미러). (2) Cesium static assets `apps/web/public/cesium/` 복사 + `window.CESIUM_BASE_URL` (프로덕션 deploy 전 필수). (3) Cesium 1.37 MB 번들 축소 (CDN 또는 custom build). (4) Cesium upstream lighter `.d.ts` 배포 시 `lint` 을 `astro check` 로 복구하고 shim + ambient declare 제거. (5) GIBS tile 404 시 Legend `status="error"` 표시 세분화.
+
+### Last Completed (2026-04-18 · Step 5 — Report Build Pipeline)
+- **Policy lock (Rule 7):** `docs/reports/report-block-policy.md` (233 lines) — Rule 5 refined into core-blocks-always-present / optional-blocks-gate-based; City Comparison decision (separate `data/rankings/*.json`, NOT 2-pass enrichment of report.json); trust-tag combine rule = weakest-wins (observed > near-real-time > forecast > compliance > derived).
+- **Schema (8+5 block freeze):** `packages/schemas/src/index.ts` gains `CoreBlockId` (8) · `OptionalBlockId` (5) · `OptionalAvailability` · `ReportMetric` · `ReportCitation` · `CityReportMeta` · `CityReportIndex` · `Ranking` · `RankingsIndex`. `ReportBlock` refactored: `trustTags[]` → `trustTag` (singular, weakest-wins); added `error` / `notes[]` / `data` fields. `pipelines/contracts/__init__.py` pydantic mirror (1:1) updated.
+- **Composer:** `pipelines/transforms/block_composer.py` — 8 core block builders (always returned) + 5 optional with gate evaluators (`gate_pfas_monitoring` / `gate_coastal_conditions` / `gate_disaster_history_detailed` / `gate_related_cities`). City Comparison never embedded — `optionalAvailability.city_comparison="external"` always. `combine_trust_tags()` implements weakest-wins.
+- **Build reports job:** `pipelines/jobs/build_reports.py` — loads `data/cbsa_mapping.json` (50 CBSAs), filters to Step 5 samples via `--only`, resolves peer slugs (same climate zone OR state, capped 5), calls composer per CBSA, writes `data/reports/{slug}.json` + `index.json`. Pipeline version: `v2.step5.0`.
+- **Build rankings job:** `pipelines/jobs/build_rankings.py` — reads all `data/reports/*.json` (never rewrites), extracts 4 metrics (`air_quality_pm25` · `emissions_ghg_total` · `water_violations_count` · `disaster_declarations_10y`), ranks asc (nulls → bottom with `rank=null`), writes `data/rankings/*.json` + `index.json`.
+- **Samples:** 3 Step 5 reports generated for `new-york-newark-jersey-city` / `los-angeles-long-beach-anaheim` / `houston-the-woodlands-sugar-land`. Each has 10 blocks (8 core + coastal_conditions + related_cities), `coastal=true`, `optionalAvailability.city_comparison="external"`. 4 ranking files with 3 rows each (all `value=null` — source blocks pending v2 connector migration).
+- **Docs:** `docs/reports/report-schema.md` (new, 207 lines) freezes the top-level shape, `ReportBlock`, `CityReportMeta`, index/rankings shapes, validation recipes, versioning rules.
+- **Tests:** `pipelines/tests/test_report_contract.py` (14 tests) locks: core-block order & always-present invariant, city_comparison-never-embedded, `optionalAvailability` 5-key shape, coastal gate correctness, PFAS gate default-false, weakest-wins ranking, methodology always-ok, block-status vocabulary, composer→pydantic roundtrip, Step 5 sample existence + schema conformance. Full suite: **60 passed** in 0.58s (was 46 after Step 4).
+- **API endpoints removed (runtime → buildtime):** `/api/reports/{slug}`, `/api/reports` (list), `/api/reports/{slug}/key_signals`, `/api/rankings/*` — all replaced by static R2-servable JSON.
+- **Out-of-scope (deferred to Step 6):** live-alerts NWS surfacing (removed from report scope), EJSCREEN indicator integration (Step 5 ships population-only stub), connector migration for 13 v1 sources (all core blocks currently `status="pending"` except methodology + related_cities).
+
+### Last Completed (2026-04-17 · Step 4 — Connectors, 4 병렬)
+- **Agent 1 — GIBS manifest** (`pipelines/connectors/gibs.py`): 5 `LayerManifest` entries (BlueMarble + SST + AOD + Clouds + NightLights) aligned with `docs/datasets/gibs-approved-layers.md`. Banned-id guard rejects `VIIRS_SNPP_DayNightBand_ENCC`. Fixtures `pipelines/tests/fixtures/gibs/manifest.json` + `legend-sst.json`. 18 contract tests (incl. trust-tag freeze + fixture-drift guard).
+- **Agent 2 — FIRMS** (`pipelines/connectors/firms.py` + `apps/worker/src/routes/fires.ts`): VIIRS_SNPP_NRT CSV parser with stable FNV-1a id, graceful 400 → `error` (bad MAP_KEY), TTL 600s via `caches.default`. 5 contract tests + 3 fixtures (sample / empty / auth-error).
+- **Agent 3 — USGS** (`pipelines/connectors/usgs.py` + `apps/worker/src/routes/earthquakes.ts`): summary-feed GeoJSON with ms-epoch → ISO-8601 + `[lon, lat, depth_km]` geometry order. `mag: null` analyst-pending filter, `properties.event_type` preserves non-quake seismic types (quarry blast, rockburst). TTL 300s. 7 contract tests + 2 fixtures.
+- **Agent 4 — ERDDAP SST** (`pipelines/connectors/erddap_sst.py` + `apps/worker/src/routes/sst-point.ts`): `ncdcOisst21NrtAgg` point-query with 0-360 lon wrap/unwrap, mandatory `zlev=(0.0)` dim, `rows[0][sst]===null` → `status: "no_data"` (land/ice, NOT error). TTL 3600s. 14 contract tests + 3 fixtures.
+- **Contract layer:** `packages/schemas/src/index.ts` (zod) and `pipelines/contracts/__init__.py` (pydantic) freeze `TrustTag` (5 v2 values), `BlockStatus`, `SSTStatus`, `LayerManifest`, `EventPoint`, `SSTPoint`, `NormalizedResponse`. `docs/datasets/normalized-contracts.md` documents the 3 envelope shapes (event-collection · scalar-point · manifest).
+- **Retirements:** v1 `estimated` TrustTag value retired → `derived` (ML/satellite) or `compliance` (regulator-curated). `pipelines/connectors/climate_trace.py` migrated from `estimated` → `derived`. v1 water-data connector at `pipelines/connectors/usgs.py` (renamed to that path during Step 3) deleted by Agent 3 so the earthquake normalizer could occupy the canonical name.
+- **Verification:** `python -m pytest pipelines/tests -v` → **46 passed** in 0.53 s. `cd apps/worker && npx tsc --noEmit` → exit 0.
+- **Docs:** `docs/guardrails.md` +7 new landmines (Cadence literal gap, FIRMS confidence enum / empty-header CSV / frp empty-string / trailing whitespace, USGS non-quake event types, Cloudflare `caches.default` Request-keyed matching). `docs/connectors.md` gains a v2 Step 4 table at the top; trust-tag vocabulary updated (removed `estimated`, added `compliance`).
+- **Post-Agent reconciliation:** Agent 1's gibs.py initially used `cadence='static'` / `trustTag='observed'` uniformly; reconciled to match approval doc (BlueMarble `monthly`/`observed`, 4 NRT layers `daily`/`near-real-time`) and manifest fixture regenerated. New test `test_trust_tags_match_approval_doc` locks the matrix.
+
+### Last Completed (2026-04-17 · Step 3 — Monorepo migration)
+- **Root scaffold:** `package.json` (pnpm workspace, pinned `pnpm@9.6.0`), `pnpm-workspace.yaml`, `pyproject.toml` (Python 3.11, testpaths=pipelines/tests).
+- **`apps/web/`:** Astro 4.15 + `@astrojs/react` + React 18 + cesium 1.140. `index.astro`, `globe.astro`, `BaseLayout.astro`, placeholder `islands/Globe.tsx`. `public/_redirects` → Render maintenance stub (transitional).
+- **`apps/worker/`:** Hono 4.6 + Wrangler 3.80. `src/index.ts` routes `/health`, `/api/fires`, `/api/earthquakes`, `/api/sst-point`. Each route returns `{status:'pending'}` or `{status:'not_configured'}` stubs until Step 5 wires R2 + connectors.
+- **`packages/schemas/`:** full zod contracts (TrustTag, BlockStatus, LayerManifest, EventPoint, DatasetRegistryItem, ReportBlock, CityReport).
+- **`packages/ui/`:** `MetaLine`, `TrustBadge`, `SourceLabel` (ported to v2 TrustTag enum: observed / near-real-time / forecast / derived / compliance).
+- **`packages/config/`:** `tsconfig.base.json` strict shared config.
+- **`pipelines/`:** 33 connectors moved from `backend/connectors/` (FIRMS, OISST, GIBS, USGS, EPA regulatory, NOAA, etc.). `tests/test_smoke.py` ensures pytest discovery.
+- **Backend shrunk to maintenance stub:** `backend/main.py` now 4 endpoints (`/health`, `/fires`, `/quakes`, `/sst-point`) as thin httpx passthroughs, no DB, no scheduler. `requirements.txt` reduced from 14 → 3 packages. `backend/config.py` and all subdirs removed.
+- **Legacy quarantined:** `legacy/backend-api/` (15 routers), `legacy/backend-connectors/` (Open-Meteo/CAMS-ads/CMEMS), `legacy/backend-models/`, `legacy/backend-scheduler/`, `legacy/backend-utils/` (old surface renderer — v2 rule-1 banned), `legacy/frontend/` (v1 Vite app), `legacy/scripts-experimental/` (compute_bbox*.py).
+- **Root cleanup:** deleted `.claude-statusline-test`, `Screenshot 2026-04-14 at 22.50.30.png`, `frontend/src/components/earth-now/Globe.old.tsx.bak`. Moved `INITIAL_PROMPTS.md`, `PROJECT_SETUP.md`, `ROADMAP.md`, `terrasight-pipeline-prompts.md` → `docs/legacy/`.
+- **New docs:** `docs/setup/local-dev.md`, `docs/architecture/repo-layout.md`.
+- **Step 3 decisions (locked):** Render = maintenance stub (do not fully shut down yet); frontend = Astro shell + React islands (not full globe rewrite); legacy = move-first, delete-after-parity; root junk = deleted.
+
+### Last Completed (2026-04-17 · Step 1)
+- `docs/architecture/architecture-v2.md` — Globe Lite / Atlas Lite / Reports Static 전면 정의
+- `docs/architecture/mvp-scope-v2.md` — MVP 6 레이어 + 8 핵심 블록 + 선택 확장 블록 고정
+- `docs/architecture/data-source-policy.md` — 1/2/3순위 소스 + 프로덕션 제외 목록 + 표기 규칙
+- `CLAUDE.md` — Non-Negotiable Rules (v2) 섹션 추가, Tech stack 에 v1→v2 이행 표기
+- `docs/terrasight-v2-step-prompts.md` — Step 1~10 단계별 CLI 프롬프트 세트 (이전 작업)
+
+### Last Completed (2026-04-17 · Step 2 집계 완료 — 3 dataset docs + CLAUDE.md 업데이트)
+- `docs/datasets/source-spike-matrix.md` — Tier 1/2/3 소스 전체 × 7 axes
+- `docs/datasets/gibs-approved-layers.md` — MVP 5 레이어 (BlueMarble + SST + AOD + Clouds + Night Lights) LayerManifest 고정
+- `docs/datasets/runtime-vs-batch-sources.md` — Browser / Worker / GH Actions 3 경로 경계
+- `CLAUDE.md` — Tier 1 v2 레이어 목록 (ENCC 금지 명시) + "When to read which doc" 에 datasets/ 추가
+- **결정 고정 (변경 금지):** Night Lights `_ENCC` 금지 · Night Lights 교체 `VIIRS_SNPP_DayNightBand` · CRW DHW host `oceanwatch.pifsc.noaa.gov`
+
+### Last Completed (2026-04-17 · Step 2 — Agent 3: NOAA OISST + CRW DHW Spike)
+- OISST point query live-verified: `coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg`, lon 0-360 변환 필수, `zlev=(0.0)` 차원 필수, null land cells = JSON `null`.
+- **CRW DHW landmine 해결:** 올바른 host/datasetID 확정 — `oceanwatch.pifsc.noaa.gov/erddap/griddap/CRW_dhw_v1_0` (변수 `degree_heating_week`, deg-C-weeks). `pae-paha.pacioos.hawaii.edu` → 영구 500, `coastwatch.pfeg.noaa.gov` → 카탈로그에 DHW 없음.
+- Worker `/api/sst-point` contract 확정 (ok / no_data=land_or_ice / error), snappedLat/Lon 응답 포함.
+- Fixtures: `data/fixtures/oisst/point-sample.json` (2 ocean + 1 land-null), `data/fixtures/crw-dhw/metadata.json`.
+- `docs/guardrails.md` 업데이트 (CRW 줄 수정 + ERDDAP 신규 3줄 추가).
+
+### Last Completed (2026-04-17 · Step 2 — Agent 1: NASA GIBS Imagery Spike)
+- BlueMarble + SST + AOD + Clouds HEAD probe 모두 200 (CloudFront CDN, 인증 불필요).
+- **Night Lights 교체:** `VIIRS_SNPP_DayNightBand_ENCC` 는 2023-07-07 FROZEN (현재 날짜 요청 시 400) → `VIIRS_SNPP_DayNightBand` (live, 2012-01-19부터) 로 변경.
+- TileMatrixSet 은 레이어별 상이 (500m / 1km / 2km) — 매니페스트에서 관리.
+- CesiumJS 1.140 async `fromUrl()` 주의 — REST urlTemplate 권장.
+- Fixtures: `data/fixtures/gibs/` 5 JSON (per-layer HEAD probe 메타데이터).
+
+### Last Completed (2026-04-17 · Step 2 — Agent 4: CAMS / ERA5 / GFS Batch Pipeline Spike)
+- Suitability assessment complete for Phase 4+ batch pipeline sources (doc review, no accounts created).
+- CAMS (ADS): 0.4° global, daily, GRIB2, PM2.5 composite variable confirmed, ADS URL separate from CDS.
+- ERA5 (CDS): 0.25° global, monthly means, ~6th of month availability, ERA5T ~5 d latency.
+- GFS (NOMADS): 0.25° global, 4× daily, no auth, full f000 = 477 MB (use filter service → ~4 MB per 5 vars).
+- NOMADS 10-day rolling window confirmed (oldest dir = April 8 on April 17 probe).
+- Priority ranking: GFS (1st) → CAMS (2nd) → ERA5 (3rd).
+- Fixture: `data/fixtures/batch-sources/pipeline-plan.json` — products, cron schedules, R2 paths, landmines.
+- 8 critical landmines documented (ADS/CDS URL confusion, cfgrib eccodes dep, GRIB full-file size trap, etc.)
+
+### Last Completed (2026-04-17 · Step 2 — Agent 2: FIRMS + USGS)
+- USGS `all_day.geojson` live-fetched: 271 features, mag range -0.9→4.7, time in **ms epoch**, `geometry.coordinates` = [lon, lat, depth_km]
+- FIRMS: HTTP 400 on invalid MAP_KEY confirmed (not 401/403 — see landmine). Auth via URL path segment.
+- EventPoint normalization logic documented for both sources.
+- Fixtures: `data/fixtures/firms/sample-normalized.json` (10 entries), `data/fixtures/usgs/earthquakes-all-day.json` (15 real entries trimmed)
+- Worker API endpoint contracts: `GET /api/fires?bbox=w,s,e,n&days=1`, `GET /api/earthquakes?period=day&magnitude=all`
+- Cache TTLs: FIRMS 10 min, USGS 5 min.
+- Landmines logged below.
+
+### In Progress
+- (없음) — Step 4 완료. Step 5 진입 가능.
+
+### Next Actions
+1. **Step 9 — Consent gate + AdSense runtime wiring:** region-aware default (EU/UK/CA → reject, else accept), AdSense loader deferred until consent resolves, `data-npa` swap, CI deploy hook prepending `Sitemap:` to `dist/robots.txt`. Spec: `docs/revenue/adsense-placement-policy.md` §7.
+2. **Step 10 — QA / E2E** (strict status vocab enforcement, Lighthouse, route-layout invariants).
+3. **Step 11 — Atlas Lite 8 카테고리** (`/atlas/*` surfaces — Tier 2 depth).
+4. **Content backlog (unblocks `/guides/*` indexability):** author 4 guide bodies per priority (compliance disclaimer → trust tag → how to read → navigation hub); clear noindex gate + Disallow line + sitemap filter together when each body lands.
+5. **Parity cleanup:** once Tier 2 ships and v2 parity is verified, delete `legacy/` + fully shut down Render instance.
+
+### Decisions (v2 고정 — 변경 금지)
+- Render 상시 런타임 rasterization **제거**
+- Open-Meteo 프로덕션 MVP 에서 **제외** (참고용으로만 유지)
+- Astro SSG + React island (Globe) + Cloudflare Workers (proxy/cache) + R2 + GitHub Actions
+- MVP Globe 6 레이어: SST · AOD · Clouds · Night Lights · Wildfires · Earthquakes
+- MVP Report 핵심 8 블록 + 선택 확장 5 블록
+- 샘플 검증 도시 3개: New York / Houston / Los Angeles
+- Trust Tag 체계 유지 (`observed` / `near-real-time` / `forecast` / `derived` / `compliance`)
+- Mandatory disclaimers 유지 (ECHO / WQP / AirNow)
+- **Step 2 추가 고정:**
+  - Night Lights 는 `VIIRS_SNPP_DayNightBand` 만 사용 (`_ENCC` 는 2023-07-07 FROZEN 금지)
+  - CRW DHW ERDDAP host = `oceanwatch.pifsc.noaa.gov`, datasetID = `CRW_dhw_v1_0`
+  - GFS 는 `filter_gfs_0p25.pl` 서브셋 서비스 필수 (풀 파일 477MB → 필터 4MB)
+  - CAMS PM2.5 는 composite variable `particulate_matter_d_less_than_2p5_um` (수동 합산 금지)
+  - ERDDAP longitude 0-360 변환 필수 (OISST + DHW 동일)
+
+### Blockers / Risks
+- **Cloudflare Workers 무료 한도** — 10만 req/day. 모니터링 필요 (Step 3 이후).
+- **기존 `/api` 하위호환** — Render 엔드포인트를 사용하는 frontend 코드가 남아있으면 Step 3 에서 점진 폐기.
+- **Open-Meteo 의존 코드 제거** — `backend/connectors/open_meteo_*.py` 및 관련 PNG 엔드포인트는 Step 3 에서 legacy 처리.
+- **CMEMS / CAMS / CDS 계정 미등록** — Phase 4 배치 파이프라인 착수 전 선행 등록 필요.
+
+### Verification (Step 1)
+- tests: n/a (문서 전용 Step)
+- manual: `docs/architecture/*.md` 3 파일 생성 확인
+- review: Step 9 (Reviewer 검증) 에서 v2 규칙 대조 예정
 
 ---
 

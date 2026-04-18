@@ -123,7 +123,7 @@ Run these in order.
 | GFW v1.13 → 401 "restricted dataset or version" | `connectors/global_forest_watch.py` | Pin to v1.11; test before bumping version |
 | GFW `Origin` header mandatory for key validation | `connectors/global_forest_watch.py` | Must send `Origin: https://terrasight.pages.dev` matching registered domain |
 | GFW query requires `geometry` field (since ~2026-04) | `connectors/global_forest_watch.py` | Without geometry → 422 "Raster tile set queries require a geometry" |
-| CRW ERDDAP code/docstring URL mismatch | `connectors/coral_reef_watch.py` | Docstring says `coastwatch.pfeg.noaa.gov` but code hits `pae-paha.pacioos.hawaii.edu` → HTTP 500; investigate and fix |
+| CRW ERDDAP host mismatch — **RESOLVED 2026-04-17** | `connectors/coral_reef_watch.py` | `pae-paha.pacioos.hawaii.edu` → HTTP 500 (dead). `coastwatch.pfeg.noaa.gov` has no DHW dataset. **Correct host: `oceanwatch.pifsc.noaa.gov`**, datasetID `CRW_dhw_v1_0`, variable `degree_heating_week`. Lon 0-360, no zlev dim. See `data/fixtures/crw-dhw/metadata.json`. |
 | NESDIS `star.nesdis.noaa.gov` intermittent TCP refusal | `connectors/noaa_sea_level.py` | Connector handles gracefully but `/api/trends/sea-level` returns 502 during outages |
 | RCRA BR_REPORTING state-only query → HTTP 500 on large states (TX, CA) | `connectors/rcra.py` | Always include `/report_cycle/{year}` filter (default 2023) — server-side timeout otherwise |
 | RCRA BR_REPORTING has no lat/lon columns | `connectors/rcra.py` | Coordinates always None; geocoding via second table deferred |
@@ -143,7 +143,59 @@ Run these in order.
 | CO-OPS datagetter `v` field is string | `connectors/coops.py` | Water level value returned as string `"1.234"`, not float; empty string = missing data |
 | Open-Meteo Marine land points return null | `connectors/open_meteo_marine.py` | Grid covers all lon/lat; land points have null velocity/direction — must filter |
 | Open-Meteo Marine direction is "going to" | `connectors/open_meteo_marine.py` | Oceanographic convention (not meteorological "coming from"); frontend should not flip |
+| ERDDAP griddap lon 0-360 convention (OISST + CRW) | `connectors/oisst.py`, `connectors/coral_reef_watch.py` | Both `ncdcOisst21NrtAgg` and `CRW_dhw_v1_0` use 0-360 lon. Convert user lon: `lon_erddap = lon_user < 0 ? lon_user + 360 : lon_user`. Using raw negative lon returns HTTP 404. |
+| OISST land/near-coast cells return JSON `null` | `connectors/oisst.py`, Worker `/api/sst-point` | Coastal clicks will snap to nearest 0.25° cell but may still hit null if land-masked. Worker must check for null SST and return `{ status: "no_data", reason: "land_or_ice" }` — not an error. |
+| OISST griddap requires `zlev=(0.0)` in every point query | `connectors/oisst.py` | Omitting the zlev dimension from a 4-D griddap variable yields HTTP 400. Format: `sst[(last)][(0.0)][(lat)][(lon)]` |
+| GIBS `VIIRS_SNPP_DayNightBand_ENCC` is FROZEN at 2023-07-07 | Globe imagery layers | Any current-date request returns HTTP 400. Use `VIIRS_SNPP_DayNightBand` (live 2012-01-19→present) or `VIIRS_NOAA20_DayNightBand`. Never use `_ENCC` in new code. |
+| GIBS TileMatrixSet varies per layer (no global default) | Globe imagery | BlueMarble=`500m`/JPG, SST=`1km`/PNG, AOD=`2km`/PNG, Cloud=`2km`/PNG, Night Lights=`1km`/PNG. Hardcode per-layer in LayerManifest, never inherit a global default. |
+| GIBS date format: `YYYY-MM-DD` only (no ISO datetime) | Globe imagery | `2026-04-17T00:00:00Z` yields HTTP 400. Use bare date. |
+| GIBS static layers use literal `"default"` as date segment | Globe imagery | BlueMarble path: `…/default/default/500m/…`. Cesium `WebMapTileServiceImageryProvider` should have `clock` undefined for static layers. |
+| CesiumJS 1.140 `WebMapTileServiceImageryProvider.fromUrl()` is async | Globe init | Prefer the sync constructor with `urlTemplate` (REST form) to bypass GetCapabilities fetch. `fromUrl()` requires `await`. |
+| FIRMS invalid MAP_KEY returns HTTP 400 (not 401/403) | Worker `/api/fires` | Error handler must map 400 → `{ status: "not_configured" }`. |
+| FIRMS global bbox fan-out = quota drain | Worker `/api/fires` | Single `-180,-90,180,90` call consumes 100+ transactions. Split into ~9 regional sub-bboxes or use `/country/` API for global coverage. |
+| FIRMS CSV column drift — VIIRS vs MODIS | Worker `/api/fires` | VIIRS: `bright_ti4`/`bright_ti5`. MODIS: `brightness`/`bright_t31`. MVP uses VIIRS_SNPP_NRT only. |
+| FIRMS `acq_time` needs zero-padding | Worker `/api/fires` | "130" must become "0130" before parsing into `HH:MM`. |
+| USGS `properties.time` is Unix **milliseconds**, not seconds | Worker `/api/earthquakes` | `new Date(p.time)` works directly in JS — never divide by 1000. |
+| USGS `properties.mag` can be null (quarry blasts, non-earthquakes) | Worker `/api/earthquakes` | Normalize as `p.mag ?? 0`; skip Globe rendering if null. |
+| USGS `properties.tsunami` can be null | Worker `/api/earthquakes` | Always `p.tsunami ?? 0`. Show warning badge only when `=== 1`. |
+| USGS `geometry.coordinates[2]` is depth km, positive-down | Worker `/api/earthquakes` | Label popup "Depth: X km" — never negate. Spec convention. |
+| NOMADS GFS 10-day rolling window returns 404 | Phase 4+ GFS pipeline | URLs older than ~10 days 404 silently. Never hardcode dates; fall back to prior cycle on 404. |
+| GFS `pgrb2.0p25.f000` full file = 477 MB | Phase 4+ GFS pipeline | Never download the full file. Use `filter_gfs_0p25.pl` with explicit `var_TMP=on&var_UGRD=on&…`; filtered 5-var payload ~4 MB. |
+| GFS longitude range is 0–359.75° (not -180..180) | Phase 4+ GFS pipeline | Roll with `np.roll()` or `xr.assign_coords()` before plotting with cartopy, or tiles will be east-shifted by 180°. |
+| `cfgrib` requires `libeccodes-dev` C library | Phase 4+ GFS pipeline | `apt-get install -y libeccodes-dev` in GH Actions job step. Import fails at runtime (not install time). |
+| ADS vs CDS URLs are distinct in `~/.cdsapirc` | Phase 4+ CAMS/ERA5 | ADS = `https://ads.atmosphere.copernicus.eu/api`. CDS = `https://cds.climate.copernicus.eu/api`. Mixing them yields silent 403. Same `cdsapi` package, different server. |
+| ERA5 `~/.cdsapirc` format changed 2024: single PAT, no `UID:API_KEY` colon | Phase 4+ ERA5 | Old `key: 12345:abc...` format silently 403s. Use single personal access token. |
+| CAMS/ERA5 per-dataset ToU must be accepted in browser | Phase 4+ CAMS/ERA5 | `cdsapi` returns cryptic `Access restricted` with no explanation if ToU not accepted. Do this manually once per dataset. |
+| CAMS PM2.5 = composite variable `particulate_matter_d_less_than_2p5_um` | Phase 4+ CAMS | Never manually sum organic + sulfate + BC + dust; use the pre-computed composite. `cfgrib` shortName is `pm2p5`. |
+| ERA5 multi-month hourly requests trigger MARS tape retrieval (hours–days) | Phase 4+ ERA5 | Request one month at a time for monthly-means jobs. Always set `timeout=` in `cdsapi.Client()` to avoid a 6h runner hang. |
+| `pipelines/contracts::Cadence` literal lacks `near-real-time` | `pipelines/connectors/gibs.py`, LayerManifest authoring | Encode NRT latency via `trustTag='near-real-time'` + a `caveats[]` entry — never try to stuff NRT into the `cadence` field (enum is `daily\|monthly\|3h\|5min\|static` only). |
+| FIRMS VIIRS `confidence` column is string enum `n\|l\|h`, not numeric 0–100 like MODIS | `pipelines/connectors/firms.py`, Worker `/api/fires` | Map `n\|l\|h` → `nominal\|low\|high` for the human-readable `label`; keep the raw one-char code under `properties.confidence_raw`. |
+| FIRMS empty/quiet feed = **header-only CSV** (not HTTP 204, not 404) | `pipelines/connectors/firms.py`, Worker `/api/fires` | Treat a header-only body as `status: 'ok'` with empty `data: []`. Do NOT retry — the feed really is empty for this window. |
+| FIRMS `frp` column can be empty string on legacy MODIS rows | `pipelines/connectors/firms.py`, Worker `/api/fires` | Use a `_safe_float` helper that defaults to `0.0` on empty / non-numeric. Keep the row — the fire is still real even when FRP is missing. |
+| FIRMS CSV cells have trailing whitespace (e.g. `satellite="N "`) | `pipelines/connectors/firms.py`, Worker `/api/fires` | Always `.strip()` string cells before downstream use. Applies to both Python and TS parsers. |
+| USGS `properties.type` can be non-earthquake — quarry blast, rockburst, sonic boom | `pipelines/connectors/usgs.py`, Worker `/api/earthquakes` | The frozen EventPoint `type` stays `"earthquake"`; preserve the USGS value under `properties.event_type` so the UI can tag atypical events without breaking the contract. |
+| Cloudflare `caches.default.match()` is **Request-keyed**, not string-keyed | Worker routes (`fires.ts`, `earthquakes.ts`, `sst-point.ts`) | A `caches.default.match('somekey')` string-miss compiles and silently never hits. Always build a `new Request(normalizedUrl, { method: 'GET' })`; fold the cache key into the URL's search string so identity is stable and inspectable. |
 
 Any new landmine discovered during implementation must be added
 **to this table and to the relevant connector docstring** before the
 feature is marked done. The goal is zero re-learned lessons.
+
+## Step 7 frontend landmines
+
+| Landmine | Where | Fix |
+|---|---|---|
+| Rankings metric slug — underscore in schema vs hyphen in URL | `apps/web/src/components/reports/CityComparison.astro`, future `pages/rankings/*` | The `RankingMetric` enum in `@terrasight/schemas` uses underscore ids (`air_quality_pm25`). Step 8 ranking routes live at hyphenated paths (`/rankings/air-quality-pm25`). CityComparison.astro owns the translation via `SLUG_MAP`; Step 8 route filenames must match or links 404. |
+| `related_cities` block data shape drift — `peer_slugs` vs `peers` | `apps/web/src/components/reports/RelatedCities.astro` | Step 5 composer emits `block.data.peer_slugs: string[]`. Spec'd shape is `block.data.peers: Array<{ slug, city, region, reason? }>`. Component accepts both; slug-only list is resolved via `reports-index.json` mirror. |
+| Rankings JSON mirror — manual copy required | `apps/web/src/data/rankings/*.json` | Astro/Vite cannot reliably `import.meta.glob` across the workspace root, so rankings JSON is mirrored under `apps/web/src/data/rankings/`. Re-copy from `C:/0_project/terrasight/data/rankings/*.json` whenever the pipeline regenerates. Step 7 follow-up will automate via a build hook. |
+| Astro `.astro` can't export TypeScript types | `apps/web/src/components/reports/AdSlot.types.ts` | Types referenced at build time across packages must live in sibling `.ts` files; `AdSlot.astro` imports `AdSlotName` from `./AdSlot.types`, barrel re-exports the type from the `.ts` file. |
+
+## Step 10 QA landmines
+
+| Landmine | Where | Fix |
+|---|---|---|
+| Footer links to non-existent guide slugs (`/guides/methodology`, `/guides/trust-legend`) | `apps/web/src/components/SiteFooter.astro` | Actual guide stubs ship as `how-to-read-a-report` and `what-is-a-trust-tag` (Step 8). Any component referencing guide routes must grep against `apps/web/src/pages/guides/*.astro`, not against the Step 8 IA doc draft names. Fixed 2026-04-18 — footer now points at the real stubs. |
+| `grep -c '<loc>'` on Astro sitemap undercounts | QA verification | `@astrojs/sitemap` emits all `<loc>` tags on a single line, so `grep -c` (line count) returns 1 regardless of URL count. Always use `grep -oE '<loc>[^<]+</loc>' <file> \| wc -l` for the true count. Same trap applies to `data-ad-slot=` count in minified report HTML. |
+| Peer-metro links 404 when pipeline ships < full CBSA set | `apps/web/src/components/reports/RelatedCities.astro`, `apps/web/src/components/reports/CityComparison.astro` | Step 5 composer resolves peer slugs from the full `data/cbsa_mapping.json` (50 CBSAs), but only 3 sample reports are built. Sidebar links to non-built peers 404. Filter `peer_slugs` at render time against `reports-index.json`, or post-filter in `build_reports.py`. Defer to Step 11 when full 50-CBSA set ships. |
+| Home page canonical not emitted even when `PUBLIC_SITE_URL` set | `apps/web/src/pages/index.astro` | Home calls `<Layout title=... description=...>` without the `seo` prop, so `BaseLayout.astro` falls back to the minimal-OG path that skips canonical. Pass `seo={{ title, description, path: '/' }}` to route through `buildPageMeta()` and emit canonical when env var is set. |
+| `wrangler dev` on Windows appears to "exit 0" via run_in_background but keeps listening | Step 10 QA protocol | `wrangler 3.114.17` detaches its server PID from the shell task, so the task notification may claim completion while the server is actually still up on `127.0.0.1:8787`. Always verify with `netstat -ano \| grep :8787` and kill the listener PIDs explicitly at teardown. |
+

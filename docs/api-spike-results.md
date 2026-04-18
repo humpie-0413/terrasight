@@ -276,6 +276,214 @@ Connector (`backend/connectors/oisst.py`) updated accordingly.
 
 ---
 
+## Step 2 Spike — Event Layers: FIRMS Wildfires + USGS Earthquakes (2026-04-17)
+
+### Summary Table (7 axes)
+
+| Axis | FIRMS VIIRS SNPP NRT | USGS Earthquakes |
+|---|---|---|
+| **Auth** | Free MAP_KEY (email reg) — URL path segment | None |
+| **Rate limit** | 5,000 transactions / 10-min window per key | No documented limit; feeds are static GeoJSON files, CDN-served |
+| **Spatial coverage** | Global (bbox param: `west,south,east,north`) | Global |
+| **Cadence** | NRT ~3 h from satellite overpass | `all_day`: regenerated ~1 min; `all_week`: ~5 min; `all_month`: ~15 min |
+| **Latency** | ~3 h from overpass; DAY_RANGE 1–5 | Near-instantaneous (static file, CDN) |
+| **Payload size** | Varies by bbox/days; global 1-day ~500 KB–2 MB CSV | `all_day.geojson` ~180 KB (271 features on 2026-04-17 spike) |
+| **Client-direct?** | **No** — MAP_KEY must be hidden in Worker | **No** — must go through Worker for bbox filtering and cache |
+
+**MAP_KEY registration:** `https://firms.modaps.eosdis.nasa.gov/api/map_key/`
+**Env var for Worker:** `FIRMS_MAP_KEY`
+
+---
+
+### USGS Live Spike Results (2026-04-17)
+
+- **Endpoint verified:** `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson`
+- **HTTP status:** 200
+- **Feature count:** 271
+- **Magnitude range:** -0.9 → 4.7 (all_day includes micro-quakes; use `4.5` or `significant` feeds for Globe default)
+- **Timestamp format:** `properties.time` — **Unix ms epoch** (divide by 1000 for ISO)
+- **Depth:** `geometry.coordinates[2]` in **km** (positive = below surface)
+- **Tsunami flag:** `properties.tsunami` — integer (0 = no, 1 = possible). Can be `null` for minor events — null-safe required.
+- **Alert:** `properties.alert` — `"green"/"yellow"/"orange"/"red"` or `null` for non-significant events.
+- **API version:** 2.3.0
+- **Response size:** ~180 KB (271 features)
+
+Sample feature (index 0, 2026-04-17):
+```
+id: "aka2026hnobgm"
+mag: 1.0, place: "65 km WNW of Happy Valley, Alaska"
+time: 1776429393935 (ms) → 2026-04-17T18:16:33.935Z
+geometry.coordinates: [-152.85, 60.137, 17.7]  → [lon, lat, depth_km]
+tsunami: 0, alert: null, magType: "ml"
+```
+
+---
+
+### FIRMS Key-Less Probe (2026-04-17)
+
+- **Invalid MAP_KEY response:** HTTP **400** (not 401/403 — see Landmine #1)
+- Response body: plain text error message from FIRMS API
+- Key format: 32-char alphanumeric (delivered via email on registration)
+- Worker must inject key from env var `FIRMS_MAP_KEY`; never expose to client
+
+---
+
+### EventPoint Normalization
+
+#### USGS GeoJSON → EventPoint (TypeScript)
+
+```typescript
+import type { EventPoint } from '@/packages/schemas/events';
+
+export function normalizeUsgsFeature(f: GeoJsonFeature): EventPoint {
+  const p = f.properties;
+  const [lon, lat, depthKm] = f.geometry.coordinates;
+  return {
+    id: `usgs-${f.id}`,
+    type: 'earthquake',
+    lat,
+    lon,
+    observedAt: new Date(p.time).toISOString(),   // ms epoch → ISO
+    severity: p.mag ?? 0,
+    label: p.title,
+    properties: {
+      mag: p.mag,
+      place: p.place,
+      depth_km: depthKm,
+      tsunami: p.tsunami ?? 0,          // null-safe — default 0
+      alert: p.alert ?? null,
+      magType: p.magType,
+      sig: p.sig,
+      status: p.status,
+      net: p.net,
+      time: p.time,
+      updated: p.updated,
+    },
+  };
+}
+```
+
+#### FIRMS CSV → EventPoint (TypeScript)
+
+```typescript
+// VIIRS SNPP NRT CSV columns (ordered):
+// latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,
+// satellite,confidence,version,bright_ti5,frp,daynight
+
+export function normalizeFirmsRow(row: Record<string, string>, idx: number): EventPoint {
+  const lat = parseFloat(row.latitude);
+  const lon = parseFloat(row.longitude);
+  const frp = parseFloat(row.frp) || 0;
+  // acq_date="2026-04-16", acq_time="0130" → "2026-04-16T01:30:00Z"
+  const hhmm = row.acq_time.padStart(4, '0');
+  const observedAt = `${row.acq_date}T${hhmm.slice(0, 2)}:${hhmm.slice(2)}:00Z`;
+  return {
+    id: `firms-viirs-${row.acq_date.replace(/-/g, '')}-${row.acq_time}-${idx}`,
+    type: 'wildfire',
+    lat,
+    lon,
+    observedAt,
+    severity: frp,
+    label: `Active fire — FRP ${frp} MW`,
+    properties: {
+      bright_ti4: parseFloat(row.bright_ti4),
+      bright_ti5: parseFloat(row.bright_ti5),
+      scan: parseFloat(row.scan),
+      track: parseFloat(row.track),
+      acq_date: row.acq_date,
+      acq_time: row.acq_time,
+      satellite: row.satellite,    // "N"=NOAA-20/21, "S"=Suomi-NPP
+      confidence: row.confidence,  // "low"|"nominal"|"high"
+      version: row.version,
+      frp,
+      daynight: row.daynight,      // "D"|"N"
+    },
+  };
+}
+```
+
+---
+
+### Worker API Endpoint Design
+
+#### `GET /api/fires?bbox=w,s,e,n&days=1`
+
+```
+Worker injects FIRMS_MAP_KEY → proxies:
+  GET https://firms.modaps.eosdis.nasa.gov/api/area/csv/{MAP_KEY}/VIIRS_SNPP_NRT/{bbox}/{days}
+Returns: JSON EventPoint[] (CSV parsed and normalized server-side)
+Cache: 10 min (CF Cache-Control: max-age=600)
+Params:
+  bbox  required  "west,south,east,north"  e.g. "-180,-90,180,90"
+  days  optional  1-5, default 1
+```
+
+Worker splits large global bbox into sub-regions if needed (see Landmine #3).
+
+#### `GET /api/earthquakes?period=day&magnitude=all`
+
+```
+Worker proxies:
+  GET https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/{magnitude}_{period}.geojson
+Returns: JSON EventPoint[] (normalized from GeoJSON)
+Cache: 5 min (CF Cache-Control: max-age=300)
+Params:
+  period     optional  hour|day|week|month  default "day"
+  magnitude  optional  significant|4.5|2.5|1.0|all  default "all"
+Globe default: magnitude=4.5&period=day (reduce noise)
+```
+
+---
+
+### Cache TTL Recommendation
+
+| Source | TTL | Rationale |
+|---|---|---|
+| FIRMS | **10 min** | NRT cadence ~3h; 10-min cache cuts Worker transactions 6× per hour while staying far within 3h window |
+| USGS | **5 min** | Static GeoJSON regenerated ~1 min; 5 min gives reasonable freshness without hammering CDN |
+
+---
+
+### Landmines
+
+1. **FIRMS returns HTTP 400 (not 401/403) for invalid MAP_KEY.** Worker error handler must treat 400 as auth failure and return `{ status: "not_configured" }` — don't surface raw FIRMS 400 to client.
+
+2. **USGS `properties.time` is Unix ms (not seconds).** Must divide by 1000 before passing to `new Date()` — or use `new Date(p.time)` directly (JS Date accepts ms). Do not do `new Date(p.time / 1000)` which would give ~1970.
+
+3. **FIRMS bbox fan-out for global coverage.** The FIRMS API limits very large bboxes to a set number of transactions. A single `-180,-90,180,90` request may use 100+ transactions. For global coverage, either (a) use the country API endpoint instead of bbox, or (b) split into ~9 regional sub-bboxes and merge.
+
+4. **FIRMS CSV column drift between VIIRS and MODIS.** MODIS CSV has `brightness` / `bright_t31` instead of `bright_ti4` / `bright_ti5`. The normalization function must branch on `instrument` or `satellite` to avoid undefined column reads. Default Worker layer uses VIIRS_SNPP_NRT only.
+
+5. **USGS `properties.mag` can be `null` for quarry blasts / other events.** Normalize as `severity: p.mag ?? 0` and skip display if `mag === null`.
+
+6. **USGS `properties.tsunami` is integer 0/1 but can be `null` for older or non-network events.** Always null-coalesce: `tsunami: p.tsunami ?? 0`.
+
+7. **USGS `geometry.coordinates[2]` is depth in km positive-down.** Do NOT negate — 17.7 means 17.7 km deep, not elevation. Label popup as "Depth: X km".
+
+8. **FIRMS `acq_time` is HHMM with no separator, zero-padded to 4 digits.** Time "130" must be padded to "0130" before parsing. Use `.padStart(4, '0')`.
+
+---
+
+### Popup Data Contracts
+
+**Fire popup fields:**
+- `lat`, `lon`
+- `frp` (Fire Radiative Power in MW)
+- `confidence` ("low" / "nominal" / "high")
+- `acq_date` + `acq_time` (acquisition datetime)
+- `satellite` ("N" = NOAA-20/21, "S" = Suomi-NPP, "T" = Terra-MODIS, "A" = Aqua-MODIS)
+- `daynight` ("D" = daytime, "N" = nighttime)
+
+**Earthquake popup fields:**
+- `mag` + `magType`
+- `depth_km` (from `geometry.coordinates[2]`)
+- `place`
+- `observedAt` (ISO 8601)
+- `tsunami` (0 = no / 1 = possible — display warning badge if `tsunami === 1`)
+- `alert` (PAGER color if not null)
+
+---
+
 ## Integration Actions (immediate)
 
 1. ~~**❌ OISST blocker**~~ **✅ RESOLVED 2026-04-10** — pivoted to NOAA CoastWatch ERDDAP. Connector updated. See OISST section for details.

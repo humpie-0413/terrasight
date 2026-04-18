@@ -1,22 +1,50 @@
 # Data Sources & Connector Catalog
 
-Detailed per-source reference for every P0/P1/P2 dataset in EarthPulse.
-Connector implementations live in `backend/connectors/`; this file is the
-source of truth for cadence, trust tag, and update rhythm.
+Detailed per-source reference for every P0/P1/P2 dataset in TerraSight.
+**v2 path:** connectors live in `pipelines/connectors/` and Worker routes in
+`apps/worker/src/routes/`. The pre-v2 `backend/connectors/` tree has been
+moved to `legacy/backend-connectors/` — this file's lower sections still
+reference the v1 layout for archival traceability.
 
-## Trust-tag vocabulary (5 levels)
+## Trust-tag vocabulary (5 levels · v2 freeze)
 
 | Tag | Color | Meaning |
 |---|---|---|
 | observed | 🟢 | Direct instrument measurement |
 | near-real-time | 🟡 | Processed within a few hours |
-| forecast/model | 🟠 | CAMS, GFS etc. — model output |
-| derived | 🔵 | Calculated from observed values |
-| estimated | ⚪ | Statistical / ML inference |
+| forecast | 🟠 | Runtime model prediction (CAMS, GFS) |
+| derived | 🔵 | Reanalysis / computed from observed values (incl. ML/satellite estimates) |
+| compliance | ⚪ | Regulator-curated records (ECHO, TRI, SDWIS) |
 
-Every data surface in the UI must attach one of these tags. The
-`backend/connectors/base.py::ConnectorResult.tag` field enforces this
-at the type level (`Literal["observed", ...]`).
+The v1 `estimated` tag was retired 2026-04-17; ML/satellite inference now maps
+to `derived`, and regulator-curated records to `compliance`. Enforcement lives
+in `pipelines/contracts/__init__.py` (pydantic `TrustTag`) and
+`packages/schemas/src/index.ts` (zod `TrustTag`).
+
+---
+
+## v2 Step 4 — Runtime connectors (Worker edge + Python mirrors)
+
+Four connectors landed as part of Step 4 (2026-04-17). Each has a Python
+normalizer in `pipelines/connectors/` with offline fixtures and contract
+tests, plus a Cloudflare Worker route that returns the frozen envelope
+from `docs/datasets/normalized-contracts.md`.
+
+| Connector | Python | Worker route | TTL | Tag | Cadence | Auth |
+|---|---|---|---|---|---|---|
+| GIBS manifest | `pipelines/connectors/gibs.py` | (browser-direct) | n/a | observed / NRT | monthly / daily | None |
+| FIRMS wildfires | `pipelines/connectors/firms.py` | `apps/worker/src/routes/fires.ts` | 600s | near-real-time | NRT ~3h | `FIRMS_MAP_KEY` |
+| USGS earthquakes | `pipelines/connectors/usgs.py` | `apps/worker/src/routes/earthquakes.ts` | 300s | observed | NRT ~5 min | None |
+| NOAA OISST | `pipelines/connectors/erddap_sst.py` | `apps/worker/src/routes/sst-point.ts` | 3600s | observed | daily | None |
+
+Contract tests: `pipelines/tests/test_{gibs,firms,usgs,erddap_sst}_contract.py`
+(46 passing, 100% offline). Worker routes type-check against
+`@terrasight/schemas` (`EventPoint` / `TrustTag` / `SSTStatus` / `LayerManifest`).
+
+New v2 landmines (full list in `docs/guardrails.md`): Cadence literal lacks
+NRT value, FIRMS VIIRS confidence string enum, FIRMS header-only empty feed,
+FIRMS trailing whitespace in cells, USGS `properties.type` can be non-quake,
+Cloudflare `caches.default.match()` is Request-keyed.
 
 ---
 
